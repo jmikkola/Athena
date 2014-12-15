@@ -1,2 +1,2 @@
-athena: athena.hs
+athena: *.hs
 	ghc --make *.hs

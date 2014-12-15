@@ -2,6 +2,8 @@
 
 import Data.Bits (complement, shift, xor, (.&.), (.|.));
 
+import Parse;
+
 class Evaluable a b where
   eval :: a -> b
 
