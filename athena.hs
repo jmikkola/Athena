@@ -7,14 +7,27 @@ class Evaluable a b where
 
 data StringExpression = StringValue String
                       | ShowInt IntExpression
+                      | Concat String String
                       deriving (Eq, Show)
 
 evalStringExpr :: StringExpression -> String
 evalStringExpr (StringValue s) = s
 evalStringExpr (ShowInt ix) = show $ evalIntExpr ix
+evalStringExpr (Concat left right) = left ++ right
 
 --instance Evaluable StringExpression String where
 --  eval = evalStringExpr
+
+data BinaryFloatOp = FAdd | FSubtract | FMultiply | FDivide | FPower
+
+evalBinaryFloatOp :: BinaryFloatOp -> Float -> Float -> Float
+evalBinaryFloatOp op left right = case op of
+  FAdd -> left + right
+  FSubtract -> left - right
+  FMultiply -> left * right
+  FDivide -> left / right
+  FPower -> left ** right
+
 
 
 data UnaryIntOp = Negate
