@@ -5,6 +5,18 @@ import Data.Bits (complement, shift, xor, (.&.), (.|.));
 class Evaluable a b where
   eval :: a -> b
 
+data StringExpression = StringValue String
+                      | ShowInt IntExpression
+                      deriving (Eq, Show)
+
+evalStringExpr :: StringExpression -> String
+evalStringExpr (StringValue s) = s
+evalStringExpr (ShowInt ix) = show $ evalIntExpr ix
+
+--instance Evaluable StringExpression String where
+--  eval = evalStringExpr
+
+
 data UnaryIntOp = Negate
                 | Invert
                 deriving (Eq, Show)
