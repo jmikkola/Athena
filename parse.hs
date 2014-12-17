@@ -10,11 +10,24 @@ import Text.Parsec.String
 import Text.Parsec.Token
 
 data SExpression = List [SExpression]
+                 | CharValue Char
+                 | StringValue String
+                 | Key String
                  | Symbol String
-                 | Expr String
+                 | IntVal Int
+                 | FloatVal Float
                  deriving (Eq, Show)
 
 whitespaceChs = " \t\r\n"
+
+otherChars :: Parser Char
+otherChars = oneOf "~!@$%^&*-+=<>?"
+
+underscore :: Parser Char
+underscore = char '_'
+
+anyKeyChar :: Parser Char
+anyKeyChar = letter <|> underscore <|> otherChars
 
 anyWhitespaceCh :: Parser Char
 anyWhitespaceCh = oneOf whitespaceChs
@@ -22,39 +35,88 @@ anyWhitespaceCh = oneOf whitespaceChs
 anyWhitespace :: Parser String
 anyWhitespace = many $ anyWhitespaceCh
 
-inCharsWhite :: Char -> Char -> (Parser a) -> (Parser a)
-inCharsWhite start end inner = do
-    char start
-    anyWhitespace
-    result <- inner
-    anyWhitespace
-    char end
-    return result
+listStart = char '('
 
-inParens :: (Parser a) -> (Parser a)
-inParens inner = inCharsWhite '(' ')' inner
+listEnd :: [SExpression] -> Parser SExpression
+listEnd soFar = do
+  char ')'
+  return $ List $ reverse soFar
+
+parseListNext :: [SExpression] -> Parser SExpression
+parseListNext soFar = do
+  nextItem <- sexpression
+  parseListContents (nextItem : soFar)
+
+parseListContents :: [SExpression] -> Parser SExpression
+parseListContents soFar = do
+  anyWhitespace
+  listEnd soFar <|> parseListNext soFar
 
 parseList :: Parser SExpression
 parseList = do
-  contents <- inParens sexpressions
-  return (List contents)
+  listStart
+  parseListContents []
+
+parseChar :: Parser SExpression
+parseChar = do
+    char '\''
+    c <- anyChar
+    char '\''
+    return $ CharValue c
+
+stringLetter = satisfy (\c -> (c /= '"') && (c /= '\\') && (c > '\026'))
+
+stringChar = do
+  c <- stringLetter
+  return (Just c)
+
+parseString :: Parser SExpression
+parseString = do
+  s <- between
+       (char '"')
+       (char '"' <?> "end of string")
+       (many stringChar)
+  return $ StringValue (foldr (maybe id (:)) "" s)
+
+parseKey :: Parser SExpression
+parseKey = do
+  char ':'
+  text <- many1 $ anyKeyChar
+  return (Key text)
+
+parseInt :: String -> Parser SExpression
+parseInt digits = do
+  return (IntVal $ (read digits))
+
+parseFloat :: String -> Parser SExpression
+parseFloat digits = do
+  char '.'
+  decimal <- many1 $ digit
+  return (FloatVal $ read $ (digits ++ "." ++ decimal))
+
+parseNumber :: Parser SExpression
+parseNumber = do
+  digits <- many1 $ digit
+  parseFloat digits <|> parseInt digits
 
 parseSymbol :: Parser SExpression
 parseSymbol = do
-  char ':'
-  text <- many1 $ noneOf (whitespaceChs ++ "()")
-  return (Symbol text)
-
-parseItem :: Parser SExpression
-parseItem = do
-  text <- many1 $ noneOf (whitespaceChs ++ "()")
-  return (Expr text)
+  text <- many1 $ anyKeyChar -- TODO: allow digits
+  return $ Symbol text
 
 sexpression :: Parser SExpression
-sexpression = parseList <|> parseSymbol <|> parseItem
+sexpression = parseList <|>
+              parseString <|>
+              parseChar <|>
+              parseKey <|>
+              parseNumber <|>
+              parseSymbol
 
 sexpressions :: Parser [SExpression]
-sexpressions = sepEndBy sexpression anyWhitespace
+sexpressions = do
+  expressions <- sepEndBy1 sexpression anyWhitespace
+  eof
+  return expressions
 
 parseSexpressions :: String -> Either ParseError [SExpression]
 parseSexpressions input = parse sexpressions "???" input
