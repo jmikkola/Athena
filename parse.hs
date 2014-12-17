@@ -48,18 +48,23 @@ listEnd soFar = do
 parseListNext :: [SExpression] -> Parser SExpression
 parseListNext soFar = do
   nextItem <- sexpression
-  parseListContents (nextItem : soFar)
+  unseparatedListContents (nextItem : soFar)
 
-parseListContents :: [SExpression] -> Parser SExpression
-parseListContents soFar = (listEnd soFar) <|>
-                          (do
-                              many anyWhitespaceCh
-                              listEnd soFar <|> parseListNext soFar)
+separatedListContents :: [SExpression] -> Parser SExpression
+separatedListContents soFar = listEnd soFar <|> parseListNext soFar
+
+unseparatedListContents :: [SExpression] -> Parser SExpression
+unseparatedListContents soFar =
+  (listEnd soFar) <|>
+  (do
+      many1 anyWhitespaceCh
+      separatedListContents soFar)
 
 parseList :: Parser SExpression
 parseList = do
   listStart
-  parseListContents []
+  anyWhitespace
+  separatedListContents []
 
 parseChar :: Parser SExpression
 parseChar = do
