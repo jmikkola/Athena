@@ -27,7 +27,10 @@ underscore :: Parser Char
 underscore = char '_'
 
 anyKeyChar :: Parser Char
-anyKeyChar = letter <|> underscore <|> otherChars
+anyKeyChar = alphaNum <|> underscore <|> otherChars
+
+symbolStartChar :: Parser Char
+symbolStartChar = letter <|> underscore <|> otherChars
 
 anyWhitespaceCh :: Parser Char
 anyWhitespaceCh = oneOf whitespaceChs
@@ -48,9 +51,10 @@ parseListNext soFar = do
   parseListContents (nextItem : soFar)
 
 parseListContents :: [SExpression] -> Parser SExpression
-parseListContents soFar = do
-  anyWhitespace
-  listEnd soFar <|> parseListNext soFar
+parseListContents soFar = (listEnd soFar) <|>
+                          (do
+                              many anyWhitespaceCh
+                              listEnd soFar <|> parseListNext soFar)
 
 parseList :: Parser SExpression
 parseList = do
@@ -101,8 +105,9 @@ parseNumber = do
 
 parseSymbol :: Parser SExpression
 parseSymbol = do
-  text <- many1 $ anyKeyChar -- TODO: allow digits
-  return $ Symbol text
+  c1 <- symbolStartChar
+  text <- many $ anyKeyChar
+  return $ Symbol $ c1 : text
 
 sexpression :: Parser SExpression
 sexpression = parseList <|>
