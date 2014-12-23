@@ -1,0 +1,37 @@
+// Example athena file
+
+// Wait, am I literally writing rust?
+
+mod routing {
+    type PatternName = String
+
+    pub type Routes {
+        namesUsed: Set<PatternName>,
+        routes: List<(Regex, PatternName)>,
+    }
+
+    pub pure fn router () -> Routes {
+        Routes(emptySet, emptyList)
+    }
+
+    pub pure fn addRoute (routes: Routes, re: Regex, name: String) -> Either Error Routes {
+        let patName = PatternName(name)
+        if contains? routes.namesUsed patternname {
+            Left("Duplicate pattern name: " ++ name)
+        } else {
+            Routes(add(routes.namesUsed, patName), add(routes.routes, (re, patName)))
+        }
+    }
+
+    pub pure fn matchRoute (routes: Routes, url: String) -> Maybe String {
+        matchAny routes.routes url
+    }
+
+    pure fn matchAny (routes: List<(Regex, String)>, url: String) -> Maybe PatternName {
+        match routes {
+            [] => Nothing,
+            ((pattern:name):_) if matches pattern url => name,
+            (_:rest) => matchAny rest url,
+        }
+    }
+}
