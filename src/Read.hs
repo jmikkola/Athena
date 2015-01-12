@@ -84,13 +84,25 @@ readSpecialForm (SList items) = case items of
 readSpecialForm _ = Left "Not a special form"
 
 readFnCall :: SExpression -> RReader RExpression
-readFnCall = undefined
+readFnCall (SList items) = case items of
+  (SSymbol fn:argExprs) -> do
+    argRexprs <- mapM readExpression argExprs
+    return $ RFnCall (RNamedCall fn) argRexprs
+  (SList l:argExprs)    -> do
+    lambda <- readLambda l
+    argRexprs <- mapM readExpression argExprs
+    return $ RFnCall (RLambdaCall lambda) argRexprs
+  _                     -> Left ("Bad form for a function: " ++ (show items))
+readFnCall x             = Left ("Cannot understand expression: " ++ (show x))
 
 readDoForm :: [SExpression] -> RReader RExpression
 readDoForm _ = Left "TODO: do form unimplemented"
 
 readLambdaForm :: [SExpression] -> RReader RExpression
 readLambdaForm _ = Left "TODO: lambda form unimplemented"
+
+readLambda :: [SExpression] -> RReader RLambda
+readLambda _ = Left "TODO: lambda unimplemented"
 
 readLetForm :: [SExpression] -> RReader RExpression
 readLetForm _ = Left "TODO: let form unimplemented"
