@@ -1,6 +1,7 @@
 import System.Console.Readline
 
 import Parse
+import Read
 
 main :: IO ()
 main = repl "> " tryParsing
