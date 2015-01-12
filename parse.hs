@@ -9,13 +9,13 @@ import Text.Parsec.Prim
 import Text.Parsec.String
 import Text.Parsec.Token
 
-data SExpression = List [SExpression]
-                 | CharValue Char
-                 | StringValue String
-                 | Key String
-                 | Symbol String
-                 | IntVal Int
-                 | FloatVal Float
+data SExpression = SList [SExpression]
+                 | SCharValue Char
+                 | SStringValue String
+                 | SKey String
+                 | SSymbol String
+                 | SIntVal Int
+                 | SFloatVal Float
                  deriving (Eq, Show)
 
 whitespaceChs = " \t\r\n"
@@ -43,7 +43,7 @@ listStart = char '('
 listEnd :: [SExpression] -> Parser SExpression
 listEnd soFar = do
   char ')'
-  return $ List $ reverse soFar
+  return $ SList $ reverse soFar
 
 parseListNext :: [SExpression] -> Parser SExpression
 parseListNext soFar = do
@@ -71,7 +71,7 @@ parseChar = do
     char '\''
     c <- anyChar
     char '\''
-    return $ CharValue c
+    return $ SCharValue c
 
 stringLetter = satisfy (\c -> (c /= '"') && (c /= '\\') && (c > '\026'))
 
@@ -85,23 +85,23 @@ parseString = do
        (char '"')
        (char '"' <?> "end of string")
        (many stringChar)
-  return $ StringValue (foldr (maybe id (:)) "" s)
+  return $ SStringValue (foldr (maybe id (:)) "" s)
 
 parseKey :: Parser SExpression
 parseKey = do
   char ':'
   text <- many1 $ anyKeyChar
-  return (Key text)
+  return (SKey text)
 
 parseInt :: String -> Parser SExpression
 parseInt digits = do
-  return (IntVal $ (read digits))
+  return (SIntVal $ (read digits))
 
 parseFloat :: String -> Parser SExpression
 parseFloat digits = do
   char '.'
   decimal <- many1 $ digit
-  return (FloatVal $ read $ (digits ++ "." ++ decimal))
+  return (SFloatVal $ read $ (digits ++ "." ++ decimal))
 
 parseNumber :: Parser SExpression
 parseNumber = do
@@ -112,7 +112,7 @@ parseSymbol :: Parser SExpression
 parseSymbol = do
   c1 <- symbolStartChar
   text <- many $ anyKeyChar
-  return $ Symbol $ c1 : text
+  return $ SSymbol $ c1 : text
 
 sexpression :: Parser SExpression
 sexpression = parseList <|>
