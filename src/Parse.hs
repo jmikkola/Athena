@@ -9,14 +9,7 @@ import Text.Parsec.Prim
 import Text.Parsec.String
 import Text.Parsec.Token
 
-data SExpression = SList [SExpression]
-                 | SCharValue Char
-                 | SStringValue String
-                 | SKey String
-                 | SSymbol String
-                 | SIntVal Int
-                 | SFloatVal Float
-                 deriving (Eq, Show)
+import SExpression
 
 whitespaceChs = " \t\r\n"
 
