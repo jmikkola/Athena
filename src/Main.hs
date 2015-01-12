@@ -1,3 +1,5 @@
+import System.Console.Readline
+
 import Parse
 
 main :: IO ()
@@ -15,3 +17,4 @@ repl prompt fn = do
     else do
       fn line
       repl prompt fn
+
