@@ -5,7 +5,7 @@ import Parse
 import Read
 
 main :: IO ()
-main = repl "> " tryParsing
+main = repl "athena > " tryParsing
 
 tryParsing :: String -> IO ()
 tryParsing line = case parseSexpressions line of
