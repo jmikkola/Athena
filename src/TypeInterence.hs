@@ -1,70 +1,31 @@
 module TypeInference where
 
 import Data.Map (Map)
+import qualified Data.Map as Map
 
--- My attempt at approximating Algorithm W without actually knowing how it works.
+type ErrorS = Either String
 
-data ConcreteType = CTBool
-                  | CTChar
-                  | CTInt
-                  | CTFloat
-                  | CTList ConcreteType
-                  | CTFunction [ConcreteType] ConcreteType
-                  deriving (Read, Show, Eq)
+class Resolveable a where
+  combine :: a -> a -> ErrorS a
 
-data PartialType = KnownType ConcreteType
-                 | TypeVariable String
-                 | PTList PartialType
-                 | PTFunction [PartialType] PartialType
-                 deriving (Read, Show, Eq)
+data SimpleType a = STBool
+                  | STInt
+                  | STFloat
+                  | STChar
+                  | STList a
+                  deriving (Show, Eq)
 
-combineTypes :: PartialType -> PartialType -> Maybe PartialType
-combineTypes (KnownType a) (KnownType b) = if a == b then Just (KnownType a) else Nothing
-
- -- TODO: mark that the variables are the same thing
-combineTypes (TypeVariable a) (TypeVariable b) = Just (TypeVariable b)
- -- TODO: set what type variable means
-combineTypes (TypeVariable s) (KnownType a) = Just (KnownType a)
-combineTypes (TypeVariable a) (PTList b) = Just (PTList b)
-combineTypes (TypeVariable a) (PTFunction argsb retb) = Just (PTFunction argsb retb)
-combineTypes a b@(TypeVariable _) = combineTypes b a
-
-combineTypes (PTList a) (PTList b) = do
-  combo <- combineTypes a b
-  return $ PTList combo
-
-combineTypes (PTFunction argsa reta) (PTFunction argsb retb) =
-  if (length argsa) /= (length argsb)
-  then Nothing
-  else do
-    combinedArgs <- mapM (\(ta, tb) -> combineTypes ta tb) (zip argsa argsb)
-    combinedRet <- combineTypes reta retb
-    return $ PTFunction combinedArgs combinedRet
+-- This isn't quite right
+instance (Eq a, Show a) => Resolveable (SimpleType a) where
+  combine a b =
+    if a == b
+    then Right a
+    else case (a, b) of
+      (a, b) -> Left ("Can't combine types " ++ (show a) ++ " and " ++ (show b))
 
 
-
-combineTypes _ _ = undefined
-
-
--- Here's more like the interface that I want
-
-resolveTypes :: TypedSystem -> Either String (Map CodePoint ConcreteType)
-resolveTypes = undefined
-
-data TypedSystem = TypedSystem
-                   { codePoints :: Map CodePoint TypeDetails
-                   , relationships :: [Relationship]
-                   } deriving (Show)
-
-data TypeDetails = Known ConcreteType
-                 | Unknown
-                 deriving (Show)
-
-type CodePoint = String
-type CompositionType = String
-
-data Relationship = Equivalent CodePoint CodePoint
-                  | CompositeOf CompositionType CodePoint [CodePoint]
+data Relationship = Equivalent String String
+                  | CompositeOf String String [String]
                   deriving (Show)
 
 {-
@@ -123,5 +84,43 @@ Maybe what this really requires is rules + codepoints + things to figure out
 Equivalent "cons1.arg1" "a"
 Equivalent "cons1.arg2" "cons2.ret"
 Equivalent "cons1.ret" "pair.ret"
-Equivalent "cons1.arg1" "cons2.arg2.subtype[0]" ?????
+-- Equivalent "cons1.arg1" "cons2.arg2.subtype[0]" ?????
+CompositeOf "cons1.ret" "List" ["cons1.arg1"]
+
+-- OK, how about the internal representation of the types while it is working?
+
+TypeVar a => _
+TypeVar b => _
+...
+
+Relationship (Equivalent a b)
+
+-- Do you ever need to use a fact in a relationship more than once?
 -}
+type TypeVar = String
+type TypeVars = Map String (Maybe (SimpleType TypeVar))
+
+lookupTVar :: TypeVar -> TypeVars -> ErrorS (Maybe (SimpleType TypeVar))
+lookupTVar key vars = case Map.lookup key vars of
+  Nothing -> Left ("Typevar " ++ key ++ " not found")
+  Just st -> Right st
+
+crunch :: Relationship -> TypeVars -> ErrorS TypeVars
+crunch (Equivalent vara varb) tvars = do
+  ta <- lookupTVar vara tvars
+  tb <- lookupTVar varb tvars
+  resultingType <- case (ta, tb) of
+    (Nothing, Nothing) -> Right $ Nothing
+    (Just a,  Nothing) -> Right $ Just a
+    (Nothing, Just b)  -> Right $ Just b
+    (Just a,  Just b)  -> case combine a b of
+      Left err -> Left err
+      Right t  -> Right $ Just t
+  return (Map.insert varb resultingType (Map.insert vara resultingType tvars))
+
+crunch (CompositeOf vara compositeKind compositeVars) tvars = do
+  typea <- lookupTVar vara tvars
+  Left "wtf"
+  -- Wait, what was supposed to happen here?
+
+tryCrunching = crunch (Equivalent "a" "b") (Map.fromList [("a", Nothing), ("b", Just STInt)])
