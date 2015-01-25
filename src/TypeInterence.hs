@@ -98,24 +98,36 @@ Relationship (Equivalent a b)
 -- Do you ever need to use a fact in a relationship more than once?
 -}
 type TypeVar = String
-type TypeVars = Map String (Maybe (SimpleType TypeVar))
+data TypeValue = Unknown
+               | AliasTo TypeVar
+               | TypeVal (SimpleType TypeValue)
+               deriving (Show, Eq)
 
-lookupTVar :: TypeVar -> TypeVars -> ErrorS (Maybe (SimpleType TypeVar))
+type TypeVars = Map String TypeValue
+
+lookupTVar :: TypeVar -> TypeVars -> ErrorS TypeValue
 lookupTVar key vars = case Map.lookup key vars of
   Nothing -> Left ("Typevar " ++ key ++ " not found")
   Just st -> Right st
+
+combineTypeValues :: TypeVars -> TypeValue -> TypeValue -> ErrorS TypeValue
+combineTypeValues vars a b = case (a, b) of
+  (Unknown,   Unknown)   -> Right Unknown
+  (Unknown,   TypeVal v) -> Right v
+  (TypeVal v, Unknown)   -> Right v
+  (AliasTo a, other)     -> do
+    actual <- lookupTVar a
+    combineTypeValues vars actual other
+  (other,    AliasTo a)  -> do
+    actual <- lookupTVar a
+    combineTypeValues vars other actual
+  (TypeVal a, TypeVal b) -> combine a b
 
 crunch :: Relationship -> TypeVars -> ErrorS TypeVars
 crunch (Equivalent vara varb) tvars = do
   ta <- lookupTVar vara tvars
   tb <- lookupTVar varb tvars
-  resultingType <- case (ta, tb) of
-    (Nothing, Nothing) -> Right $ Nothing
-    (Just a,  Nothing) -> Right $ Just a
-    (Nothing, Just b)  -> Right $ Just b
-    (Just a,  Just b)  -> case combine a b of
-      Left err -> Left err
-      Right t  -> Right $ Just t
+  resultingType <- combineTypeValues tvars ta tb
   return (Map.insert varb resultingType (Map.insert vara resultingType tvars))
 
 crunch (CompositeOf vara compositeKind compositeVars) tvars = do
