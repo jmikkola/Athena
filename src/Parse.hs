@@ -3,11 +3,26 @@ module Parse where
 import Control.Applicative ((<$>), (<*>))
 
 import Text.Parsec
+import Text.Parsec.Char (char, digit, satisfy)
 import Text.Parsec.Expr
 import Text.Parsec.Language
 import Text.Parsec.Prim
 import Text.Parsec.String
 import Text.Parsec.Token
+
+data LiteralValue = LiteralFloat Float | LiteralInt Int
+                  deriving (Show, Eq)
+
+digits :: Parser String
+digits = do
+  d <- digit
+  ds <- many _digit
+  return (d : ds)
+
+_digit :: Parser Char
+_digit = do
+  _ <- optional underscore
+  digit
 
 whitespaceChs = " \t\r\n"
 
@@ -28,11 +43,3 @@ anyWhitespaceCh = oneOf whitespaceChs
 
 anyWhitespace :: Parser String
 anyWhitespace = many $ anyWhitespaceCh
-
-listStart = char '('
-
-stringLetter = satisfy (\c -> (c /= '"') && (c /= '\\') && (c > '\026'))
-
-stringChar = do
-  c <- stringLetter
-  return (Just c)

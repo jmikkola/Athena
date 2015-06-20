@@ -1,5 +1,7 @@
 import System.Console.Readline
 
+import Parse
+
 main :: IO ()
 main = putStrLn "Hello world"
 
