@@ -127,6 +127,22 @@
 <field_values> ::= <field_value> <s+>? "," <_>? <field_values> | <field_value>
 <field_value> ::= <field_name> ":" <_> <expression>
 
+-- TODO: add interface types
+<type> ::= <type_kwd> <s+> <typeName> <s+> <=> <_> <type_definition>
+<type_definition> ::= <data_type> | <alias_type> | <new_type>
+-- TODO: add type variables
+<data_type> ::= <struct_kwd> <s+> "{" <_> <struct_fields> <_> "}"
+<struct_fields> ::= <struct_field> <;> <struct_fields> | <struct_field>
+<struct_field> ::= <field_name> <s+> <type_def>
+
+<alias_type> ::= <alias_kwd> <s+> <type_def>
+<new_type> ::= <newtype_kwd> <s+> <type_def>
+
+<type_kwd> ::= "type"
+<struct_kwd> ::= "struct"
+<alias_kwd> ::= "alias"
+<newtype_kwd> ::= "newtype"
+
 <=> = "="
 -- <;> Means end of statement. It can be either a semicolon or a newline.
 <;> ::= <_>? ";" <_>? | <_>? "\n" <_>?
