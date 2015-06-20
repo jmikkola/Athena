@@ -1,0 +1,70 @@
+
+
+<file> ::= <?module> <statements>?
+
+<?module> ::= <module_decl> <;> | ""
+<module_decl> ::= <kwd_mod> <s+> <module_name>
+<module_name> ::= /[a-z][a-zA-Z0-9_]+/
+<kwd_mod> ::= "module"
+
+<statements> ::= <statement> <;> <statements> | <statement>
+<statement> ::= <constant> | <function> | <type>
+
+<constant> ::= <kwd_const> <s+> <valueName> <s+> <=> <_> <expression>
+<kwd_const> ::= "const"
+
+<valueName> ::= /[a-z][a-zA-Z9-0_?]*/
+
+<function> ::= <kwd_fn> <s+> <valueName> <argList> <fn_body>
+<argList> ::= "(" <_>? <arguments>? <_>? ")"
+<arguments> ::= <argument> <_>? "," <_> <arguments> | <argument>
+<argument> ::= <valueName> (<s+> <type_def>)?
+<fn_body> ::= <short_fn_body> | <long_fn_body>
+<sort_fn_body> ::= <_> <=> <_> <expression>
+<long_fn_body> ::= <s+> "{" <expressions>? "}"
+<kwd_fn> ::= "fn"
+
+<type_def> ::= <typeName> ("[" <_>? <typeArgs> <_>? "]")?
+<typeArgs> ::= <typeArg> <s+>? "," <s+> <typeArgs> | <typeArg>
+<typeArg> ::= <typeVar> | <type_def>
+<typeVar> ::= /[a-z][a-z0-9]*/
+
+<expressions> ::= <expression> <;> <expressions> | <expression>
+<expression> ::= <literal> | <paren_expr> | <unary_expr> | <binary_expr> | <fn_call> | <lambda_expr> | <list_expr>
+
+<literal> ::= <lit_num> | <lit_string> | <lit_struct>
+
+<lit_num> ::= <digits> <floating_part>? | <hex_num> | <octal_num> | <binary_num>
+<digits> ::= <digit> <_digits> | <digit>
+-- Allow separating numbers like 10_000_000:
+<_digits> ::= "_" <digits> | <digits>
+<floating_part> ::= "." <digits>? <exponent>?
+<exponent> ::= "e" <digit>+
+<digit> ::= /[0-9]/
+<hex_num> ::= "0x" <hexit>+
+<hexit> ::= /[0-9a-f]/
+<octal_num> ::= "0o" <octit>+
+<octit> ::= /[0-7]/
+<binary_num> ::= "0b" <bit>*
+<bit> ::= "0" | "1"
+
+-- The grammar itself doesn't care about escape codes like \n
+<lit_string> ::= <'_str> | <"_str> | <"""_str>
+<'_str> ::= "'" <'_chr>* "'"
+<'_chr> ::= /[^']/ | "\'"
+<"_str> ::= """ <"_chr>* """
+<"_chr> ::= /[^"]/ | "\""
+<"""_str> ::= """"" <"""_chrs>? """""
+-- Allow " or "" but not """ inside the string:
+<"""_chrs> ::= <"_chr> <"""_chrs> | """ <"_chr> <"""_chrs> | """" <"_chr> <"""_chrs>
+
+<=> = "="
+-- <;> Means end of statement. It can be either a semicolon or a newline.
+<;> ::= <_>? ";" <_>? | <_>? "\n" <_>?
+
+-- <_> Means whitespace that can include a comment
+<_> ::= <s+> <_>? | <block_comment> <_>? | <inline_commeent>
+<s+> ::= /\s+/
+
+<block_comment> ::= "/*" (not "*/")* "*/"
+<inline_commeent> ::= "//" (not "\n")*
