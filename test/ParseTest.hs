@@ -18,6 +18,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("hex literals", testHexLiteral)
                              , ("octal literals", testOctalLiteral)
                              , ("double quoted string", testDoubleQuotedString)
+                             , ("expression", testExpression)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -36,6 +37,10 @@ assertParses parser input expectation = assertBool message matched
           Nothing -> "not parse"
           Just r  -> "parse to " ++ show r
         message   = "expected " ++ input ++ " to " ++ resultStr ++ ", got " ++ (show result)
+
+tableTest cases parseFn = TestList $ map makeTest cases
+  where makeTest (input, expectation) = input ~: assertParses parseFn input expectation
+
 
 goodDigitsTestCases = [ ("1", "1")
                       , ("10", "10")
@@ -89,15 +94,19 @@ octalTestCases = [ ("0o1", Just 1)
 
 testOctalLiteral = tableTest octalTestCases octalNum
 
-quoteLiteral = '"' : ""
-escapedString s = quoteLiteral ++ s ++ quoteLiteral
+quoteCh = '"'
+backslashCr = '\\'
+escapedString s = quoteCh : s ++ [quoteCh]
 doubleQuotedStringCases = [ (escapedString "", Just "")
                           , (escapedString "Hello, world!", Just "Hello, world!")
-                          , (escapedString "\\\"", Just "\\\"")
-                          , (escapedString "\\n", Just "\\n")
+                          , (escapedString [backslashCr, quoteCh], Just [backslashCr, quoteCh])
+                          , (escapedString [backslashCr, 'n'], Just [backslashCr, 'n'])
                           ]
 
 testDoubleQuotedString = tableTest doubleQuotedStringCases doubleQuotedString
 
-tableTest cases parseFn = TestList $ map makeTest cases
-  where makeTest (input, expectation) = input ~: assertParses parseFn input expectation
+expressionTestCases = [ ("1", Just (ExpressionLit (LiteralInt 1)))
+                      , ("(123)", Just (ExpressionParen (ExpressionLit (LiteralInt 123))))
+                      ]
+
+testExpression = tableTest expressionTestCases expression

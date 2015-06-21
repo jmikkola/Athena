@@ -6,9 +6,16 @@ import Data.Char ( digitToInt )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
+data Expression = ExpressionLit LiteralValue
+                | ExpressionVar VariableName
+                | ExpressionParen Expression
+                deriving (Show, Eq)
+
 -- TODO: allow using structs with fields...
 data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String | LiteralStruct String
                   deriving (Show, Eq)
+
+type VariableName = String
 
 unwrapOr :: Maybe a -> a -> a
 unwrapOr (Just a) _ = a
@@ -16,6 +23,12 @@ unwrapOr Nothing  b = b
 
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
+
+expression :: Parser Expression
+expression = choice [literalExpression, variableExpression, parenExpression]
+
+literalExpression :: Parser Expression
+literalExpression = liftM ExpressionLit $ literal
 
 literal :: Parser LiteralValue
 literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral, structLiteral]
@@ -98,6 +111,21 @@ escapedChar = do
 -- TODO: parse field values
 structLiteral :: Parser LiteralValue
 structLiteral = liftM LiteralStruct $ typeName
+
+variableExpression :: Parser Expression
+variableExpression = liftM ExpressionVar $ variable
+
+variable :: Parser VariableName
+variable = valueName
+
+parenExpression :: Parser Expression
+parenExpression = do
+  _ <- char '('
+  _ <- anyWhitespace
+  expr <- expression
+  _ <- anyWhitespace
+  _ <- char ')'
+  return $ ExpressionParen expr
 
 typeName :: Parser String
 typeName = do
