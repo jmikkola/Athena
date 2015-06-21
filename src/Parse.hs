@@ -6,6 +6,20 @@ import Data.Char ( digitToInt )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
+type Block = [Statement]
+
+data Statement = StatementExpr Expression
+               | StatementAssign VariableName Expression
+               | StatementReturn Expression
+               | StatementIf { condition :: Expression
+                             , body :: Block
+                             , elseIfBlocks :: [(Expression, Block)]
+                             , elseBlock :: Maybe Block
+                             }
+               | StatementWhile Expression Block
+               | StatementFor VariableName Expression Block
+               deriving (Show, Eq)
+
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               deriving (Show, Eq)
 
