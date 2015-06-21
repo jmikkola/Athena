@@ -53,6 +53,7 @@ maybeEmpty m = unwrapOr m ""
 statement :: Parser Statement
 statement = choice [ try assignmentStatement
                    , try returnStatement
+                   , try ifStatement
                    , expressionStatment
                    ]
 
@@ -62,20 +63,68 @@ expressionStatment = liftM StatementExpr $ expression
 assignmentStatement :: Parser Statement
 assignmentStatement = do
   _ <- letKwd
-  _ <- anyWhitespace
+  _ <- any1LinearWhitespace
   var <- valueName
-  _ <- anyWhitespace
+  _ <- any1LinearWhitespace
   _ <- char '='
-  _ <- anyWhitespace
+  _ <- any1Whitespace
   expr <- expression
   return $ StatementAssign var expr
 
 returnStatement :: Parser Statement
 returnStatement = do
   _ <- returnKwd
-  _ <- anyWhitespace
+  _ <- any1LinearWhitespace
   expr <- expression
   return $ StatementReturn expr
+
+ifStatement :: Parser Statement
+ifStatement = do
+  _ <- ifKwd
+  _ <- any1LinearWhitespace
+  test <- expression
+  _ <- any1LinearWhitespace
+  body <- block
+  -- TODO: handle `else if` and `else` parts
+  return StatementIf { condition=test
+                     , body=body
+                     , elseIfBlocks=[]
+                     , elseBlock=Nothing
+                     }
+
+
+block :: Parser Block
+block = do
+  startBlock
+  blockStatements
+
+startBlock :: Parser ()
+startBlock = do
+  _ <- char '{'
+  _ <- anyWhitespace
+  return ()
+
+blockStatements :: Parser Block
+blockStatements = blockStatement <|> endBlock
+
+-- TODO: fix this mess
+blockStatement :: Parser Block
+blockStatement = do
+  stmt <- statement
+  _ <- anyLinearWhitespace
+  rest <- choice [ endBlock
+                , do
+                  _ <- statementSep
+                  _ <- anyLinearWhitespace
+                  blockStatements
+                ]
+  return $ stmt : rest
+
+endBlock :: Parser Block
+endBlock = do
+  _ <- char '}'
+  return []
+
 
 expression :: Parser Expression
 expression = binLevel1
@@ -322,3 +371,18 @@ anyWhitespaceCh = oneOf whitespaceChs
 
 anyWhitespace :: Parser String
 anyWhitespace = many $ anyWhitespaceCh
+
+any1Whitespace :: Parser String
+any1Whitespace = many1 anyWhitespaceCh
+
+linearWhitespaceCh :: Parser Char
+linearWhitespaceCh = oneOf " \t"
+
+anyLinearWhitespace :: Parser String
+anyLinearWhitespace = many linearWhitespaceCh
+
+any1LinearWhitespace:: Parser String
+any1LinearWhitespace = many1 linearWhitespaceCh
+
+statementSep :: Parser String
+statementSep = choice [string "\n", string ";"]

@@ -23,6 +23,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("fn call args", testFnArgs)
                              , ("binary expression", testBinaryExpr)
                              , ("statements", testStatements)
+                             , ("block", testBlock)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -168,4 +169,20 @@ testStatements = tableTest statement
                  , ("last(foo)", Just (StatementExpr (ExpressionFnCall "last"
                                                       [ExpressionVar "foo"])))
                  , ("return 5", Just (StatementReturn (intLitExpr 5)))
+                 , ("if True { return 1 }", Just (StatementIf
+                                                  { condition=(ExpressionLit (LiteralStruct "True"))
+                                                  , body=[StatementReturn (intLitExpr 1)]
+                                                  , elseIfBlocks=[]
+                                                  , elseBlock=Nothing }))
                  ]
+
+testBlock = tableTest block
+            [ ("{}", Just [])
+            , ("{1}", Just [StatementExpr (intLitExpr 1)])
+            , ("{  1  }", Just [StatementExpr (intLitExpr 1)])
+            , ("{\n1\n}", Just [StatementExpr (intLitExpr 1)])
+            , ("{\n  1\n  return 2;  }", Just [ StatementExpr (intLitExpr 1)
+                                              , StatementReturn (intLitExpr 2)])
+            , ("{1;return 2;}", Just [ StatementExpr (intLitExpr 1)
+                                     , StatementReturn (intLitExpr 2)])
+            ]
