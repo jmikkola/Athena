@@ -1,5 +1,8 @@
 module Parse where
 
+import Control.Monad (liftM)
+import Data.Char ( digitToInt )
+
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
@@ -14,7 +17,7 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 literal :: Parser LiteralValue
-literal = choice [numericLiteral]
+literal = choice [try hexLiteral, try octalLiteral, numericLiteral]
 
 numericLiteral :: Parser LiteralValue
 numericLiteral = do
@@ -53,6 +56,26 @@ exponentPart = do
   sign <- choice [string "+", string "-", string ""]
   ds <- many digit
   return ('e' : sign ++ ds)
+
+hexLiteral :: Parser LiteralValue
+hexLiteral = liftM LiteralInt $ hexNum
+
+hexNum :: Parser Int
+hexNum = do
+  _ <- string "0x"
+  hexits <- many1 $ oneOf "0123456789ABCDEFabcdef"
+  return $ readHex hexits
+    where readHex = foldl (\ current hexit -> (digitToInt hexit) + (16 * current)) 0
+
+octalLiteral :: Parser LiteralValue
+octalLiteral = liftM LiteralInt $ octalNum
+
+octalNum :: Parser Int
+octalNum = do
+  _ <- string "0o"
+  octits <- many1 $ oneOf "01234567"
+  return $ readOct octits
+    where readOct = foldl (\ current octit -> (digitToInt octit) + (8 * current)) 0
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"

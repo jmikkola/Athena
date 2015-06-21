@@ -14,7 +14,9 @@ import Parse
 
 
 main = defaultMain $ asGroup [ ("digits", testParseDigits)
-                             , ("numeric literals", testNumericLiterals)
+                             , ("literals", testLiterals)
+                             , ("hex literals", testHexLiteral)
+                             , ("octal literals", testOctalLiteral)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -55,13 +57,36 @@ testGoodDigits = TestList $ map makeTest goodDigitsTestCases
 testBadDigits = TestList $ map makeTest badDigitsTestCases
   where makeTest input = input ~: assertParses digits input Nothing
 
-numericLiteralTestCases = [ ("1", Just (LiteralInt 1))
-                          , ("2_001_003", Just (LiteralInt 2001003))
-                          , ("1.", Just (LiteralFloat 1.0))
-                          , ("10_6.2_5", Just (LiteralFloat 106.25))
-                          , ("0.125e+2", Just (LiteralFloat 12.5))
-                          , ("1e5", Nothing)
-                          ]
+literalTestCases = [ ("1", Just (LiteralInt 1))
+                    , ("2_001_003", Just (LiteralInt 2001003))
+                    , ("1.", Just (LiteralFloat 1.0))
+                    , ("10_6.2_5", Just (LiteralFloat 106.25))
+                    , ("0.125e+2", Just (LiteralFloat 12.5))
+                    , ("0x0ff", Just (LiteralInt 255))
+                    , ("0o74", Just (LiteralInt 60))
+                    , ("1e5", Nothing)
+                    ]
 
-testNumericLiterals = TestList $ map makeTest numericLiteralTestCases
-  where makeTest (input, expectation) = input ~: assertParses numericLiteral input expectation
+testLiterals = TestList $ map makeTest literalTestCases
+  where makeTest (input, expectation) = input ~: assertParses literal input expectation
+
+hexTestCases = [ ("0x1", Just 1)
+               , ("0xFF", Just 255)
+               , ("0xff", Just 255)
+               , ("0x400", Just 1024)
+               , ("400", Nothing)
+               , ("0xG", Nothing)
+               ]
+
+testHexLiteral = TestList $ map makeTest hexTestCases
+  where makeTest (input, expectation) = input ~: assertParses hexNum input expectation
+
+octalTestCases = [ ("0o1", Just 1)
+                 , ("0o20", Just 16)
+                 , ("0o77", Just 63)
+                 , ("77", Nothing)
+                 , ("0o8", Nothing)
+                 ]
+
+testOctalLiteral = TestList $ map makeTest octalTestCases
+  where makeTest (input, expectation) = input ~: assertParses octalNum input expectation
