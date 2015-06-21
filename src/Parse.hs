@@ -35,19 +35,21 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 expression :: Parser Expression
-expression = choice [ try binLevel1
-                    , try literalExpression
-                    , try parenExpression
-                    , try functionCallExpression
-                    , variableExpression
+expression = choice [ parenExpression
+                    , binLevel1
                     ]
 
 nonBinaryExpression ::  Parser Expression
-nonBinaryExpression = choice [ try literalExpression
-                             , try parenExpression
-                             , try functionCallExpression
-                             , variableExpression
+nonBinaryExpression = choice [ parenExpression
+                             , literalExpression
+                             , lowerLetterExpr
                              ]
+
+-- Expressions that start with a lowercase letter
+lowerLetterExpr :: Parser Expression
+lowerLetterExpr = do
+  name <- valueName
+  choice [functionCallExpression name, variableExpression name]
 
 literalExpression :: Parser Expression
 literalExpression = liftM ExpressionLit $ literal
@@ -134,11 +136,8 @@ escapedChar = do
 structLiteral :: Parser LiteralValue
 structLiteral = liftM LiteralStruct $ typeName
 
-variableExpression :: Parser Expression
-variableExpression = liftM ExpressionVar $ variable
-
-variable :: Parser VariableName
-variable = valueName
+variableExpression :: String -> Parser Expression
+variableExpression varName = return $ ExpressionVar varName
 
 parenExpression :: Parser Expression
 parenExpression = do
@@ -149,9 +148,8 @@ parenExpression = do
   _ <- char ')'
   return $ ExpressionParen expr
 
-functionCallExpression :: Parser Expression
-functionCallExpression = do
-  fnName <- valueName
+functionCallExpression :: String -> Parser Expression
+functionCallExpression fnName = do
   _ <- anyWhitespace
   args <- fnCallArgs
   return $ ExpressionFnCall fnName args

@@ -113,11 +113,12 @@ testExpression = tableTest expression
                  , ("barFn()", Just (ExpressionFnCall "barFn" []))
                  ]
 
-testFnCall = tableTest functionCallExpression
-             [ ("foo(    )", Just (ExpressionFnCall "foo" []))
-             , ("foo()", Just (ExpressionFnCall "foo" []))
-             , ("foo(123)", Just (ExpressionFnCall "foo" [intLitExpr 123]))
-             , ("foo(   123  )", Just (ExpressionFnCall "foo" [intLitExpr 123]))
+testFnCall = tableTest (functionCallExpression "foo")
+             [ ("(    )", Just (ExpressionFnCall "foo" []))
+             , ("()", Just (ExpressionFnCall "foo" []))
+             , ("(123)", Just (ExpressionFnCall "foo" [intLitExpr 123]))
+             , ("(   123  )", Just (ExpressionFnCall "foo" [intLitExpr 123]))
+             , ("  (123)", Just (ExpressionFnCall "foo" [intLitExpr 123]))
              ]
 
 testFnArgs = tableTest fnCallArgs
