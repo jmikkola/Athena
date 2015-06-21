@@ -21,6 +21,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("function call", testFnCall)
                              , ("expression", testExpression)
                              , ("fn call args", testFnArgs)
+                             , ("binary expression", testBinaryExpr)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -136,3 +137,11 @@ testFnArgs = tableTest fnCallArgs
             , ("(123, ,456)", Nothing)
             , ("(123 456)", Nothing)
             ]
+
+testBinaryExpr = tableTest binaryExpression
+                 [ ("1+2", Just (ExpressionBinary Plus (intLitExpr 1) (intLitExpr 2)))
+                 , ("1  -  2", Just (ExpressionBinary Minus (intLitExpr 1) (intLitExpr 2)))
+                 , ("1 + (2 * 3)", Just (ExpressionBinary Plus (intLitExpr 1)
+                                         (ExpressionParen (ExpressionBinary Times
+                                                           (intLitExpr 2) (intLitExpr 3)))))
+                 ]

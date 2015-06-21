@@ -6,10 +6,18 @@ import Data.Char ( digitToInt )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
+data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
+              deriving (Show, Eq)
+
+data UnaryOp = Negate | Flip
+             deriving (Show, Eq)
+
 data Expression = ExpressionLit LiteralValue
                 | ExpressionVar VariableName
                 | ExpressionParen Expression
                 | ExpressionFnCall FunctionName [Expression]
+                | ExpressionBinary BinaryOp Expression Expression
+                | ExpressionUnary UnaryOp Expression
                 deriving (Show, Eq)
 
 -- TODO: allow using structs with fields...
@@ -27,11 +35,19 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 expression :: Parser Expression
-expression = choice [ try literalExpression
+expression = choice [ try binaryExpression
+                    , try literalExpression
                     , try parenExpression
                     , try functionCallExpression
                     , variableExpression
                     ]
+
+nonBinaryExpression ::  Parser Expression
+nonBinaryExpression = choice [ try literalExpression
+                             , try parenExpression
+                             , try functionCallExpression
+                             , variableExpression
+                             ]
 
 literalExpression :: Parser Expression
 literalExpression = liftM ExpressionLit $ literal
@@ -185,6 +201,28 @@ commaSeparator = do
   _ <- char ','
   _ <- anyWhitespace
   return ()
+
+_binaryOp :: String -> BinaryOp -> Parser BinaryOp
+_binaryOp s op = do
+  _ <- string s
+  return op
+
+plusOp = _binaryOp "+" Plus
+minusOp = _binaryOp "-" Minus
+timesOp = _binaryOp "*" Times
+divideOp = _binaryOp "/" Divide
+modOp = _binaryOp "%" Mod
+
+binaryOp = choice [plusOp, minusOp, timesOp, divideOp, modOp]
+
+binaryExpression :: Parser Expression
+binaryExpression = do
+  left <- nonBinaryExpression
+  _ <- anyWhitespace
+  op <- binaryOp
+  _ <- anyWhitespace
+  right <- expression
+  return $ ExpressionBinary op left right
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
