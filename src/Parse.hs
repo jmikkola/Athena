@@ -8,6 +8,7 @@ import Text.Parsec.String (Parser)
 
 type Block = [Statement]
 
+-- TODO: add function declaration, type declaration
 data Statement = StatementExpr Expression
                | StatementAssign VariableName Expression
                | StatementReturn Expression
@@ -47,6 +48,21 @@ unwrapOr Nothing  b = b
 
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
+
+statement :: Parser Statement
+statement = choice [ assignmentStatement
+                   ]
+
+assignmentStatement :: Parser Statement
+assignmentStatement = do
+  _ <- letKwd
+  _ <- anyWhitespace
+  var <- valueName
+  _ <- anyWhitespace
+  _ <- char '='
+  _ <- anyWhitespace
+  expr <- expression
+  return $ StatementAssign var expr
 
 expression :: Parser Expression
 expression = binLevel1
@@ -251,6 +267,24 @@ binExpr2 = do
   _ <- anyWhitespace
   right <- binLevel2
   return $ ExpressionBinary op left right
+
+ifKwd :: Parser String
+ifKwd = string "if"
+
+elseKwd :: Parser String
+elseKwd = string "else"
+
+whileKwd :: Parser String
+whileKwd = string "while"
+
+forKwd :: Parser String
+forKwd = string "for"
+
+inKwd :: Parser String
+inKwd = string "in"
+
+letKwd :: Parser String
+letKwd = string "let"
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"

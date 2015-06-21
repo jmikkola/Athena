@@ -22,6 +22,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("expression", testExpression)
                              , ("fn call args", testFnArgs)
                              , ("binary expression", testBinaryExpr)
+                             , ("statements", testStatements)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -158,4 +159,8 @@ testBinaryExpr = tableTest binLevel1
                  , ("2 * 3 + 4", Just (ExpressionBinary Plus
                                        (ExpressionBinary Times (intLitExpr 2) (intLitExpr 3))
                                        (intLitExpr 4)))
+                 ]
+
+testStatements = tableTest statement
+                 [ ("let abc = 123", Just (StatementAssign "abc" (intLitExpr 123)))
                  ]
