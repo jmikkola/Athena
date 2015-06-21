@@ -1,6 +1,6 @@
 module Parse where
 
-import Control.Monad (liftM)
+import Control.Monad ( liftM )
 import Data.Char ( digitToInt )
 
 import Text.Parsec
@@ -9,6 +9,7 @@ import Text.Parsec.String (Parser)
 data Expression = ExpressionLit LiteralValue
                 | ExpressionVar VariableName
                 | ExpressionParen Expression
+                | ExpressionFnCall FunctionName [Expression]
                 deriving (Show, Eq)
 
 -- TODO: allow using structs with fields...
@@ -16,6 +17,7 @@ data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String |
                   deriving (Show, Eq)
 
 type VariableName = String
+type FunctionName = String
 
 unwrapOr :: Maybe a -> a -> a
 unwrapOr (Just a) _ = a
@@ -25,7 +27,11 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 expression :: Parser Expression
-expression = choice [literalExpression, variableExpression, parenExpression]
+expression = choice [ try literalExpression
+                    , try variableExpression
+                    , try parenExpression
+                    , try functionCallExpression
+                    ]
 
 literalExpression :: Parser Expression
 literalExpression = liftM ExpressionLit $ literal
@@ -127,6 +133,22 @@ parenExpression = do
   _ <- char ')'
   return $ ExpressionParen expr
 
+functionCallExpression :: Parser Expression
+functionCallExpression = do
+  fnName <- valueName
+  _ <- anyWhitespace
+  args <- fnCallArgs
+  return $ ExpressionFnCall fnName args
+
+fnCallArgs :: Parser [Expression]
+fnCallArgs = do
+  _ <- char '('
+  _ <- anyWhitespace
+  args <- expression `sepBy` commaSeparator
+  _ <- anyWhitespace
+  _ <- char ')'
+  return args
+
 typeName :: Parser String
 typeName = do
   first <- upper
@@ -138,6 +160,13 @@ valueName = do
   first <- lower
   rest <- many $ choice [alphaNum, underscore, char '?']
   return $ first : rest
+
+commaSeparator :: Parser ()
+commaSeparator = do
+  _ <- anyWhitespace
+  _ <- char ','
+  _ <- anyWhitespace
+  return ()
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
