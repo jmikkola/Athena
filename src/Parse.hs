@@ -93,6 +93,18 @@ escapedChar = do
   c <- anyChar
   return $ '\\' : c : ""
 
+typeName :: Parser String
+typeName = do
+  first <- upper
+  rest <- many $ choice [letter, underscore]
+  return $ first : rest
+
+valueName :: Parser String
+valueName = do
+  first <- lower
+  rest <- many $ choice [alphaNum, underscore, char '?']
+  return $ first : rest
+
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
 

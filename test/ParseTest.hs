@@ -52,11 +52,9 @@ testParseDigits = TestList [ "Accepts good digits" ~: testGoodDigits
                            , "Rejects bad digits" ~: testBadDigits
                            ]
 
-testGoodDigits = TestList $ map makeTest goodDigitsTestCases
-  where makeTest (input, output) = input ~: assertParses digits input (Just output)
+testGoodDigits = tableTest (map (\(t,o) -> (t, Just o)) goodDigitsTestCases) digits
 
-testBadDigits = TestList $ map makeTest badDigitsTestCases
-  where makeTest input = input ~: assertParses digits input Nothing
+testBadDigits = tableTest (map (\t -> (t, Nothing)) badDigitsTestCases) digits
 
 literalTestCases = [ ("1", Just (LiteralInt 1))
                     , ("2_001_003", Just (LiteralInt 2001003))
@@ -69,8 +67,7 @@ literalTestCases = [ ("1", Just (LiteralInt 1))
                     , (escapedString "foo bar", Just (LiteralString "foo bar"))
                     ]
 
-testLiterals = TestList $ map makeTest literalTestCases
-  where makeTest (input, expectation) = input ~: assertParses literal input expectation
+testLiterals = tableTest literalTestCases literal
 
 hexTestCases = [ ("0x1", Just 1)
                , ("0xFF", Just 255)
@@ -80,8 +77,7 @@ hexTestCases = [ ("0x1", Just 1)
                , ("0xG", Nothing)
                ]
 
-testHexLiteral = TestList $ map makeTest hexTestCases
-  where makeTest (input, expectation) = input ~: assertParses hexNum input expectation
+testHexLiteral = tableTest hexTestCases hexNum
 
 octalTestCases = [ ("0o1", Just 1)
                  , ("0o20", Just 16)
@@ -90,9 +86,7 @@ octalTestCases = [ ("0o1", Just 1)
                  , ("0o8", Nothing)
                  ]
 
-testOctalLiteral = TestList $ map makeTest octalTestCases
-  where makeTest (input, expectation) = input ~: assertParses octalNum input expectation
-
+testOctalLiteral = tableTest octalTestCases octalNum
 
 quoteLiteral = '"' : ""
 escapedString s = quoteLiteral ++ s ++ quoteLiteral
