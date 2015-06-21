@@ -108,6 +108,7 @@ intLitExpr = ExpressionLit . LiteralInt
 testExpression = tableTest expression
                  [ ("1", Just (intLitExpr 1))
                  , ("(123)", Just (ExpressionParen (intLitExpr 123)))
+                 , ("var1", Just (ExpressionVar "var1"))
                  , ("barFn()", Just (ExpressionFnCall "barFn" []))
                  ]
 
@@ -129,4 +130,9 @@ testFnArgs = tableTest fnCallArgs
             , ("(123,456)", Just [intLitExpr 123, intLitExpr 456])
             , ("(123,  456)", Just [intLitExpr 123, intLitExpr 456])
             , ("(123  ,456)", Just [intLitExpr 123, intLitExpr 456])
+            , ("(,)", Nothing)
+            , ("(,123)", Nothing)
+            , ("(123,)", Nothing)
+            , ("(123, ,456)", Nothing)
+            , ("(123 456)", Nothing)
             ]

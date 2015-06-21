@@ -28,9 +28,9 @@ maybeEmpty m = unwrapOr m ""
 
 expression :: Parser Expression
 expression = choice [ try literalExpression
-                    , try variableExpression
                     , try parenExpression
                     , try functionCallExpression
+                    , variableExpression
                     ]
 
 literalExpression :: Parser Expression
