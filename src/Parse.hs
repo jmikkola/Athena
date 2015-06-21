@@ -61,12 +61,14 @@ exponentPart = do
 hexLiteral :: Parser LiteralValue
 hexLiteral = liftM LiteralInt $ hexNum
 
+readInBase :: Int -> String -> Int
+readInBase base = foldl (\current chr -> (digitToInt chr) + (base * current)) 0
+
 hexNum :: Parser Int
 hexNum = do
   _ <- string "0x"
   hexits <- many1 $ oneOf "0123456789ABCDEFabcdef"
-  return $ readHex hexits
-    where readHex = foldl (\ current hexit -> (digitToInt hexit) + (16 * current)) 0
+  return $ (readInBase 16) hexits
 
 octalLiteral :: Parser LiteralValue
 octalLiteral = liftM LiteralInt $ octalNum
@@ -75,8 +77,7 @@ octalNum :: Parser Int
 octalNum = do
   _ <- string "0o"
   octits <- many1 $ oneOf "01234567"
-  return $ readOct octits
-    where readOct = foldl (\ current octit -> (digitToInt octit) + (8 * current)) 0
+  return $ (readInBase 8) octits
 
 stringLiteral :: Parser LiteralValue
 stringLiteral = liftM LiteralString $ doubleQuotedString
