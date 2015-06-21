@@ -163,4 +163,9 @@ testBinaryExpr = tableTest binLevel1
 
 testStatements = tableTest statement
                  [ ("let abc = 123", Just (StatementAssign "abc" (intLitExpr 123)))
+                 , ("println(\"test\")", Just (StatementExpr (ExpressionFnCall "println"
+                                                              [ExpressionLit (LiteralString "test")])))
+                 , ("last(foo)", Just (StatementExpr (ExpressionFnCall "last"
+                                                      [ExpressionVar "foo"])))
+                 , ("return 5", Just (StatementReturn (intLitExpr 5)))
                  ]

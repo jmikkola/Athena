@@ -49,9 +49,15 @@ unwrapOr Nothing  b = b
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
+-- Both assignmentStatement and returnStatement are safe to "try" because they will fail fast
 statement :: Parser Statement
-statement = choice [ assignmentStatement
+statement = choice [ try assignmentStatement
+                   , try returnStatement
+                   , expressionStatment
                    ]
+
+expressionStatment :: Parser Statement
+expressionStatment = liftM StatementExpr $ expression
 
 assignmentStatement :: Parser Statement
 assignmentStatement = do
@@ -63,6 +69,13 @@ assignmentStatement = do
   _ <- anyWhitespace
   expr <- expression
   return $ StatementAssign var expr
+
+returnStatement :: Parser Statement
+returnStatement = do
+  _ <- returnKwd
+  _ <- anyWhitespace
+  expr <- expression
+  return $ StatementReturn expr
 
 expression :: Parser Expression
 expression = binLevel1
@@ -285,6 +298,9 @@ inKwd = string "in"
 
 letKwd :: Parser String
 letKwd = string "let"
+
+returnKwd :: Parser String
+returnKwd = string "return"
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
