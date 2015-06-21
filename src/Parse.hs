@@ -144,10 +144,28 @@ fnCallArgs :: Parser [Expression]
 fnCallArgs = do
   _ <- char '('
   _ <- anyWhitespace
-  args <- expression `sepBy` commaSeparator
+  fnCallArgsList
+
+fnCallArgsList :: Parser [Expression]
+fnCallArgsList = choice [fnCallArgsEnd, fnCallArgsSingle]
+
+fnCallArgsSingle :: Parser [Expression]
+fnCallArgsSingle = do
+  expr <- expression
   _ <- anyWhitespace
+  rest <- choice [fnCallArgsNext, fnCallArgsEnd]
+  return (expr : rest)
+
+fnCallArgsNext :: Parser [Expression]
+fnCallArgsNext = do
+  _ <- char ','
+  _ <- anyWhitespace
+  fnCallArgsSingle
+
+fnCallArgsEnd :: Parser [Expression]
+fnCallArgsEnd = do
   _ <- char ')'
-  return args
+  return []
 
 typeName :: Parser String
 typeName = do

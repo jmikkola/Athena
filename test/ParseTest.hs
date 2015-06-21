@@ -20,6 +20,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("double quoted string", testDoubleQuotedString)
                              , ("function call", testFnCall)
                              , ("expression", testExpression)
+                             , ("fn call args", testFnArgs)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -116,3 +117,16 @@ testFnCall = tableTest functionCallExpression
              , ("foo(123)", Just (ExpressionFnCall "foo" [intLitExpr 123]))
              , ("foo(   123  )", Just (ExpressionFnCall "foo" [intLitExpr 123]))
              ]
+
+testFnArgs = tableTest fnCallArgs
+            [ ("()", Just [])
+            , ("( )", Just [])
+            , ("(  )", Just [])
+            , ("(123)", Just [intLitExpr 123])
+            , ("( 123)", Just [intLitExpr 123])
+            , ("(123 )", Just [intLitExpr 123])
+            , ("(  123  )", Just [intLitExpr 123])
+            , ("(123,456)", Just [intLitExpr 123, intLitExpr 456])
+            , ("(123,  456)", Just [intLitExpr 123, intLitExpr 456])
+            , ("(123  ,456)", Just [intLitExpr 123, intLitExpr 456])
+            ]
