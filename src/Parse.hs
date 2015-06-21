@@ -35,7 +35,7 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 expression :: Parser Expression
-expression = choice [ try binaryExpression
+expression = choice [ try binLevel1
                     , try literalExpression
                     , try parenExpression
                     , try functionCallExpression
@@ -215,13 +215,31 @@ modOp = _binaryOp "%" Mod
 
 binaryOp = choice [plusOp, minusOp, timesOp, divideOp, modOp]
 
-binaryExpression :: Parser Expression
-binaryExpression = do
+binaryOps1 = choice [plusOp, minusOp]
+binaryOps2 = choice [timesOp, divideOp, modOp]
+
+binLevel1 :: Parser Expression
+binLevel1 = choice [try binExpr1, binLevel2]
+
+binLevel2 :: Parser Expression
+binLevel2 = choice [try binExpr2, nonBinaryExpression]
+
+binExpr1 :: Parser Expression
+binExpr1 = do
+  left <- binLevel2
+  _ <- anyWhitespace
+  op <- binaryOps1
+  _ <- anyWhitespace
+  right <- binLevel1
+  return $ ExpressionBinary op left right
+
+binExpr2 :: Parser Expression
+binExpr2 = do
   left <- nonBinaryExpression
   _ <- anyWhitespace
-  op <- binaryOp
+  op <- binaryOps2
   _ <- anyWhitespace
-  right <- expression
+  right <- binLevel2
   return $ ExpressionBinary op left right
 
 whitespaceChs :: String

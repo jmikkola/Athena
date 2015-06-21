@@ -138,10 +138,15 @@ testFnArgs = tableTest fnCallArgs
             , ("(123 456)", Nothing)
             ]
 
-testBinaryExpr = tableTest binaryExpression
+testBinaryExpr = tableTest binLevel1
                  [ ("1+2", Just (ExpressionBinary Plus (intLitExpr 1) (intLitExpr 2)))
                  , ("1  -  2", Just (ExpressionBinary Minus (intLitExpr 1) (intLitExpr 2)))
                  , ("1 + (2 * 3)", Just (ExpressionBinary Plus (intLitExpr 1)
                                          (ExpressionParen (ExpressionBinary Times
                                                            (intLitExpr 2) (intLitExpr 3)))))
+                 , ("2 + 3 * 4", Just (ExpressionBinary Plus (intLitExpr 2)
+                                       (ExpressionBinary Times (intLitExpr 3) (intLitExpr 4))))
+                 , ("2 * 3 + 4", Just (ExpressionBinary Plus
+                                       (ExpressionBinary Times (intLitExpr 2) (intLitExpr 3))
+                                       (intLitExpr 4)))
                  ]
