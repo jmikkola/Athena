@@ -65,6 +65,7 @@ literalTestCases = [ ("1", Just (LiteralInt 1))
                     , ("0o74", Just (LiteralInt 60))
                     , ("1e5", Nothing)
                     , (escapedString "foo bar", Just (LiteralString "foo bar"))
+                    , ("False", Just (LiteralStruct "False"))
                     ]
 
 testLiterals = tableTest literalTestCases literal

@@ -6,7 +6,8 @@ import Data.Char ( digitToInt )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
-data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String
+-- TODO: allow using structs with fields...
+data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String | LiteralStruct String
                   deriving (Show, Eq)
 
 unwrapOr :: Maybe a -> a -> a
@@ -17,7 +18,7 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 literal :: Parser LiteralValue
-literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral]
+literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral, structLiteral]
 
 numericLiteral :: Parser LiteralValue
 numericLiteral = do
@@ -92,6 +93,10 @@ escapedChar = do
   _ <- char '\\'
   c <- anyChar
   return $ '\\' : c : ""
+
+-- TODO: parse field values
+structLiteral :: Parser LiteralValue
+structLiteral = liftM LiteralStruct $ typeName
 
 typeName :: Parser String
 typeName = do
