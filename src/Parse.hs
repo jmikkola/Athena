@@ -6,7 +6,7 @@ import Data.Char ( digitToInt )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
-data LiteralValue = LiteralFloat Float | LiteralInt Int
+data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String
                   deriving (Show, Eq)
 
 unwrapOr :: Maybe a -> a -> a
@@ -17,7 +17,7 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 literal :: Parser LiteralValue
-literal = choice [try hexLiteral, try octalLiteral, numericLiteral]
+literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral]
 
 numericLiteral :: Parser LiteralValue
 numericLiteral = do
@@ -76,6 +76,22 @@ octalNum = do
   octits <- many1 $ oneOf "01234567"
   return $ readOct octits
     where readOct = foldl (\ current octit -> (digitToInt octit) + (8 * current)) 0
+
+stringLiteral :: Parser LiteralValue
+stringLiteral = liftM LiteralString $ doubleQuotedString
+
+doubleQuotedString :: Parser String
+doubleQuotedString = do
+  _ <- char '"'
+  stringContents <- many $ choice [escapedChar, many1 $ noneOf "\\\""]
+  _ <- char '"'
+  return $ concat stringContents
+
+escapedChar :: Parser String
+escapedChar = do
+  _ <- char '\\'
+  c <- anyChar
+  return $ '\\' : c : ""
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"

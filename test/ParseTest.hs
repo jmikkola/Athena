@@ -17,6 +17,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("literals", testLiterals)
                              , ("hex literals", testHexLiteral)
                              , ("octal literals", testOctalLiteral)
+                             , ("double quoted string", testDoubleQuotedString)
                              ]
 
 asGroup namedTests = map convert namedTests
@@ -65,6 +66,7 @@ literalTestCases = [ ("1", Just (LiteralInt 1))
                     , ("0x0ff", Just (LiteralInt 255))
                     , ("0o74", Just (LiteralInt 60))
                     , ("1e5", Nothing)
+                    , (escapedString "foo bar", Just (LiteralString "foo bar"))
                     ]
 
 testLiterals = TestList $ map makeTest literalTestCases
@@ -90,3 +92,17 @@ octalTestCases = [ ("0o1", Just 1)
 
 testOctalLiteral = TestList $ map makeTest octalTestCases
   where makeTest (input, expectation) = input ~: assertParses octalNum input expectation
+
+
+quoteLiteral = '"' : ""
+escapedString s = quoteLiteral ++ s ++ quoteLiteral
+doubleQuotedStringCases = [ (escapedString "", Just "")
+                          , (escapedString "Hello, world!", Just "Hello, world!")
+                          , (escapedString "\\\"", Just "\\\"")
+                          , (escapedString "\\n", Just "\\n")
+                          ]
+
+testDoubleQuotedString = tableTest doubleQuotedStringCases doubleQuotedString
+
+tableTest cases parseFn = TestList $ map makeTest cases
+  where makeTest (input, expectation) = input ~: assertParses parseFn input expectation
