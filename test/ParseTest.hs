@@ -111,6 +111,14 @@ testExpression = tableTest expression
                  , ("(123)", Just (ExpressionParen (intLitExpr 123)))
                  , ("var1", Just (ExpressionVar "var1"))
                  , ("barFn()", Just (ExpressionFnCall "barFn" []))
+                 , ("1 + foo  ( 3 * 4 , bar(\"zig\") ) / 5",
+                    Just (ExpressionBinary Plus (intLitExpr 1)
+                         (ExpressionBinary Divide
+                           (ExpressionFnCall "foo"
+                            [ExpressionBinary Times (intLitExpr 3) (intLitExpr 4),
+                             ExpressionFnCall "bar"
+                             [ExpressionLit (LiteralString "zig")]])
+                           (intLitExpr 5))))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")

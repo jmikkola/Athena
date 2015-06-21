@@ -35,9 +35,7 @@ maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
 expression :: Parser Expression
-expression = choice [ parenExpression
-                    , binLevel1
-                    ]
+expression = binLevel1
 
 nonBinaryExpression ::  Parser Expression
 nonBinaryExpression = choice [ parenExpression
