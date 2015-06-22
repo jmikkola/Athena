@@ -45,15 +45,20 @@ evalExpr ctx ex =
       case Map.lookup varname ctx of
         Just value -> Right value
         Nothing    -> Left $ EvalError { message="Variable not found", expr=ex }
-    (UnaryExpr op ex)   -> do
-      inner <- evalExpr ctx ex
-      evalUnary op inner
+    (UnaryExpr op ex')   -> do
+      inner <- evalExpr ctx ex'
+      wrapError ex $ evalUnary op inner
     (BinaryExpr op l r) -> do
       left <- evalExpr ctx l
       right <- evalExpr ctx r
-      evalBinary op left right
+      wrapError ex $ evalBinary op left right
 
-evalUnary :: UnaryOp -> Expr -> Either EvalError Expr
+wrapError :: Expr -> Either String Expr -> Either EvalError Expr
+wrapError original result = case result of
+  Right r -> Right r
+  Left er -> Left $ EvalError { message=er, expr=original }
+
+evalUnary :: UnaryOp -> Expr -> Either String Expr
 evalUnary op ex =
   case ex of
     (IntValExpr i)    ->
@@ -63,45 +68,36 @@ evalUnary op ex =
     (FloatValExpr f)  ->
       case op of
         Negate -> Right . FloatValExpr $ 0 - f
-        _      -> Left $ EvalError
-                        { message=("Can't apply unary op " ++ (display op) ++ " to a float")
-                        , expr=ex
-                        }
-    _                 -> Left $ EvalError
-                                 { message=("Can't apply unary op " ++ (display op))
-                                 , expr=ex
-                                 }
+        _      -> Left $ "Can't apply unary op " ++ (display op) ++ " to a float"
+    _                 -> Left $ "Can't apply unary op " ++ (display op)
 
-evalBinary :: BinaryOp -> Expr -> Expr -> Either EvalError Expr
+evalBinary :: BinaryOp -> Expr -> Expr -> Either String Expr
 evalBinary op l r =
   case (l, r) of
-   (IntValExpr il, IntValExpr ir) ->
-     case op of
-      Plus   -> Right . IntValExpr $ il + ir
-      Minus  -> Right . IntValExpr $ il - ir
-      Times  -> Right . IntValExpr $ il * ir
-      Divide -> Right . IntValExpr $ il `div` ir
-      Mod    -> Right . IntValExpr $ il `mod` ir
-      Power  -> Right . IntValExpr $ il ^ ir
-   (FloatValExpr fl, FloatValExpr fr) ->
-     case op of
-      Plus   -> Right . FloatValExpr $ fl + fr
-      Minus  -> Right . FloatValExpr $ fl - fr
-      Times  -> Right . FloatValExpr $ fl * fr
-      Divide -> Right . FloatValExpr $ fl / fr
-      Mod    -> Left $ EvalError
-                      { message=("Can't apply mod to floats")
-                      , expr=(BinaryExpr op l r)
-                      }
-      Power  -> Right . FloatValExpr $ fl ** fr
+   (IntValExpr il,    IntValExpr ir)    ->
+     Right . IntValExpr $ intOp op il ir
+   (FloatValExpr fl,  FloatValExpr fr)  ->
+     do
+       opFn <- floatOp op
+       return $ FloatValExpr (opFn fl fr)
    (StringValExpr sl, StringValExpr sr) ->
      case op of
        Plus -> Right . StringValExpr $ sl ++ sr
-       _    -> Left $ EvalError
-                          { message=("Can't apply op " ++ (display op) ++ " to strings")
-                          , expr=(BinaryExpr op l r)
-                          }
-   _ -> Left $ EvalError
-               { message=("Can't apply binary op " ++ (display op) ++ " to " ++ (show l) ++ " and " ++ (show r))
-               , expr=(BinaryExpr op l r)
-               }
+       _    -> Left $ "Can't apply op " ++ (display op) ++ " to strings"
+   _ -> Left $ "Can't apply binary op " ++ (display op) ++ " to " ++ (show l) ++ " and " ++ (show r)
+
+intOp :: BinaryOp -> Int -> Int -> Int
+intOp Plus   = (+)
+intOp Minus  = (-)
+intOp Times  = (*)
+intOp Divide = div
+intOp Mod    = mod
+intOp Power  = (^)
+
+floatOp :: BinaryOp -> Either String (Float -> Float -> Float)
+floatOp Plus   = Right (+)
+floatOp Minus  = Right (-)
+floatOp Times  = Right (*)
+floatOp Divide = Right (/)
+floatOp Mod    = Left "Can't apply mod to floats"
+floatOp Power  = Right (**)
