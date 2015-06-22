@@ -2,6 +2,7 @@ import System.Console.Readline
 
 import Control.Applicative ( (<*) )
 import Data.Char ( isSpace )
+import qualified Data.Map as Map
 
 import Text.Parsec ( parse, eof )
 
@@ -21,7 +22,7 @@ tryParsing line = case parse (expression <* eof) "user input" line of
   Left err -> print err
 
 handleParsed :: Expression -> IO ()
-handleParsed = print . translate
+handleParsed = print . evalExpr Map.empty . translate
 
 repl :: String -> (String -> IO ()) -> IO ()
 repl prompt fn = do

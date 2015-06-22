@@ -6,6 +6,9 @@ import Data.Char ( digitToInt )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
+class Display a where
+  display :: a -> String
+
 type Block = [Statement]
 
 -- TODO: add function declaration, type declaration
@@ -24,8 +27,20 @@ data Statement = StatementExpr Expression
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               deriving (Show, Eq)
 
+instance Display BinaryOp where
+  display Plus   = "+"
+  display Minus  = "-"
+  display Times  = "*"
+  display Divide = "/"
+  display Mod    = "%"
+  display Power  = "^"
+
 data UnaryOp = Negate | Flip
              deriving (Show, Eq)
+
+instance Display UnaryOp where
+  display Negate = "-"
+  display Flip   = "~"
 
 data Expression = ExpressionLit LiteralValue
                 | ExpressionVar VariableName
@@ -131,6 +146,7 @@ expression = binLevel1
 
 nonBinaryExpression ::  Parser Expression
 nonBinaryExpression = choice [ parenExpression
+                             , unaryExpr
                              , literalExpression
                              , lowerLetterExpr
                              ]
@@ -329,6 +345,23 @@ binExpr2 = do
   _ <- anyWhitespace
   right <- binLevel2
   return $ ExpressionBinary op left right
+
+_unaryOp :: String -> UnaryOp -> Parser UnaryOp
+_unaryOp s op = do
+  _ <- string s
+  return op
+
+negateOp = _unaryOp "-" Negate
+flipOp = _unaryOp "~" Flip
+
+unaryOp :: Parser UnaryOp
+unaryOp = choice [negateOp, flipOp]
+
+unaryExpr :: Parser Expression
+unaryExpr = do
+  op <- unaryOp
+  expr <- nonBinaryExpression
+  return $ ExpressionUnary op expr
 
 ifKwd :: Parser String
 ifKwd = string "if"

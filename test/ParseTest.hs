@@ -121,6 +121,16 @@ testExpression = tableTest expression
                              ExpressionFnCall "bar"
                              [ExpressionLit (LiteralString "zig")]])
                            (intLitExpr 5))))
+                 , ("~-123", Just (ExpressionUnary Flip (ExpressionUnary Negate (intLitExpr 123))))
+                 , ("~(1 + 2)", Just (ExpressionUnary Flip
+                                      (ExpressionParen (ExpressionBinary Plus
+                                                        (intLitExpr 1) (intLitExpr 2)))))
+                 , ("-1 + 3", Just (ExpressionBinary Plus
+                                    (ExpressionUnary Negate (intLitExpr 1))
+                                    (intLitExpr 3)))
+                 , ("3 + -1", Just (ExpressionBinary Plus
+                                    (intLitExpr 3)
+                                    (ExpressionUnary Negate (intLitExpr 1))))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")
