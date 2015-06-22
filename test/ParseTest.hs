@@ -107,6 +107,7 @@ testDoubleQuotedString = tableTest doubleQuotedString
                          ]
 
 intLitExpr = ExpressionLit . LiteralInt
+flLitExpr = ExpressionLit . LiteralFloat
 
 testExpression = tableTest expression
                  [ ("1", Just (intLitExpr 1))
@@ -131,6 +132,7 @@ testExpression = tableTest expression
                  , ("3 + -1", Just (ExpressionBinary Plus
                                     (intLitExpr 3)
                                     (ExpressionUnary Negate (intLitExpr 1))))
+                 , ("3.14 ^ 2.0", Just (ExpressionBinary Power (flLitExpr 3.14) (flLitExpr 2.0)))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")

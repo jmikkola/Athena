@@ -316,11 +316,10 @@ minusOp = _binaryOp "-" Minus
 timesOp = _binaryOp "*" Times
 divideOp = _binaryOp "/" Divide
 modOp = _binaryOp "%" Mod
-
-binaryOp = choice [plusOp, minusOp, timesOp, divideOp, modOp]
+powerOp = _binaryOp "^" Power
 
 binaryOps1 = choice [plusOp, minusOp]
-binaryOps2 = choice [timesOp, divideOp, modOp]
+binaryOps2 = choice [timesOp, divideOp, modOp, powerOp]
 
 binLevel1 :: Parser Expression
 binLevel1 = choice [try binExpr1, binLevel2]
