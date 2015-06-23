@@ -26,6 +26,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("statements", testStatements)
                              , ("block", testBlock)
                              , ("type def", testTypeDef)
+                             , ("function", testFunctionDef)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -209,3 +210,18 @@ testTypeDef = tableTest typeDef
                                                                  , NamedType "Set" [NamedType "Int" []]
                                                                  ])
               ]
+
+testFunctionDef = tableTest functionDef
+                  [ ("fn f() {}", Just $ FunctionDef "f" [] Nothing [])
+                  , ("fn add(a, b) {}", Just $ FunctionDef "add"
+                                                             [FnArg "a" Nothing, FnArg "b" Nothing]
+                                                             Nothing
+                                                             [])
+                  , ("fn five() { return 1 + 4 }", Just $ FunctionDef "five" [] Nothing
+                                                             [StatementReturn $ ExpressionBinary
+                                                               Plus (intLitExpr 1) (intLitExpr 4)])
+                  , ("fn head(l List[a]) a {}", Just $ FunctionDef "head"
+                                                       [FnArg "l" (Just $ NamedType "List" [TypeVar "a"])]
+                                                       (Just $ TypeVar "a")
+                                                       [])
+                  ]

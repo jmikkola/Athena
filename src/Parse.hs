@@ -9,6 +9,12 @@ import Text.Parsec.String (Parser)
 class Display a where
   display :: a -> String
 
+data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
+                 deriving (Eq, Show)
+
+data FnArg = FnArg String (Maybe TypeDef)
+             deriving (Eq, Show)
+
 data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
              deriving (Eq, Show)
 
@@ -392,6 +398,53 @@ typeVar :: Parser TypeDef
 typeVar = do
   varName <- many1 lower
   return $ TypeVar varName
+
+-- TODO: Support short fn definition
+functionDef :: Parser FunctionDef
+functionDef = do
+  _ <- fnKwd
+  _ <- any1LinearWhitespace
+  fnName <- valueName
+  args <- fnArgs
+  _ <- any1LinearWhitespace
+  retType <- optionMaybe $ do
+    retType <- typeDef
+    _ <- any1LinearWhitespace
+    return retType
+  body <- block
+  return $ FunctionDef fnName args retType body
+
+fnArgs :: Parser [FnArg]
+fnArgs = do
+  _ <- char '('
+  _ <- anyWhitespace
+  nextFnArg
+
+nextFnArg :: Parser [FnArg]
+nextFnArg = fnArgEnd <|> do
+  arg <- fnArg
+  _ <- anyWhitespace
+  rest <- fnArgEnd <|> do
+    _ <- char ','
+    _ <- any1Whitespace
+    nextFnArg
+  return $ arg : rest
+
+fnArgEnd :: Parser [FnArg]
+fnArgEnd = do
+  _ <- char ')'
+  return []
+
+fnArg :: Parser FnArg
+fnArg = do
+  name <- valueName
+  argType <- optionMaybe $ do
+    _ <- any1LinearWhitespace
+    typeDef
+  return $ FnArg name argType
+
+fnKwd :: Parser String
+fnKwd = string "fn"
 
 ifKwd :: Parser String
 ifKwd = string "if"
