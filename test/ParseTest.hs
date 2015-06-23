@@ -10,6 +10,8 @@ import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Text.Parsec ( parse, eof )
 import Text.Parsec.String ( Parser )
 
+import TestUtil ( asGroup )
+
 import Parse
 
 
@@ -25,9 +27,6 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("statements", testStatements)
                              , ("block", testBlock)
                              ]
-
-asGroup namedTests = map convert namedTests
-  where convert (name, fn) = testGroup name (hUnitTestToTests fn)
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
 maybeEqEither (Just a) (Right b) = a == b
