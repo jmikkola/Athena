@@ -107,7 +107,6 @@ ifStatement = do
                      , elseBlock=Nothing
                      }
 
-
 block :: Parser Block
 block = do
   startBlock
@@ -139,7 +138,6 @@ endBlock :: Parser Block
 endBlock = do
   _ <- char '}'
   return []
-
 
 expression :: Parser Expression
 expression = binLevel1
