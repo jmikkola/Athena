@@ -9,6 +9,9 @@ import Text.Parsec.String (Parser)
 class Display a where
   display :: a -> String
 
+data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
+             deriving (Eq, Show)
+
 type Block = [Statement]
 
 -- TODO: add function declaration, type declaration
@@ -359,6 +362,36 @@ unaryExpr = do
   op <- unaryOp
   expr <- nonBinaryExpression
   return $ ExpressionUnary op expr
+
+typeDef :: Parser TypeDef
+typeDef = nilType <|> namedType <|> typeVar <?> "type def"
+
+nilType :: Parser TypeDef
+nilType = do
+  _ <- string "()"
+  return NilType
+
+namedType :: Parser TypeDef
+namedType = do
+  name <- typeName
+  params <- optionMaybe typeParams
+  return $ NamedType name (unwrapOr params [])
+
+typeParams :: Parser [TypeDef]
+typeParams = do
+  _ <- char '['
+  _ <- anyLinearWhitespace
+  params <- typeDef `sepBy` (do
+                               _ <- char ','
+                               anyLinearWhitespace)
+  _ <- anyLinearWhitespace
+  _ <- char ']'
+  return params
+
+typeVar :: Parser TypeDef
+typeVar = do
+  varName <- many1 lower
+  return $ TypeVar varName
 
 ifKwd :: Parser String
 ifKwd = string "if"

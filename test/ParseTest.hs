@@ -14,7 +14,6 @@ import TestUtil ( asGroup )
 
 import Parse
 
-
 main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("literals", testLiterals)
                              , ("hex literals", testHexLiteral)
@@ -26,6 +25,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("binary expression", testBinaryExpr)
                              , ("statements", testStatements)
                              , ("block", testBlock)
+                             , ("type def", testTypeDef)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -197,3 +197,15 @@ testBlock = tableTest block
             , ("{1;return 2;}", Just [ StatementExpr (intLitExpr 1)
                                      , StatementReturn (intLitExpr 2)])
             ]
+
+testTypeDef = tableTest typeDef
+              [ ("()", Just NilType)
+              , ("(  )", Nothing)
+              , ("Bool", Just $ NamedType "Bool" [])
+              , ("Bool[]", Just $ NamedType "Bool" [])
+              , ("List[a]", Just $ NamedType "List" [TypeVar "a"])
+              , ("List[  a  ]", Just $ NamedType "List" [TypeVar "a"])
+              , ("Map[String, Set[Int]]", Just $ NamedType "Map" [ NamedType "String" []
+                                                                 , NamedType "Set" [NamedType "Int" []]
+                                                                 ])
+              ]
