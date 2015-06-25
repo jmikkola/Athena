@@ -1,4 +1,29 @@
-module Parse where
+module Parse ( Display (..)
+             , FunctionDef (..)
+             , FnArg (..)
+             , TypeDef (..)
+             , Block
+             , Statement (..)
+             , BinaryOp (..)
+             , UnaryOp (..)
+             , Expression (..)
+             , LiteralValue (..)
+             , FunctionName
+             , VariableName
+             , digits
+             , literal
+             , doubleQuotedString
+             , hexNum
+             , octalNum
+             , expression
+             , binaryExpression
+             , functionCallExpression
+             , fnCallArgs
+             , statement
+             , block
+             , typeDef
+             , functionDef
+             ) where
 
 import Control.Monad ( liftM )
 import Data.Char ( digitToInt )
@@ -22,7 +47,7 @@ type Block = [Statement]
 
 -- TODO: add function declaration, type declaration
 data Statement = StatementExpr Expression
-               | StatementAssign VariableName Expression
+               | StatementLet VariableName Expression
                | StatementReturn Expression
                | StatementIf { condition :: Expression
                              , body :: Block
@@ -83,9 +108,9 @@ unwrapOr Nothing  b = b
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
--- Both assignmentStatement and returnStatement are safe to "try" because they will fail fast
+-- Both letStatement and returnStatement are safe to "try" because they will fail fast
 statement :: Parser Statement
-statement = choice [ try assignmentStatement
+statement = choice [ try letStatement
                    , try returnStatement
                    , try ifStatement
                    , try whileStatement
@@ -95,8 +120,8 @@ statement = choice [ try assignmentStatement
 expressionStatment :: Parser Statement
 expressionStatment = liftM StatementExpr $ expression
 
-assignmentStatement :: Parser Statement
-assignmentStatement = do
+letStatement :: Parser Statement
+letStatement = do
   _ <- letKwd
   _ <- any1LinearWhitespace
   var <- valueName
@@ -104,7 +129,7 @@ assignmentStatement = do
   _ <- char '='
   _ <- any1Whitespace
   expr <- expression
-  return $ StatementAssign var expr
+  return $ StatementLet var expr
 
 returnStatement :: Parser Statement
 returnStatement = do
@@ -326,13 +351,6 @@ valueName = do
   rest <- many $ choice [alphaNum, underscore, char '?']
   return $ first : rest
 
-commaSeparator :: Parser ()
-commaSeparator = do
-  _ <- anyWhitespace
-  _ <- char ','
-  _ <- anyWhitespace
-  return ()
-
 binaryOpLevels :: [[BinaryOp]]
 binaryOpLevels = [ [LessEq, GreaterEq, NotEq, Equals, Less, Greater]
                  , [Plus, Minus, And, Or]
@@ -483,17 +501,8 @@ returnKwd = string "return"
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
 
-otherChars :: Parser Char
-otherChars = oneOf "~!@$%^&*-+=<>?"
-
 underscore :: Parser Char
 underscore = char '_'
-
-anyKeyChar :: Parser Char
-anyKeyChar = alphaNum <|> underscore <|> otherChars
-
-symbolStartChar :: Parser Char
-symbolStartChar = letter <|> underscore <|> otherChars
 
 anyWhitespaceCh :: Parser Char
 anyWhitespaceCh = oneOf whitespaceChs

@@ -178,7 +178,7 @@ testBinaryExpr = tableTest binaryExpression
                  ]
 
 testStatements = tableTest statement
-                 [ ("let abc = 123", Just (StatementAssign "abc" (intLitExpr 123)))
+                 [ ("let abc = 123", Just (StatementLet "abc" (intLitExpr 123)))
                  , ("println(\"test\")", Just (StatementExpr (ExpressionFnCall "println"
                                                               [ExpressionLit (LiteralString "test")])))
                  , ("last(foo)", Just (StatementExpr (ExpressionFnCall "last"
@@ -191,7 +191,7 @@ testStatements = tableTest statement
                                                   , elseBlock=Nothing }))
                  , ("while 10 { let i = 20 }", Just $ StatementWhile
                                                          (intLitExpr 10)
-                                                         [StatementAssign "i" (intLitExpr 20)])
+                                                         [StatementLet "i" (intLitExpr 20)])
                  ]
 
 testBlock = tableTest block
