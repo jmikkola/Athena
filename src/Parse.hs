@@ -33,16 +33,27 @@ data Statement = StatementExpr Expression
                | StatementFor VariableName Expression Block
                deriving (Show, Eq)
 
+-- TODO: introduce boolean binary operations and, or, not, and xor
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
+              | Less | LessEq | Equals | Greater | GreaterEq | NotEq
               deriving (Show, Eq)
 
 instance Display BinaryOp where
-  display Plus   = "+"
-  display Minus  = "-"
-  display Times  = "*"
-  display Divide = "/"
-  display Mod    = "%"
-  display Power  = "^"
+  display Plus      = "+"
+  display Minus     = "-"
+  display Times     = "*"
+  display Divide    = "/"
+  display Mod       = "%"
+  display Power     = "^"
+  display Less      = "<"
+  display LessEq    = "<="
+  display Equals    = "=="
+  display Greater   = ">"
+  display GreaterEq = ">="
+  display NotEq     = "!="
+
+allBinaryOps :: [BinaryOp]
+allBinaryOps = [Plus, Minus, Times, Divide, Mod, Power, Less, LessEq, Equals, Greater, GreaterEq, NotEq]
 
 data UnaryOp = Negate | Flip
              deriving (Show, Eq)
@@ -78,6 +89,7 @@ statement :: Parser Statement
 statement = choice [ try assignmentStatement
                    , try returnStatement
                    , try ifStatement
+                   , try whileStatement
                    , expressionStatment
                    ]
 
@@ -116,6 +128,15 @@ ifStatement = do
                      , elseBlock=Nothing
                      }
 
+whileStatement :: Parser Statement
+whileStatement = do
+  _ <- whileKwd
+  _ <- any1LinearWhitespace
+  test <- expression
+  _ <- any1LinearWhitespace
+  body <- block
+  return $ StatementWhile test body
+
 block :: Parser Block
 block = do
   startBlock
@@ -149,12 +170,12 @@ endBlock = do
   return []
 
 expression :: Parser Expression
-expression = binLevel1
+expression = binaryExpression
 
 nonBinaryExpression ::  Parser Expression
 nonBinaryExpression = choice [ parenExpression
                              , unaryExpr
-                             , literalExpression
+                             , try literalExpression
                              , lowerLetterExpr
                              ]
 
@@ -313,55 +334,48 @@ commaSeparator = do
   _ <- anyWhitespace
   return ()
 
-_binaryOp :: String -> BinaryOp -> Parser BinaryOp
-_binaryOp s op = do
-  _ <- string s
+binaryOpLevels :: [[BinaryOp]]
+binaryOpLevels = [ [LessEq, GreaterEq, NotEq, Equals, Less, Greater]
+                 , [Plus, Minus]
+                 , [Times, Divide, Mod]
+                 , [Power]
+                 ]
+
+binaryOpLevel :: [[BinaryOp]] -> Parser Expression
+binaryOpLevel [bottom] = binExprBottom
+  where binExprBottom = choice [ try $ binaryExpressionLevel binExprBottom nonBinaryExpression bottom
+                               , nonBinaryExpression
+                               ]
+binaryOpLevel (l:ls)   = binExprCurr
+  where binExprNext = binaryOpLevel ls
+        binExprCurr = choice [ try $ binaryExpressionLevel binExprCurr binExprNext l
+                             , binExprNext
+                             ]
+binaryOpLevel []       = error "must be at least one binary op level"
+
+
+binaryExpression :: Parser Expression
+binaryExpression = binaryOpLevel binaryOpLevels
+
+binOp :: BinaryOp -> Parser BinaryOp
+binOp op = do
+  _ <- string $ display op
   return op
 
-plusOp = _binaryOp "+" Plus
-minusOp = _binaryOp "-" Minus
-timesOp = _binaryOp "*" Times
-divideOp = _binaryOp "/" Divide
-modOp = _binaryOp "%" Mod
-powerOp = _binaryOp "^" Power
-
-binaryOps1 = choice [plusOp, minusOp]
-binaryOps2 = choice [timesOp, divideOp, modOp, powerOp]
-
-binLevel1 :: Parser Expression
-binLevel1 = choice [try binExpr1, binLevel2]
-
-binLevel2 :: Parser Expression
-binLevel2 = choice [try binExpr2, nonBinaryExpression]
-
-binExpr1 :: Parser Expression
-binExpr1 = do
-  left <- binLevel2
+binaryExpressionLevel :: Parser Expression -> Parser Expression -> [BinaryOp] -> Parser Expression
+binaryExpressionLevel self nextLevel ops = do
+  left <- nextLevel
   _ <- anyWhitespace
-  op <- binaryOps1
+  op <- choice $ map (try . binOp) ops
   _ <- anyWhitespace
-  right <- binLevel1
+  right <- self
   return $ ExpressionBinary op left right
-
-binExpr2 :: Parser Expression
-binExpr2 = do
-  left <- nonBinaryExpression
-  _ <- anyWhitespace
-  op <- binaryOps2
-  _ <- anyWhitespace
-  right <- binLevel2
-  return $ ExpressionBinary op left right
-
-_unaryOp :: String -> UnaryOp -> Parser UnaryOp
-_unaryOp s op = do
-  _ <- string s
-  return op
-
-negateOp = _unaryOp "-" Negate
-flipOp = _unaryOp "~" Flip
 
 unaryOp :: Parser UnaryOp
-unaryOp = choice [negateOp, flipOp]
+unaryOp = choice $ map (try . uOp) [Negate, Flip]
+  where uOp op = do
+          _ <- string $ display op
+          return op
 
 unaryExpr :: Parser Expression
 unaryExpr = do

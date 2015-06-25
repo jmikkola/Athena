@@ -161,7 +161,7 @@ testFnArgs = tableTest fnCallArgs
             , ("(123 456)", Nothing)
             ]
 
-testBinaryExpr = tableTest binLevel1
+testBinaryExpr = tableTest binaryExpression
                  [ ("1+2", Just (ExpressionBinary Plus (intLitExpr 1) (intLitExpr 2)))
                  , ("1  -  2", Just (ExpressionBinary Minus (intLitExpr 1) (intLitExpr 2)))
                  , ("1 + (2 * 3)", Just (ExpressionBinary Plus (intLitExpr 1)
@@ -186,6 +186,9 @@ testStatements = tableTest statement
                                                   , body=[StatementReturn (intLitExpr 1)]
                                                   , elseIfBlocks=[]
                                                   , elseBlock=Nothing }))
+                 , ("while 10 { let i = 20 }", Just $ StatementWhile
+                                                         (intLitExpr 10)
+                                                         [StatementAssign "i" (intLitExpr 20)])
                  ]
 
 testBlock = tableTest block
