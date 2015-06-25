@@ -22,6 +22,7 @@ module Parse ( Display (..)
              , functionCallExpression
              , fnCallArgs
              , statement
+             , ifStatement
              , block
              , typeDef
              , functionDef
@@ -190,8 +191,35 @@ ifStatement = do
   test <- expression
   _ <- any1LinearWhitespace
   body <- block
-  -- TODO: handle `else if` and `else` parts
-  return $ StatementIf test body NoElse
+  elsePart <- maybeElse
+  return $ StatementIf test body elsePart
+
+maybeElse :: Parser ElsePart
+maybeElse = do
+  elsePart <- optionMaybe $ try elseBlock
+  return $ unwrapOr elsePart NoElse
+
+elseBlock :: Parser ElsePart
+elseBlock = do
+  _ <- anyWhitespace
+  _ <- elseKwd
+  _ <- any1LinearWhitespace
+  elseIfStmt <|> elseStmt <?> "else block"
+
+elseIfStmt :: Parser ElsePart
+elseIfStmt = do
+  _ <- ifKwd
+  _ <- any1Whitespace
+  test <- expression
+  _ <- any1LinearWhitespace
+  body <- block
+  elsePart <- maybeElse
+  return $ ElseIf test body elsePart
+
+elseStmt :: Parser ElsePart
+elseStmt = do
+  body <- block
+  return $ Else body
 
 whileStatement :: Parser Statement
 whileStatement = do

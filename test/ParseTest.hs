@@ -24,6 +24,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("fn call args", testFnArgs)
                              , ("binary expression", testBinaryExpr)
                              , ("statements", testStatements)
+                             , ("if statement", testIfStatement)
                              , ("block", testBlock)
                              , ("type def", testTypeDef)
                              , ("function", testFunctionDef)
@@ -205,12 +206,32 @@ testStatements = tableTest statement
                                                           (Block [StatementAssign "i"
                                                             (ExpressionBinary Plus
                                                              (ExpressionVar "i") (intLitExpr 1))]))
-                 , (undisplay (StatementWhile (ExpressionBinary Less
-                                                (ExpressionVar "i") (intLitExpr 10))
+                 , (undisplay (StatementWhile exampleBoolExpr
                                               (Block [StatementAssign "i"
                                                       (ExpressionBinary Plus
                                                        (ExpressionVar "i") (intLitExpr 1))])))
                  ]
+
+exampleBoolExpr = (ExpressionBinary Less (ExpressionVar "i") (intLitExpr 10))
+exampleBlock = (Block [StatementReturn (intLitExpr 123)])
+
+testIfStatement = tableTest ifStatement
+                  [ (undisplay $ StatementIf exampleBoolExpr exampleBlock NoElse)
+                  , (undisplay $ StatementIf exampleBoolExpr exampleBlock
+                                 (Else exampleBlock))
+                  , (undisplay $ StatementIf exampleBoolExpr exampleBlock
+                                 (ElseIf exampleBoolExpr exampleBlock NoElse))
+                  , (undisplay $ StatementIf exampleBoolExpr exampleBlock
+                                 (ElseIf exampleBoolExpr exampleBlock
+                                   (ElseIf exampleBoolExpr exampleBlock
+                                     (Else exampleBlock))))
+                  , ("if 1 { 5 } else if 2 { 3 } else { 999 }",
+                     Just $ StatementIf (intLitExpr 1)
+                         (Block [StatementExpr $ intLitExpr 5])
+                         (ElseIf (intLitExpr 2)
+                                 (Block [StatementExpr $ intLitExpr 3])
+                                 (Else $ Block [StatementExpr $ intLitExpr 999])))
+                  ]
 
 testBlock = tableTest block
             [ ("{}", Just $ Block [])
