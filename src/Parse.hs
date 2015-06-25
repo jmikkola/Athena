@@ -383,11 +383,11 @@ escapedChar = do
   c <- anyChar
   return $ '\\' : c : ""
 
--- TODO: parse field values
 structLiteral :: Parser LiteralValue
 structLiteral = do
   name <- typeName
-  return $ LiteralStruct name []
+  args <- optionMaybe fnCallArgs
+  return $ LiteralStruct name (unwrapOr args [])
 
 variableExpression :: String -> Parser Expression
 variableExpression varName = return $ ExpressionVar varName

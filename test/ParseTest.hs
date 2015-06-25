@@ -69,6 +69,8 @@ testGoodDigits = tableTest digits
 
 testBadDigits = tableTest digits (map expectNoParse ["", "_", "1_", "_3", "1__2"])
 
+trueExpr = ExpressionLit $ LiteralStruct "True" []
+
 testLiterals = tableTest literal
                [ ("1", Just (LiteralInt 1))
                , ("2_001_003", Just (LiteralInt 2001003))
@@ -81,6 +83,7 @@ testLiterals = tableTest literal
                , (escapedString "foo bar", Just (LiteralString "foo bar"))
                , ("False", Just (LiteralStruct "False" []))
                , (undisplay $ LiteralStruct "True" [])
+               , (undisplay $ LiteralStruct "Pair" [(intLitExpr 23), trueExpr])
                ]
 
 testHexLiteral = tableTest hexNum
