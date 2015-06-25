@@ -47,6 +47,12 @@ data FnArg = FnArg String (Maybe TypeDef)
 data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
              deriving (Eq, Show)
 
+instance Display TypeDef where
+  display  NilType               = "()"
+  display (NamedType s [])       = s
+  display (NamedType s subtypes) = s ++ "[" ++ (intercalate ", " $ map display subtypes) ++ "]"
+  display (TypeVar   s)          = s
+
 data Block = Block [Statement]
            deriving (Eq, Show)
 

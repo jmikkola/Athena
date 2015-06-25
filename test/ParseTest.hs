@@ -256,6 +256,9 @@ testTypeDef = tableTest typeDef
               , ("Map[String, Set[Int]]", Just $ NamedType "Map" [ NamedType "String" []
                                                                  , NamedType "Set" [NamedType "Int" []]
                                                                  ])
+              , (undisplay (NamedType "Map" [ NamedType "String" []
+                                            , NamedType "Set" [NamedType "Int" []]
+                                            ]))
               ]
 
 testFunctionDef = tableTest functionDef
