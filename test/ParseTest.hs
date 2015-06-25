@@ -70,6 +70,7 @@ testGoodDigits = tableTest digits
 testBadDigits = tableTest digits (map expectNoParse ["", "_", "1_", "_3", "1__2"])
 
 trueExpr = ExpressionLit $ LiteralStruct "True" []
+falseExpr = ExpressionLit $ LiteralStruct "False" []
 
 testLiterals = tableTest literal
                [ ("1", Just (LiteralInt 1))
@@ -149,6 +150,13 @@ testExpression = tableTest expression
                  , ("i < 5", Just (ExpressionBinary Less
                                     (ExpressionVar "i")
                                     (intLitExpr 5)))
+                 , ("Pair( 1 + 5, True || False )",
+                    Just (ExpressionLit (LiteralStruct "Pair"
+                                        [ ExpressionBinary Plus (intLitExpr 1) (intLitExpr 5)
+                                        , ExpressionBinary Or trueExpr falseExpr])))
+                  , (undisplay $ ExpressionLit (LiteralStruct "Pair"
+                                         [ ExpressionBinary Plus (intLitExpr 1) (intLitExpr 5)
+                                         , ExpressionBinary Or trueExpr falseExpr]))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")
