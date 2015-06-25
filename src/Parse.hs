@@ -2,7 +2,7 @@ module Parse ( Display (..)
              , FunctionDef (..)
              , FnArg (..)
              , TypeDef (..)
-             , Block
+             , Block (..)
              , Statement (..)
              , BinaryOp (..)
              , UnaryOp (..)
@@ -44,7 +44,11 @@ data FnArg = FnArg String (Maybe TypeDef)
 data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
              deriving (Eq, Show)
 
-type Block = [Statement]
+data Block = Block [Statement]
+           deriving (Eq, Show)
+
+instance Display Block where
+  display (Block statements) = "{\n" ++ (intercalate "\n" $ map display statements) ++ "\n}"
 
 -- TODO: add function declaration, type declaration
 data Statement = StatementExpr Expression
@@ -197,7 +201,7 @@ whileStatement = do
 block :: Parser Block
 block = do
   startBlock
-  blockStatements
+  liftM Block $ blockStatements
 
 startBlock :: Parser ()
 startBlock = do
@@ -205,11 +209,11 @@ startBlock = do
   _ <- anyWhitespace
   return ()
 
-blockStatements :: Parser Block
+blockStatements :: Parser [Statement]
 blockStatements = blockStatement <|> endBlock
 
 -- TODO: fix this mess
-blockStatement :: Parser Block
+blockStatement :: Parser [Statement]
 blockStatement = do
   stmt <- statement
   _ <- anyLinearWhitespace
@@ -221,7 +225,7 @@ blockStatement = do
                 ]
   return $ stmt : rest
 
-endBlock :: Parser Block
+endBlock :: Parser [Statement]
 endBlock = do
   _ <- char '}'
   return []

@@ -194,25 +194,25 @@ testStatements = tableTest statement
                  , ("return 5", Just (StatementReturn (intLitExpr 5)))
                  , ("if True { return 1 }", Just (StatementIf
                                                   { condition=(ExpressionLit (LiteralStruct "True"))
-                                                  , body=[StatementReturn (intLitExpr 1)]
+                                                  , body=Block [StatementReturn (intLitExpr 1)]
                                                   , elseIfBlocks=[]
                                                   , elseBlock=Nothing }))
                  , ("while i < 10 { i = i + 1 }", Just $ StatementWhile
                                                          (ExpressionBinary Less
                                                           (ExpressionVar "i") (intLitExpr 10))
-                                                         [StatementAssign "i"
-                                                           (ExpressionBinary Plus (ExpressionVar "i") (intLitExpr 1))])
+                                                          (Block [StatementAssign "i"
+                                                            (ExpressionBinary Plus (ExpressionVar "i") (intLitExpr 1))]))
                  ]
 
 testBlock = tableTest block
-            [ ("{}", Just [])
-            , ("{1}", Just [StatementExpr (intLitExpr 1)])
-            , ("{  1  }", Just [StatementExpr (intLitExpr 1)])
-            , ("{\n1\n}", Just [StatementExpr (intLitExpr 1)])
-            , ("{\n  1\n  return 2;  }", Just [ StatementExpr (intLitExpr 1)
-                                              , StatementReturn (intLitExpr 2)])
-            , ("{1;return 2;}", Just [ StatementExpr (intLitExpr 1)
-                                     , StatementReturn (intLitExpr 2)])
+            [ ("{}", Just $ Block [])
+            , ("{1}", Just $ Block [StatementExpr (intLitExpr 1)])
+            , ("{  1  }", Just $ Block [StatementExpr (intLitExpr 1)])
+            , ("{\n1\n}", Just $ Block [StatementExpr (intLitExpr 1)])
+            , ("{\n  1\n  return 2;  }", Just $ Block [ StatementExpr (intLitExpr 1)
+                                                      , StatementReturn (intLitExpr 2)])
+            , ("{1;return 2;}", Just $ Block [ StatementExpr (intLitExpr 1)
+                                             , StatementReturn (intLitExpr 2)])
             ]
 
 testTypeDef = tableTest typeDef
@@ -228,16 +228,16 @@ testTypeDef = tableTest typeDef
               ]
 
 testFunctionDef = tableTest functionDef
-                  [ ("fn f() {}", Just $ FunctionDef "f" [] Nothing [])
+                  [ ("fn f() {}", Just $ FunctionDef "f" [] Nothing (Block []))
                   , ("fn add(a, b) {}", Just $ FunctionDef "add"
                                                              [FnArg "a" Nothing, FnArg "b" Nothing]
                                                              Nothing
-                                                             [])
+                                                             (Block []))
                   , ("fn five() { return 1 + 4 }", Just $ FunctionDef "five" [] Nothing
-                                                             [StatementReturn $ ExpressionBinary
-                                                               Plus (intLitExpr 1) (intLitExpr 4)])
+                                                          (Block  [StatementReturn $ ExpressionBinary
+                                                                   Plus (intLitExpr 1) (intLitExpr 4)]))
                   , ("fn head(l List[a]) a {}", Just $ FunctionDef "head"
                                                        [FnArg "l" (Just $ NamedType "List" [TypeVar "a"])]
                                                        (Just $ TypeVar "a")
-                                                       [])
+                                                       (Block  []))
                   ]
