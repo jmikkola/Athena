@@ -359,16 +359,12 @@ binaryOpLevels = [ [LessEq, GreaterEq, NotEq, Equals, Less, Greater]
                  ]
 
 binaryOpLevel :: [[BinaryOp]] -> Parser Expression
-binaryOpLevel [bottom] = binExprBottom
-  where binExprBottom = choice [ try $ binaryExpressionLevel binExprBottom nonBinaryExpression bottom
-                               , nonBinaryExpression
-                               ]
-binaryOpLevel (l:ls)   = binExprCurr
+binaryOpLevel (l:ls) = binExprCurr
   where binExprNext = binaryOpLevel ls
         binExprCurr = choice [ try $ binaryExpressionLevel binExprCurr binExprNext l
                              , binExprNext
                              ]
-binaryOpLevel []       = error "must be at least one binary op level"
+binaryOpLevel []     = nonBinaryExpression
 
 
 binaryExpression :: Parser Expression
