@@ -41,8 +41,22 @@ class Display a where
 data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
                  deriving (Eq, Show)
 
+instance Display FunctionDef where
+  display (FunctionDef name args maybeType block) =
+    "fn " ++ name ++ "(" ++ displayedArgs ++ ") " ++ retType ++ display block
+    where displayedArgs = intercalate ", " $ map display args
+          retType = case maybeType of
+            Nothing -> ""
+            Just t  -> display t ++ " "
+
 data FnArg = FnArg String (Maybe TypeDef)
              deriving (Eq, Show)
+
+instance Display FnArg where
+  display (FnArg name maybeType) = name ++ rest
+    where rest = case maybeType of
+            Nothing -> ""
+            Just t  -> " " ++ display t
 
 data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
              deriving (Eq, Show)

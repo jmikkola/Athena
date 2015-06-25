@@ -274,4 +274,13 @@ testFunctionDef = tableTest functionDef
                                                        [FnArg "l" (Just $ NamedType "List" [TypeVar "a"])]
                                                        (Just $ TypeVar "a")
                                                        (Block  []))
+                  , (undisplay $ FunctionDef "cons"
+                      [ FnArg "item" (Just $ TypeVar "a")
+                      , FnArg "rest" (Just $ NamedType "List" [TypeVar "a"])
+                      ]
+                      (Just $ NamedType "List" [TypeVar "a"])
+                      (Block [StatementReturn $ ExpressionBinary Plus
+                              (ExpressionVar "item") (ExpressionVar "rest")]))
+                  , (undisplay $ FunctionDef "cons"
+                      [FnArg "item" Nothing, FnArg "rest" Nothing] Nothing (Block []))
                   ]
