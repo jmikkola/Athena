@@ -36,15 +36,18 @@ maybeEqEither _        _         = False
 
 assertParses :: (Eq a, Show a) => Parser a -> String -> Maybe a -> Assertion
 assertParses parser input expectation = assertBool message matched
-  where result    = parse (parser <* eof) "test" input
+  where result    = parse (parser <* anyWhitespace <* eof) "test" input
         matched   = maybeEqEither expectation result
         resultStr = case expectation of
           Nothing -> "not parse"
           Just r  -> "parse to " ++ show r
-        message   = "expected " ++ input ++ " to " ++ resultStr ++ ", got " ++ (show result)
+        message   = "expected " ++ show input ++ " to " ++ resultStr ++ ", got " ++ show result
 
 tableTest parseFn cases = TestList $ map makeTest cases
   where makeTest (input, expectation) = input ~: assertParses parseFn input expectation
+
+undisplay :: (Display a) => a -> (String, Maybe a)
+undisplay a = (display a, Just a)
 
 expectNoParse s =  (s, Nothing)
 expectParsesTo (s,o) = (s, Just o)
@@ -76,6 +79,7 @@ testLiterals = tableTest literal
                , ("1e5", Nothing)
                , (escapedString "foo bar", Just (LiteralString "foo bar"))
                , ("False", Just (LiteralStruct "False"))
+               , (undisplay $ LiteralStruct "True")
                ]
 
 testHexLiteral = tableTest hexNum
@@ -192,16 +196,20 @@ testStatements = tableTest statement
                  , ("last(foo)", Just (StatementExpr (ExpressionFnCall "last"
                                                       [ExpressionVar "foo"])))
                  , ("return 5", Just (StatementReturn (intLitExpr 5)))
-                 , ("if True { return 1 }", Just (StatementIf
-                                                  { condition=(ExpressionLit (LiteralStruct "True"))
-                                                  , body=Block [StatementReturn (intLitExpr 1)]
-                                                  , elseIfBlocks=[]
-                                                  , elseBlock=Nothing }))
+                 , ("if True { return 1 }", Just (StatementIf (ExpressionLit (LiteralStruct "True"))
+                                                   (Block [StatementReturn (intLitExpr 1)])
+                                                   NoElse))
                  , ("while i < 10 { i = i + 1 }", Just $ StatementWhile
                                                          (ExpressionBinary Less
                                                           (ExpressionVar "i") (intLitExpr 10))
                                                           (Block [StatementAssign "i"
-                                                            (ExpressionBinary Plus (ExpressionVar "i") (intLitExpr 1))]))
+                                                            (ExpressionBinary Plus
+                                                             (ExpressionVar "i") (intLitExpr 1))]))
+                 , (undisplay (StatementWhile (ExpressionBinary Less
+                                                (ExpressionVar "i") (intLitExpr 10))
+                                              (Block [StatementAssign "i"
+                                                      (ExpressionBinary Plus
+                                                       (ExpressionVar "i") (intLitExpr 1))])))
                  ]
 
 testBlock = tableTest block
@@ -213,6 +221,8 @@ testBlock = tableTest block
                                                       , StatementReturn (intLitExpr 2)])
             , ("{1;return 2;}", Just $ Block [ StatementExpr (intLitExpr 1)
                                              , StatementReturn (intLitExpr 2)])
+            , (undisplay (Block [ StatementExpr (intLitExpr 1)
+                                , StatementReturn (intLitExpr 2)]))
             ]
 
 testTypeDef = tableTest typeDef

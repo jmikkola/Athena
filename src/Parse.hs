@@ -3,6 +3,7 @@ module Parse ( Display (..)
              , FnArg (..)
              , TypeDef (..)
              , Block (..)
+             , ElsePart (..)
              , Statement (..)
              , BinaryOp (..)
              , UnaryOp (..)
@@ -10,6 +11,7 @@ module Parse ( Display (..)
              , LiteralValue (..)
              , FunctionName
              , VariableName
+             , anyWhitespace
              , digits
              , literal
              , doubleQuotedString
@@ -27,7 +29,7 @@ module Parse ( Display (..)
 
 import Control.Monad ( liftM )
 import Data.Char ( digitToInt )
-import Data.List ( intercalate )
+import Data.List ( concatMap, intercalate )
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -48,28 +50,34 @@ data Block = Block [Statement]
            deriving (Eq, Show)
 
 instance Display Block where
-  display (Block statements) = "{\n" ++ (intercalate "\n" $ map display statements) ++ "\n}"
+  display (Block statements) = "{\n" ++ (concatMap display statements) ++ "}\n"
+
+data ElsePart = NoElse | Else Block | ElseIf Expression Block ElsePart
+              deriving (Eq, Show)
+
+instance Display ElsePart where
+  display NoElse = ""
+  display (Else block) = "else " ++ display block
+  display (ElseIf expr block ep) = "else if " ++ display expr ++ " " ++ display block ++ display ep
 
 -- TODO: add function declaration, type declaration
 data Statement = StatementExpr Expression
                | StatementLet VariableName Expression
                | StatementAssign VariableName Expression
                | StatementReturn Expression
-               | StatementIf { condition :: Expression
-                             , body :: Block
-                             , elseIfBlocks :: [(Expression, Block)]
-                             , elseBlock :: Maybe Block
-                             }
+               | StatementIf Expression Block ElsePart
                | StatementWhile Expression Block
                | StatementFor VariableName Expression Block
                deriving (Show, Eq)
 
 instance Display Statement where
-  display (StatementExpr expr) = display expr
-  display (StatementLet var expr) = "let " ++ var ++ " = " ++ display expr
-  display (StatementAssign var expr) = var ++ " = " ++ display expr
-  display (StatementReturn expr) = "return " ++ display expr
-  --TODO: the rest of them...
+  display (StatementExpr expr) = display expr ++ "\n"
+  display (StatementLet var expr) = "let " ++ var ++ " = " ++ display expr ++ "\n"
+  display (StatementAssign var expr) = var ++ " = " ++ display expr ++ "\n"
+  display (StatementReturn expr) = "return " ++ display expr ++ "\n"
+  display (StatementIf test block ep) = "if " ++ display test ++ " " ++ display block ++ display ep
+  display (StatementWhile test block) = "while " ++ display test ++ " " ++ display block
+  display (StatementFor var expr block) = "for " ++ var ++ " in " ++ display expr ++ " " ++ display block
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
@@ -183,11 +191,7 @@ ifStatement = do
   _ <- any1LinearWhitespace
   body <- block
   -- TODO: handle `else if` and `else` parts
-  return StatementIf { condition=test
-                     , body=body
-                     , elseIfBlocks=[]
-                     , elseBlock=Nothing
-                     }
+  return $ StatementIf test body NoElse
 
 whileStatement :: Parser Statement
 whileStatement = do
@@ -220,7 +224,7 @@ blockStatement = do
   rest <- choice [ endBlock
                 , do
                   _ <- statementSep
-                  _ <- anyLinearWhitespace
+                  _ <- anyWhitespace
                   blockStatements
                 ]
   return $ stmt : rest
