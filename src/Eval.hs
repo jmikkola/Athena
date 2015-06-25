@@ -9,7 +9,7 @@ import Parse
 data Expr = IntValExpr Int
           | FloatValExpr Float
           | StringValExpr String
-          | StructValExpr String
+          | StructValExpr String [Expr]
           | VarExpr String
           | UnaryExpr UnaryOp Expr
           | BinaryExpr BinaryOp Expr Expr
@@ -27,7 +27,7 @@ translate (ExpressionLit lit)   = case lit of
   LiteralInt i    -> IntValExpr i
   LiteralFloat f  -> FloatValExpr f
   LiteralString s -> StringValExpr s
-  LiteralStruct s -> StructValExpr s
+  LiteralStruct s exprs -> StructValExpr s (map translate exprs)
 translate (ExpressionVar name)      = VarExpr name
 translate (ExpressionParen inner)   = translate inner
 translate (ExpressionFnCall _ _)    = error "TODO"
@@ -40,7 +40,9 @@ evalExpr ctx ex =
     (IntValExpr _)      -> Right ex
     (FloatValExpr _)    -> Right ex
     (StringValExpr _)   -> Right ex
-    (StructValExpr _)   -> Right ex
+    (StructValExpr name exprs)   -> do
+      evaledExprs <- mapM (evalExpr ctx) exprs
+      return $ StructValExpr name evaledExprs
     (VarExpr varname)   ->
       case Map.lookup varname ctx of
         Just value -> Right value

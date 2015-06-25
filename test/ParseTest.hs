@@ -79,8 +79,8 @@ testLiterals = tableTest literal
                , ("0o74", Just (LiteralInt 60))
                , ("1e5", Nothing)
                , (escapedString "foo bar", Just (LiteralString "foo bar"))
-               , ("False", Just (LiteralStruct "False"))
-               , (undisplay $ LiteralStruct "True")
+               , ("False", Just (LiteralStruct "False" []))
+               , (undisplay $ LiteralStruct "True" [])
                ]
 
 testHexLiteral = tableTest hexNum
@@ -186,8 +186,8 @@ testBinaryExpr = tableTest binaryExpression
                                        (ExpressionBinary Times (intLitExpr 2) (intLitExpr 3))
                                        (intLitExpr 4)))
                  , ("True && False", Just (ExpressionBinary And
-                                            (ExpressionLit (LiteralStruct "True"))
-                                            (ExpressionLit (LiteralStruct "False"))))
+                                            (ExpressionLit (LiteralStruct "True" []))
+                                            (ExpressionLit (LiteralStruct "False" []))))
                  ]
 
 testStatements = tableTest statement
@@ -197,7 +197,7 @@ testStatements = tableTest statement
                  , ("last(foo)", Just (StatementExpr (ExpressionFnCall "last"
                                                       [ExpressionVar "foo"])))
                  , ("return 5", Just (StatementReturn (intLitExpr 5)))
-                 , ("if True { return 1 }", Just (StatementIf (ExpressionLit (LiteralStruct "True"))
+                 , ("if True { return 1 }", Just (StatementIf (ExpressionLit (LiteralStruct "True" []))
                                                    (Block [StatementReturn (intLitExpr 1)])
                                                    NoElse))
                  , ("while i < 10 { i = i + 1 }", Just $ StatementWhile

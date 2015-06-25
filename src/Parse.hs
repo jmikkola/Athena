@@ -145,14 +145,18 @@ instance Display Expression where
   display (ExpressionUnary  op inner) = display op ++ display inner
 
 -- TODO: allow using structs with fields...
-data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String | LiteralStruct String
+data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String
+                  | LiteralStruct String [Expression]
                   deriving (Show, Eq)
 
 instance Display LiteralValue where
   display (LiteralFloat f)  = show f
   display (LiteralInt i)    = show i
   display (LiteralString s) = show s
-  display (LiteralStruct s) = s
+  display (LiteralStruct s exprs) =
+    case exprs of
+     [] -> s
+     _  -> s ++ "(" ++ (intercalate ", " $ map display exprs) ++ ")"
 
 type VariableName = String
 type FunctionName = String
@@ -381,7 +385,9 @@ escapedChar = do
 
 -- TODO: parse field values
 structLiteral :: Parser LiteralValue
-structLiteral = liftM LiteralStruct $ typeName
+structLiteral = do
+  name <- typeName
+  return $ LiteralStruct name []
 
 variableExpression :: String -> Parser Expression
 variableExpression varName = return $ ExpressionVar varName

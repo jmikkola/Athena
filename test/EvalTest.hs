@@ -20,7 +20,7 @@ testExpressions =
                              , ("a variable", VarExpr "anInt", Just $ IntValExpr 123)
                              , ("null var", VarExpr "foo", Nothing)
                              , ("str value", StringValExpr "asdf", Just $ StringValExpr "asdf")
-                             , ("struct value", StructValExpr "True", Just $ StructValExpr "True")
+                             , ("struct value", StructValExpr "True" [], Just $ StructValExpr "True" [])
                              , ("unary -", UnaryExpr Negate (IntValExpr 123), Just $ IntValExpr (-123))
                              , ("unary ~", UnaryExpr Flip (IntValExpr 123), Just $ IntValExpr (-124))
                              , ("float ~", UnaryExpr Flip (FloatValExpr 123), Nothing)
