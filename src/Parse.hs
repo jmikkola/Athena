@@ -27,6 +27,7 @@ module Parse ( Display (..)
 
 import Control.Monad ( liftM )
 import Data.Char ( digitToInt )
+import Data.List ( intercalate )
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -48,6 +49,7 @@ type Block = [Statement]
 -- TODO: add function declaration, type declaration
 data Statement = StatementExpr Expression
                | StatementLet VariableName Expression
+               | StatementAssign VariableName Expression
                | StatementReturn Expression
                | StatementIf { condition :: Expression
                              , body :: Block
@@ -57,6 +59,13 @@ data Statement = StatementExpr Expression
                | StatementWhile Expression Block
                | StatementFor VariableName Expression Block
                deriving (Show, Eq)
+
+instance Display Statement where
+  display (StatementExpr expr) = display expr
+  display (StatementLet var expr) = "let " ++ var ++ " = " ++ display expr
+  display (StatementAssign var expr) = var ++ " = " ++ display expr
+  display (StatementReturn expr) = "return " ++ display expr
+  --TODO: the rest of them...
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
@@ -94,9 +103,23 @@ data Expression = ExpressionLit LiteralValue
                 | ExpressionUnary UnaryOp Expression
                 deriving (Show, Eq)
 
+instance Display Expression where
+  display (ExpressionLit    lv)       = display lv
+  display (ExpressionVar    varName)  = varName
+  display (ExpressionParen  inner)    = "(" ++ display inner ++ ")"
+  display (ExpressionFnCall fn args)  = fn ++ "(" ++ (intercalate ", " $ map display args) ++ ")"
+  display (ExpressionBinary op l r)   = display l ++ " " ++ display op ++ " " ++ display r
+  display (ExpressionUnary  op inner) = display op ++ display inner
+
 -- TODO: allow using structs with fields...
 data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String | LiteralStruct String
                   deriving (Show, Eq)
+
+instance Display LiteralValue where
+  display (LiteralFloat f)  = show f
+  display (LiteralInt i)    = show i
+  display (LiteralString s) = show s
+  display (LiteralStruct s) = s
 
 type VariableName = String
 type FunctionName = String
@@ -114,6 +137,7 @@ statement = choice [ try letStatement
                    , try returnStatement
                    , try ifStatement
                    , try whileStatement
+                   , try assignmentStatement
                    , expressionStatment
                    ]
 
@@ -130,6 +154,15 @@ letStatement = do
   _ <- any1Whitespace
   expr <- expression
   return $ StatementLet var expr
+
+assignmentStatement :: Parser Statement
+assignmentStatement = do
+  var <- valueName
+  _ <- any1LinearWhitespace
+  _ <- char '='
+  _ <- any1Whitespace
+  expr <- expression
+  return $ StatementAssign var expr
 
 returnStatement :: Parser Statement
 returnStatement = do
@@ -207,7 +240,7 @@ nonBinaryExpression = choice [ parenExpression
 lowerLetterExpr :: Parser Expression
 lowerLetterExpr = do
   name <- valueName
-  choice [functionCallExpression name, variableExpression name]
+  choice [try $ functionCallExpression name, variableExpression name]
 
 literalExpression :: Parser Expression
 literalExpression = liftM ExpressionLit $ literal

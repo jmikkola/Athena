@@ -133,6 +133,14 @@ testExpression = tableTest expression
                                     (intLitExpr 3)
                                     (ExpressionUnary Negate (intLitExpr 1))))
                  , ("3.14 ^ 2.0", Just (ExpressionBinary Power (flLitExpr 3.14) (flLitExpr 2.0)))
+                 , ("i", Just (ExpressionVar "i"))
+                 , ("i_am_a_variable", Just (ExpressionVar "i_am_a_variable"))
+                 , ("am_I_a_var?", Just (ExpressionVar "am_I_a_var?"))
+                 , ("(i)", Just (ExpressionParen (ExpressionVar "i")))
+                 , ("1 + bar", Just (ExpressionBinary Plus (intLitExpr 1) (ExpressionVar "bar")))
+                 , ("i < 5", Just (ExpressionBinary Less
+                                    (ExpressionVar "i")
+                                    (intLitExpr 5)))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")
@@ -189,9 +197,11 @@ testStatements = tableTest statement
                                                   , body=[StatementReturn (intLitExpr 1)]
                                                   , elseIfBlocks=[]
                                                   , elseBlock=Nothing }))
-                 , ("while 10 { let i = 20 }", Just $ StatementWhile
-                                                         (intLitExpr 10)
-                                                         [StatementLet "i" (intLitExpr 20)])
+                 , ("while i < 10 { i = i + 1 }", Just $ StatementWhile
+                                                         (ExpressionBinary Less
+                                                          (ExpressionVar "i") (intLitExpr 10))
+                                                         [StatementAssign "i"
+                                                           (ExpressionBinary Plus (ExpressionVar "i") (intLitExpr 1))])
                  ]
 
 testBlock = tableTest block
