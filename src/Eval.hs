@@ -1,6 +1,6 @@
 module Eval where
 
-import Data.Bits (complement)
+import Data.Bits (complement, (.&.), (.|.))
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -95,6 +95,11 @@ intOp Times  = (*)
 intOp Divide = div
 intOp Mod    = mod
 intOp Power  = (^)
+--intOp Equals = (==) TODO: Fix the evaluation model...
+--intOp NotEq  = (/=)
+intOp And    = (.&.)
+intOp Or     = (.|.)
+
 
 floatOp :: BinaryOp -> Either String (Float -> Float -> Float)
 floatOp Plus   = Right (+)
@@ -103,3 +108,25 @@ floatOp Times  = Right (*)
 floatOp Divide = Right (/)
 floatOp Mod    = Left "Can't apply mod to floats"
 floatOp Power  = Right (**)
+
+boolOp :: BinaryOp -> Either String (Expr -> Expr -> Either String Expr)
+boolOp Equals = Right $ makeBoolOp (==)
+boolOp NotEq  = Right $ makeBoolOp (/=)
+boolOp And    = Right $ makeBoolOp (&&)
+boolOp Or     = Right $ makeBoolOp (||)
+boolOp op     = Left $ "Can't apply " ++ display op ++ " to booleans"
+
+makeBoolOp :: (Bool -> Bool -> Bool) -> (Expr -> Expr -> Either String Expr)
+makeBoolOp fn = boolFn
+  where boolFn left right = do
+          lB <- ensureBool left
+          rB <- ensureBool right
+          return $ toBool (fn lB rB)
+
+ensureBool :: Expr -> Either String Bool
+ensureBool (StructValExpr "True"  []) = Right True
+ensureBool (StructValExpr "False" []) = Right False
+ensureBool expr                       = Left $ ("type error: " ++ show expr ++ " isn't boolean")
+
+toBool :: Bool -> Expr
+toBool b = StructValExpr (if b then "True" else "False") []
