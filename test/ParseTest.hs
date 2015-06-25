@@ -172,6 +172,9 @@ testBinaryExpr = tableTest binaryExpression
                  , ("2 * 3 + 4", Just (ExpressionBinary Plus
                                        (ExpressionBinary Times (intLitExpr 2) (intLitExpr 3))
                                        (intLitExpr 4)))
+                 , ("True && False", Just (ExpressionBinary And
+                                            (ExpressionLit (LiteralStruct "True"))
+                                            (ExpressionLit (LiteralStruct "False"))))
                  ]
 
 testStatements = tableTest statement

@@ -33,9 +33,9 @@ data Statement = StatementExpr Expression
                | StatementFor VariableName Expression Block
                deriving (Show, Eq)
 
--- TODO: introduce boolean binary operations and, or, not, and xor
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
+              | And | Or
               deriving (Show, Eq)
 
 instance Display BinaryOp where
@@ -51,9 +51,8 @@ instance Display BinaryOp where
   display Greater   = ">"
   display GreaterEq = ">="
   display NotEq     = "!="
-
-allBinaryOps :: [BinaryOp]
-allBinaryOps = [Plus, Minus, Times, Divide, Mod, Power, Less, LessEq, Equals, Greater, GreaterEq, NotEq]
+  display And       = "&&"
+  display Or        = "||"
 
 data UnaryOp = Negate | Flip
              deriving (Show, Eq)
@@ -336,7 +335,7 @@ commaSeparator = do
 
 binaryOpLevels :: [[BinaryOp]]
 binaryOpLevels = [ [LessEq, GreaterEq, NotEq, Equals, Less, Greater]
-                 , [Plus, Minus]
+                 , [Plus, Minus, And, Or]
                  , [Times, Divide, Mod]
                  , [Power]
                  ]
