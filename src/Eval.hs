@@ -6,137 +6,147 @@ import qualified Data.Map as Map
 
 import Parse
 
--- TODO: the body should be a block, not just an expression
-data Closure = Closure EvalContext [String] Expr
+data Closure = Closure EvalContext FunctionDef
              deriving (Eq, Show)
 
 data Value = IntVal Int
            | FloatVal Float
            | StringVal String
-           | StuctVal String [Value]
+           | StructVal String [Value]
            | FunctionVal Closure
            deriving (Eq, Show)
 
-data Expr = IntValExpr Int
-          | FloatValExpr Float
-          | StringValExpr String
-          | StructValExpr String [Expr]
-          | VarExpr String
-          | UnaryExpr UnaryOp Expr
-          | BinaryExpr BinaryOp Expr Expr
-          deriving (Eq, Show)
+type EvalError = String
+type EvalContext = Map String Value
 
-data EvalError = EvalError { message :: String
-                           , expr :: Expr
-                           }
-                 deriving (Eq, Show)
+type EvalResult = Either EvalError Value
 
-type EvalContext = Map String Expr
+orLeft :: Maybe a -> b -> Either b a
+orLeft (Just a) _ = Right a
+orLeft Nothing  b = Left b
 
-translate :: Expression -> Expr
-translate (ExpressionLit lit)   = case lit of
-  LiteralInt i    -> IntValExpr i
-  LiteralFloat f  -> FloatValExpr f
-  LiteralString s -> StringValExpr s
-translate (ExpressionVar name)      = VarExpr name
-translate (ExpressionParen inner)   = translate inner
-translate (ExpressionFnCall _ _)    = error "TODO"
-translate (ExpressionBinary op l r) = BinaryExpr op (translate l) (translate r)
-translate (ExpressionUnary op ex)   = UnaryExpr op (translate ex)
+litToVal :: LiteralValue -> Value
+litToVal (LiteralInt    i) = IntVal    i
+litToVal (LiteralFloat  f) = FloatVal  f
+litToVal (LiteralString s) = StringVal s
 
-evalExpr :: EvalContext -> Expr -> Either EvalError Expr
-evalExpr ctx ex =
-  case ex of
-    (IntValExpr _)      -> Right ex
-    (FloatValExpr _)    -> Right ex
-    (StringValExpr _)   -> Right ex
-    (StructValExpr name exprs)   -> do
-      evaledExprs <- mapM (evalExpr ctx) exprs
-      return $ StructValExpr name evaledExprs
-    (VarExpr varname)   ->
-      case Map.lookup varname ctx of
-        Just value -> Right value
-        Nothing    -> Left $ EvalError { message="Variable not found", expr=ex }
-    (UnaryExpr op ex')   -> do
-      inner <- evalExpr ctx ex'
-      wrapError ex $ evalUnary op inner
-    (BinaryExpr op l r) -> do
-      left <- evalExpr ctx l
-      right <- evalExpr ctx r
-      wrapError ex $ evalBinary op left right
+evalExpression :: EvalContext -> Expression -> EvalResult
+evalExpression _   (ExpressionLit literal)    =
+  Right $ litToVal literal
+evalExpression ctx (ExpressionVar varname)    =
+  Map.lookup varname ctx `orLeft` ("Variable not found: " ++ varname)
+evalExpression ctx (ExpressionParen inner)    =
+  evalExpression ctx inner
+evalExpression ctx (ExpressionFnCall fn args) =
+  do
+    argVals <- mapM (evalExpression ctx) args
+    applyFn ctx fn argVals
+evalExpression ctx (ExpressionBinary op l r)  =
+  do
+    left <- evalExpression ctx l
+    right <- evalExpression ctx r
+    evalBinary op left right
+evalExpression ctx (ExpressionUnary op expr)  =
+  do
+    inner <- evalExpression ctx expr
+    evalUnary op inner
+evalExpression ctx (ExpressionStruct name vs) =
+  do
+    vals <- mapM (evalExpression ctx) vs
+    return $ StructVal name vals
 
-wrapError :: Expr -> Either String Expr -> Either EvalError Expr
-wrapError original result = case result of
-  Right r -> Right r
-  Left er -> Left $ EvalError { message=er, expr=original }
+applyFn :: EvalContext -> FunctionName -> [Value] -> EvalResult
+applyFn ctx name argVals = undefined -- TODO
 
-evalUnary :: UnaryOp -> Expr -> Either String Expr
-evalUnary op ex =
-  case ex of
-    (IntValExpr i)    ->
-      case op of
-        Negate -> Right . IntValExpr $ 0 - i
-        Flip   -> Right . IntValExpr $ complement i
-    (FloatValExpr f)  ->
-      case op of
-        Negate -> Right . FloatValExpr $ 0 - f
-        _      -> Left $ "Can't apply unary op " ++ (display op) ++ " to a float"
-    _                 -> Left $ "Can't apply unary op " ++ (display op)
+evalUnary :: UnaryOp -> Value -> EvalResult
+evalUnary op val = case val of
+  (IntVal i)    ->
+    case op of
+     Negate -> Right . IntVal $ 0 - i
+     Flip   -> Right . IntVal $ complement i
+  (FloatVal f)  ->
+    case op of
+     Negate -> Right . FloatVal $ 0 - f
+     _      -> Left $ "Can't apply unary op " ++ (display op) ++ " to a float"
+  _             -> Left $ "Can't apply unary op " ++ (display op)
 
-evalBinary :: BinaryOp -> Expr -> Expr -> Either String Expr
+evalBinary :: BinaryOp -> Value -> Value -> EvalResult
 evalBinary op l r =
   case (l, r) of
-   (IntValExpr il,    IntValExpr ir)    ->
-     Right . IntValExpr $ intOp op il ir
-   (FloatValExpr fl,  FloatValExpr fr)  ->
+   (IntVal il,    IntVal ir)    ->
+     Right $ intOp op il ir
+   (FloatVal fl,  FloatVal fr)  ->
      do
        opFn <- floatOp op
-       return $ FloatValExpr (opFn fl fr)
-   (StringValExpr sl, StringValExpr sr) ->
+       return $ opFn fl fr
+   (StringVal sl, StringVal sr) ->
      case op of
-       Plus -> Right . StringValExpr $ sl ++ sr
+       Plus -> Right . StringVal $ sl ++ sr
        _    -> Left $ "Can't apply op " ++ (display op) ++ " to strings"
    _ -> Left $ "Can't apply binary op " ++ (display op) ++ " to " ++ (show l) ++ " and " ++ (show r)
 
-intOp :: BinaryOp -> Int -> Int -> Int
-intOp Plus   = (+)
-intOp Minus  = (-)
-intOp Times  = (*)
-intOp Divide = div
-intOp Mod    = mod
-intOp Power  = (^)
---intOp Equals = (==) TODO: Fix the evaluation model...
---intOp NotEq  = (/=)
-intOp And    = (.&.)
-intOp Or     = (.|.)
+intOp :: BinaryOp -> Int -> Int -> Value
+intOp Plus      = intValOp (+)
+intOp Minus     = intValOp (-)
+intOp Times     = intValOp (*)
+intOp Divide    = intValOp div
+intOp Mod       = intValOp mod
+intOp Power     = intValOp (^)
+intOp Less      = intBoolOp (<)
+intOp LessEq    = intBoolOp (<=)
+intOp Equals    = intBoolOp (==)
+intOp Greater   = intBoolOp (>)
+intOp GreaterEq = intBoolOp (>=)
+intOp NotEq     = intBoolOp (/=)
+intOp And       = intValOp (.&.)
+intOp Or        = intValOp (.|.)
 
+intValOp :: (Int -> Int -> Int) -> (Int -> Int -> Value)
+intValOp op = (\l r -> IntVal (op l r))
 
-floatOp :: BinaryOp -> Either String (Float -> Float -> Float)
-floatOp Plus   = Right (+)
-floatOp Minus  = Right (-)
-floatOp Times  = Right (*)
-floatOp Divide = Right (/)
-floatOp Mod    = Left "Can't apply mod to floats"
-floatOp Power  = Right (**)
+intBoolOp :: (Int -> Int -> Bool) -> (Int -> Int -> Value)
+intBoolOp op = (\l r -> boolToStruct $ op l r)
 
-boolOp :: BinaryOp -> Either String (Expr -> Expr -> Either String Expr)
+floatOp :: BinaryOp -> Either String (Float -> Float -> Value)
+floatOp Plus      = floatValOp (+)
+floatOp Minus     = floatValOp (-)
+floatOp Times     = floatValOp (*)
+floatOp Divide    = floatValOp (/)
+floatOp Mod       = Left "Can't apply mod to floats"
+floatOp Power     = floatValOp (**)
+floatOp Less      = floatBoolOp (<)
+floatOp LessEq    = floatBoolOp (<=)
+floatOp Equals    = floatBoolOp (==)
+floatOp Greater   = floatBoolOp (>)
+floatOp GreaterEq = floatBoolOp (>=)
+floatOp NotEq     = floatBoolOp (/=)
+floatOp And       = Left "Can't apply and to floats"
+floatOp Or        = Left "Can't apply op to floats"
+
+floatValOp :: (Float -> Float -> Float) -> Either String (Float -> Float -> Value)
+floatValOp op = return (\l r -> FloatVal (op l r))
+
+floatBoolOp :: (Float -> Float -> Bool) -> Either String (Float -> Float -> Value)
+floatBoolOp op = return (\l r -> boolToStruct $ op l r)
+
+makeBoolOp :: (Bool -> Bool -> Bool) -> (Value -> Value -> EvalResult)
+makeBoolOp fn = boolFn
+  where boolFn left right = do
+          lB <- ensureBool left
+          rB <- ensureBool right
+          return $ boolToStruct (fn lB rB)
+
+boolOp :: BinaryOp -> Either EvalError (Value -> Value -> EvalResult)
 boolOp Equals = Right $ makeBoolOp (==)
 boolOp NotEq  = Right $ makeBoolOp (/=)
 boolOp And    = Right $ makeBoolOp (&&)
 boolOp Or     = Right $ makeBoolOp (||)
 boolOp op     = Left $ "Can't apply " ++ display op ++ " to booleans"
 
-makeBoolOp :: (Bool -> Bool -> Bool) -> (Expr -> Expr -> Either String Expr)
-makeBoolOp fn = boolFn
-  where boolFn left right = do
-          lB <- ensureBool left
-          rB <- ensureBool right
-          return $ toBool (fn lB rB)
+ensureBool :: Value -> Either EvalError Bool
+ensureBool (StructVal "True"  []) = Right True
+ensureBool (StructVal "False" []) = Right False
+ensureBool expr                   = Left $ ("type error: " ++ show expr ++ " isn't boolean")
 
-ensureBool :: Expr -> Either String Bool
-ensureBool (StructValExpr "True"  []) = Right True
-ensureBool (StructValExpr "False" []) = Right False
-ensureBool expr                       = Left $ ("type error: " ++ show expr ++ " isn't boolean")
-
-toBool :: Bool -> Expr
-toBool b = StructValExpr (if b then "True" else "False") []
+boolToStruct :: Bool -> Value
+boolToStruct b = StructVal (if b then "True" else "False") []

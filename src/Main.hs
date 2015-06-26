@@ -22,7 +22,7 @@ tryParsing line = case parse (expression <* eof) "user input" line of
   Left err -> print err
 
 handleParsed :: Expression -> IO ()
-handleParsed = print . evalExpr Map.empty . translate
+handleParsed = print . evalExpression Map.empty
 
 repl :: String -> (String -> IO ()) -> IO ()
 repl prompt fn = do

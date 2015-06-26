@@ -13,39 +13,47 @@ main = defaultMain $
        asGroup [ ("expressions", testExpressions)
                ]
 
+intLiteral = ExpressionLit . LiteralInt
+floatLiteral = ExpressionLit . LiteralFloat
+strLiteral = ExpressionLit . LiteralString
+varExpr = ExpressionVar
+
 testExpressions =
   let makeTest (name, input, expectation) = name ~: assertEvals input expectation
-  in TestList $ map makeTest [ ("an int", IntValExpr 123, Just $ IntValExpr 123)
-                             , ("a float", FloatValExpr 123.4, Just $ FloatValExpr 123.4)
-                             , ("a variable", VarExpr "anInt", Just $ IntValExpr 123)
-                             , ("null var", VarExpr "foo", Nothing)
-                             , ("str value", StringValExpr "asdf", Just $ StringValExpr "asdf")
-                             , ("struct value", StructValExpr "True" [], Just $ StructValExpr "True" [])
-                             , ("unary -", UnaryExpr Negate (IntValExpr 123), Just $ IntValExpr (-123))
-                             , ("unary ~", UnaryExpr Flip (IntValExpr 123), Just $ IntValExpr (-124))
-                             , ("float ~", UnaryExpr Flip (FloatValExpr 123), Nothing)
+  in TestList $ map makeTest [ ("an int", intLiteral 123, Just $ IntVal 123)
+                             , ("a float", floatLiteral 123.4, Just $ FloatVal 123.4)
+                             , ("a variable", varExpr "anInt", Just $ IntVal 123)
+                             , ("null var", varExpr "foo", Nothing)
+                             , ("str value", strLiteral "asdf", Just $ StringVal "asdf")
+                             , ("struct value", ExpressionStruct "True" [], Just $ StructVal "True" [])
+                             , ("unary -", ExpressionUnary Negate (intLiteral 123), Just $ IntVal (-123))
+                             , ("unary ~", ExpressionUnary Flip (intLiteral 123), Just $ IntVal (-124))
+                             , ("float ~", ExpressionUnary Flip (floatLiteral 123), Nothing)
                              , ( "float +"
-                               , BinaryExpr Plus (FloatValExpr 5.0) (FloatValExpr 1.5)
-                               , Just $ FloatValExpr 6.5)
+                               , ExpressionBinary Plus (floatLiteral 5.0) (floatLiteral 1.5)
+                               , Just $ FloatVal 6.5)
                              , ( "integer %"
-                               , BinaryExpr Mod (IntValExpr 123) (IntValExpr 10)
-                               , Just $ IntValExpr 3)
+                               , ExpressionBinary Mod (intLiteral 123) (intLiteral 10)
+                               , Just $ IntVal 3)
                              , ( "mixed +"
-                               , BinaryExpr Plus (IntValExpr 5) (FloatValExpr 1.5)
+                               , ExpressionBinary Plus (intLiteral 5) (floatLiteral 1.5)
                                , Nothing)
                              , ( "struct expr"
-                               , StructValExpr "Pair" [ (BinaryExpr Plus (IntValExpr 100) (IntValExpr 42))
-                                                      , (VarExpr "anInt")]
-                               , Just $ StructValExpr "Pair" [(IntValExpr 142), (IntValExpr 123)])
+                               , ExpressionStruct "Pair" [ (ExpressionBinary Plus
+                                                            (intLiteral 100) (intLiteral 42))
+                                                         , (varExpr "anInt")]
+                               , Just $ StructVal "Pair" [(IntVal 142), (IntVal 123)])
                              ]
 
 testContext :: EvalContext
-testContext = Map.fromList [("anInt", IntValExpr 123), ("aFloat", FloatValExpr 123.4)]
+testContext = Map.fromList [("anInt", IntVal 123)
+                           , ("aFloat", FloatVal 123.4)
+                           ]
 
-assertEvals :: Expr -> Maybe Expr  -> Test
+assertEvals :: Expression -> Maybe Value  -> Test
 assertEvals expr expected = (tryEvalExpr expr) ~?= expected
 
-tryEvalExpr :: Expr -> Maybe Expr
-tryEvalExpr expr = case evalExpr testContext expr of
+tryEvalExpr :: Expression -> Maybe Value
+tryEvalExpr expr = case evalExpression testContext expr of
   Left _  -> Nothing
   Right e -> Just e
