@@ -6,6 +6,17 @@ import qualified Data.Map as Map
 
 import Parse
 
+-- TODO: the body should be a block, not just an expression
+data Closure = Closure EvalContext [String] Expr
+             deriving (Eq, Show)
+
+data Value = IntVal Int
+           | FloatVal Float
+           | StringVal String
+           | StuctVal String [Value]
+           | FunctionVal Closure
+           deriving (Eq, Show)
+
 data Expr = IntValExpr Int
           | FloatValExpr Float
           | StringValExpr String
@@ -27,7 +38,6 @@ translate (ExpressionLit lit)   = case lit of
   LiteralInt i    -> IntValExpr i
   LiteralFloat f  -> FloatValExpr f
   LiteralString s -> StringValExpr s
-  LiteralStruct s exprs -> StructValExpr s (map translate exprs)
 translate (ExpressionVar name)      = VarExpr name
 translate (ExpressionParen inner)   = translate inner
 translate (ExpressionFnCall _ _)    = error "TODO"

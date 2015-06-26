@@ -44,7 +44,7 @@ data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
 instance Display FunctionDef where
   display (FunctionDef name args maybeType block) =
     "fn " ++ name ++ "(" ++ displayedArgs ++ ") " ++ retType ++ display block
-    where displayedArgs = intercalate ", " $ map display args
+    where displayedArgs = displayCommaSep args
           retType = case maybeType of
             Nothing -> ""
             Just t  -> display t ++ " "
@@ -64,7 +64,7 @@ data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
 instance Display TypeDef where
   display  NilType               = "()"
   display (NamedType s [])       = s
-  display (NamedType s subtypes) = s ++ "[" ++ (intercalate ", " $ map display subtypes) ++ "]"
+  display (NamedType s subtypes) = s ++ "[" ++ displayCommaSep subtypes ++ "]"
   display (TypeVar   s)          = s
 
 data Block = Block [Statement]
@@ -134,29 +134,31 @@ data Expression = ExpressionLit LiteralValue
                 | ExpressionFnCall FunctionName [Expression]
                 | ExpressionBinary BinaryOp Expression Expression
                 | ExpressionUnary UnaryOp Expression
+                | ExpressionStruct String [Expression]
                 deriving (Show, Eq)
 
 instance Display Expression where
   display (ExpressionLit    lv)       = display lv
   display (ExpressionVar    varName)  = varName
   display (ExpressionParen  inner)    = "(" ++ display inner ++ ")"
-  display (ExpressionFnCall fn args)  = fn ++ "(" ++ (intercalate ", " $ map display args) ++ ")"
+  display (ExpressionFnCall fn args)  = fn ++ displayInParens args
   display (ExpressionBinary op l r)   = display l ++ " " ++ display op ++ " " ++ display r
   display (ExpressionUnary  op inner) = display op ++ display inner
+  display (ExpressionStruct s  exprs) = if null exprs then s else s ++ displayInParens exprs
 
--- TODO: allow using structs with fields...
+displayInParens :: (Display a) => [a] -> String
+displayInParens ds = "(" ++ displayCommaSep ds ++ ")"
+
+displayCommaSep :: (Display a) => [a] -> String
+displayCommaSep = (intercalate ", ") . (map display)
+
 data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String
-                  | LiteralStruct String [Expression]
                   deriving (Show, Eq)
 
 instance Display LiteralValue where
   display (LiteralFloat f)  = show f
   display (LiteralInt i)    = show i
   display (LiteralString s) = show s
-  display (LiteralStruct s exprs) =
-    case exprs of
-     [] -> s
-     _  -> s ++ "(" ++ (intercalate ", " $ map display exprs) ++ ")"
 
 type VariableName = String
 type FunctionName = String
@@ -168,7 +170,7 @@ unwrapOr Nothing  b = b
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
--- Both letStatement and returnStatement are safe to "try" because they will fail fast
+-- Statements starting with a keyword are safe to "try" because they will fail fast
 statement :: Parser Statement
 statement = choice [ try letStatement
                    , try returnStatement
@@ -292,6 +294,7 @@ expression = binaryExpression
 nonBinaryExpression ::  Parser Expression
 nonBinaryExpression = choice [ parenExpression
                              , unaryExpr
+                             , structExpression
                              , try literalExpression
                              , lowerLetterExpr
                              ]
@@ -306,7 +309,7 @@ literalExpression :: Parser Expression
 literalExpression = liftM ExpressionLit $ literal
 
 literal :: Parser LiteralValue
-literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral, structLiteral]
+literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral]
 
 numericLiteral :: Parser LiteralValue
 numericLiteral = do
@@ -383,11 +386,11 @@ escapedChar = do
   c <- anyChar
   return $ '\\' : c : ""
 
-structLiteral :: Parser LiteralValue
-structLiteral = do
+structExpression :: Parser Expression
+structExpression = do
   name <- typeName
   args <- optionMaybe fnCallArgs
-  return $ LiteralStruct name (unwrapOr args [])
+  return $ ExpressionStruct name (unwrapOr args [])
 
 variableExpression :: String -> Parser Expression
 variableExpression varName = return $ ExpressionVar varName

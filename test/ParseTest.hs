@@ -69,8 +69,8 @@ testGoodDigits = tableTest digits
 
 testBadDigits = tableTest digits (map expectNoParse ["", "_", "1_", "_3", "1__2"])
 
-trueExpr = ExpressionLit $ LiteralStruct "True" []
-falseExpr = ExpressionLit $ LiteralStruct "False" []
+trueExpr = ExpressionStruct "True" []
+falseExpr = ExpressionStruct "False" []
 
 testLiterals = tableTest literal
                [ ("1", Just (LiteralInt 1))
@@ -82,9 +82,6 @@ testLiterals = tableTest literal
                , ("0o74", Just (LiteralInt 60))
                , ("1e5", Nothing)
                , (escapedString "foo bar", Just (LiteralString "foo bar"))
-               , ("False", Just (LiteralStruct "False" []))
-               , (undisplay $ LiteralStruct "True" [])
-               , (undisplay $ LiteralStruct "Pair" [(intLitExpr 23), trueExpr])
                ]
 
 testHexLiteral = tableTest hexNum
@@ -151,12 +148,15 @@ testExpression = tableTest expression
                                     (ExpressionVar "i")
                                     (intLitExpr 5)))
                  , ("Pair( 1 + 5, True || False )",
-                    Just (ExpressionLit (LiteralStruct "Pair"
-                                        [ ExpressionBinary Plus (intLitExpr 1) (intLitExpr 5)
-                                        , ExpressionBinary Or trueExpr falseExpr])))
-                  , (undisplay $ ExpressionLit (LiteralStruct "Pair"
-                                         [ ExpressionBinary Plus (intLitExpr 1) (intLitExpr 5)
-                                         , ExpressionBinary Or trueExpr falseExpr]))
+                    Just (ExpressionStruct "Pair"
+                          [ ExpressionBinary Plus (intLitExpr 1) (intLitExpr 5)
+                          , ExpressionBinary Or trueExpr falseExpr]))
+                 , (undisplay $ ExpressionStruct "Pair"
+                    [ ExpressionBinary Plus (intLitExpr 1) (intLitExpr 5)
+                    , ExpressionBinary Or trueExpr falseExpr])
+                 , ("False", Just (ExpressionStruct "False" []))
+                 , (undisplay $ ExpressionStruct "True" [])
+                 , (undisplay $ ExpressionStruct "Pbair" [(intLitExpr 23), trueExpr])
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")
@@ -197,8 +197,8 @@ testBinaryExpr = tableTest binaryExpression
                                        (ExpressionBinary Times (intLitExpr 2) (intLitExpr 3))
                                        (intLitExpr 4)))
                  , ("True && False", Just (ExpressionBinary And
-                                            (ExpressionLit (LiteralStruct "True" []))
-                                            (ExpressionLit (LiteralStruct "False" []))))
+                                            (ExpressionStruct "True" [])
+                                            (ExpressionStruct "False" [])))
                  ]
 
 testStatements = tableTest statement
@@ -208,7 +208,7 @@ testStatements = tableTest statement
                  , ("last(foo)", Just (StatementExpr (ExpressionFnCall "last"
                                                       [ExpressionVar "foo"])))
                  , ("return 5", Just (StatementReturn (intLitExpr 5)))
-                 , ("if True { return 1 }", Just (StatementIf (ExpressionLit (LiteralStruct "True" []))
+                 , ("if True { return 1 }", Just (StatementIf (ExpressionStruct "True" [])
                                                    (Block [StatementReturn (intLitExpr 1)])
                                                    NoElse))
                  , ("while i < 10 { i = i + 1 }", Just $ StatementWhile
