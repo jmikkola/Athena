@@ -182,7 +182,18 @@ evalExpression ctx (ExpressionStruct name vs) =
     return $ StructVal name vals
 
 applyFn :: EvalContext -> FunctionName -> [Value] -> EvalResult
-applyFn = undefined -- TODO
+applyFn ctx fname argValues = do
+  FunctionVal (Closure cCtx (FunctionDef _ args _ body)) <- getVar fname ctx
+  fCtx <- makeFnCtx argValues (map argName args) cCtx
+  (_, value) <- evalBlock fCtx body
+  return value
+
+makeFnCtx :: [Value] -> [String] -> EvalContext -> Either EvalError EvalContext
+makeFnCtx values args ctx = if length values /= length args
+                            then Left ( "Number of supplied arguments doesn't match. "
+                                        ++ " Expected values for " ++ show args
+                                        ++ ", but got " ++ show values)
+                            else Right $ NestedContext (Map.fromList $ zip args values) ctx
 
 evalUnary :: UnaryOp -> Value -> EvalResult
 evalUnary op val = case val of

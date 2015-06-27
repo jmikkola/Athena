@@ -52,7 +52,7 @@ instance Display FunctionDef where
             Nothing -> ""
             Just t  -> display t ++ " "
 
-data FnArg = FnArg String (Maybe TypeDef)
+data FnArg = FnArg { argName :: String, argType :: (Maybe TypeDef) }
              deriving (Eq, Show)
 
 instance Display FnArg where
