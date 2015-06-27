@@ -121,12 +121,13 @@ instance Display BinaryOp where
   display And       = "&&"
   display Or        = "||"
 
-data UnaryOp = Negate | Flip
+data UnaryOp = Negate | Flip | Not
              deriving (Show, Eq)
 
 instance Display UnaryOp where
   display Negate = "-"
   display Flip   = "~"
+  display Not    = "!"
 
 data Expression = ExpressionLit LiteralValue
                 | ExpressionVar VariableName
@@ -483,7 +484,7 @@ binaryExpressionLevel self nextLevel ops = do
   return $ ExpressionBinary op left right
 
 unaryOp :: Parser UnaryOp
-unaryOp = choice $ map (try . uOp) [Negate, Flip]
+unaryOp = choice $ map (try . uOp) [Negate, Flip, Not]
   where uOp op = do
           _ <- string $ display op
           return op
