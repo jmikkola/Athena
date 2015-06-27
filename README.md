@@ -7,7 +7,6 @@ Athena
 
 ## TODO
 
-- Eval more complicated exprssions (e.g. boolean operators)
 - Add `!` unary operator
 - Add `for` loops
 - Evaluate statements (inc. handling variables)

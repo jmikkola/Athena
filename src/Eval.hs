@@ -83,6 +83,10 @@ evalBinary op l r =
      case op of
        Plus -> Right . StringVal $ sl ++ sr
        _    -> Left $ "Can't apply op " ++ (display op) ++ " to strings"
+   (StructVal _ _, StructVal _ _) ->
+     do
+       opFn <- boolOp op
+       opFn l r
    _ -> Left $ "Can't apply binary op " ++ (display op) ++ " to " ++ (show l) ++ " and " ++ (show r)
 
 intOp :: BinaryOp -> Int -> Int -> Value
