@@ -10,6 +10,7 @@ Athena
 - Parse and evaluate if expressions
 - Add ability to start interpreter with file contents
 - Print less output after statements
+- Parse comments
 - Decide syntax for type declarations
 - Decide how creating instances of structs should work (e.g. when passing them as like functions)
 - Parse contants

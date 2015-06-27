@@ -118,6 +118,8 @@ testDoubleQuotedString = tableTest doubleQuotedString
 intLitExpr = ExpressionLit . LiteralInt
 flLitExpr = ExpressionLit . LiteralFloat
 
+exampleIfExpr = ExpressionIf (intLitExpr 1) (intLitExpr 2) (intLitExpr 3)
+
 testExpression = tableTest expression
                  [ ("1", Just (intLitExpr 1))
                  , ("(123)", Just (ExpressionParen (intLitExpr 123)))
@@ -161,6 +163,9 @@ testExpression = tableTest expression
                  , (undisplay $ ExpressionStruct "True" [])
                  , (undisplay $ ExpressionStruct "Pbair" [(intLitExpr 23), trueExpr])
                  , (undisplay $ ExpressionUnary Not (ExpressionStruct "True" []))
+                 , (undisplay $ exampleIfExpr)
+                 , (undisplay $ ExpressionIf (intLitExpr 1) (intLitExpr 2) exampleIfExpr)
+                 , (undisplay $ ExpressionIf (intLitExpr 1) exampleIfExpr (intLitExpr 3))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")

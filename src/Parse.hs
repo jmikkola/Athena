@@ -141,7 +141,12 @@ data Expression = ExpressionLit LiteralValue
                 | ExpressionBinary BinaryOp Expression Expression
                 | ExpressionUnary UnaryOp Expression
                 | ExpressionStruct String [Expression]
+                | ExpressionIf Expression Expression Expression
                 deriving (Show, Eq)
+
+interleave :: [a] -> [a] -> [a]
+interleave (a:as) b = a : interleave b as
+interleave []     _ = []
 
 instance Display Expression where
   display (ExpressionLit    lv)       = display lv
@@ -151,6 +156,8 @@ instance Display Expression where
   display (ExpressionBinary op l r)   = display l ++ " " ++ display op ++ " " ++ display r
   display (ExpressionUnary  op inner) = display op ++ display inner
   display (ExpressionStruct s  exprs) = if null exprs then s else s ++ displayInParens exprs
+  display (ExpressionIf test tr fl)   =
+    concat $ interleave ["if ", " then ", " else "] (map display [test, tr, fl])
 
 displayInParens :: (Display a) => [a] -> String
 displayInParens ds = "(" ++ displayCommaSep ds ++ ")"
@@ -321,8 +328,24 @@ nonBinaryExpression = choice [ parenExpression
                              , unaryExpr
                              , structExpression
                              , try literalExpression
+                             , try ifExpression
                              , lowerLetterExpr
                              ]
+
+ifExpression :: Parser Expression
+ifExpression = do
+  _ <- ifKwd
+  _ <- any1LinearWhitespace
+  test <- expression
+  _ <- any1Whitespace
+  _ <- thenKwd
+  _ <- any1Whitespace
+  ifCase <- expression
+  _ <- any1Whitespace
+  _ <- elseKwd
+  _ <- any1Whitespace
+  elseCase <- expression
+  return $ ExpressionIf test ifCase elseCase
 
 -- Expressions that start with a lowercase letter
 lowerLetterExpr :: Parser Expression
@@ -637,6 +660,9 @@ inKwd = string "in"
 
 letKwd :: Parser String
 letKwd = string "let"
+
+thenKwd :: Parser String
+thenKwd = string "then"
 
 returnKwd :: Parser String
 returnKwd = string "return"
