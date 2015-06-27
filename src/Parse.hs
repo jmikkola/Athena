@@ -11,6 +11,9 @@ module Parse ( Display (..)
              , LiteralValue (..)
              , FunctionName
              , VariableName
+             , fnName
+             , getArgs
+             , fnArgNames
              , anyWhitespace
              , digits
              , literal
@@ -44,6 +47,17 @@ class Display a where
 data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
                  | ShortFn String [FnArg] (Maybe TypeDef) Expression
                  deriving (Eq, Show)
+
+fnName :: FunctionDef -> String
+fnName (FunctionDef name _ _ _) = name
+fnName (ShortFn     name _ _ _) = name
+
+getArgs :: FunctionDef -> [FnArg]
+getArgs (FunctionDef _ args _ _) = args
+getArgs (ShortFn     _ args _ _) = args
+
+fnArgNames :: FunctionDef -> [String]
+fnArgNames = (map argName) . getArgs
 
 instance Display FunctionDef where
   display (FunctionDef name args maybeType blk) =

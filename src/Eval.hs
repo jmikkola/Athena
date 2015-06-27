@@ -79,7 +79,7 @@ updateVar name value ctx = case ctx of
     return $ EvalContext scopeVars'
   (NestedContext scopeVars parent) -> case setExisting name value scopeVars of
     Right scopeVars' -> Right $ NestedContext scopeVars' parent
-    Left  err        -> do
+    Left  _          -> do
       parent' <- updateVar name value parent
       return $ NestedContext scopeVars parent'
 
@@ -105,13 +105,12 @@ evalStatement ctx (StatementReturn expr) = do
 evalStatement ctx (StatementIf test blk elPart) = evalIf ctx test blk elPart
 evalStatement ctx (StatementWhile test blk) = evalWhile ctx test blk
 evalStatement ctx (StatementFn funcDef) =
-  let (FunctionDef name args _ body) = funcDef
-      value = FunctionVal (Closure ctx funcDef)
+  let value = FunctionVal (Closure ctx funcDef)
+      name  = fnName funcDef
   in do
     -- TODO: walk the function definition to find which variables are closed over; look for returns
     ctx' <- letVar name value ctx
     return (ctx', value)
-
 -- for loops don't make sense yet because there is no iterable type
 evalStatement _ st = Left $ "Evaluation not implemented for " ++ show st
 
@@ -188,10 +187,14 @@ evalExpression ctx (ExpressionIf test ifCase elseCase) =
 
 applyFn :: EvalContext -> FunctionName -> [Value] -> EvalResult
 applyFn ctx fname argValues = do
-  FunctionVal (Closure cCtx (FunctionDef _ args _ body)) <- getVar fname ctx
-  fCtx <- makeFnCtx argValues (map argName args) cCtx
-  (_, value) <- evalBlock fCtx body
-  return value
+  FunctionVal (Closure cCtx funcDef) <- getVar fname ctx
+  let argNames = fnArgNames funcDef
+  fCtx <- makeFnCtx argValues argNames cCtx
+  case funcDef of
+   (FunctionDef _ _ _ body) -> do
+     (_, value) <- evalBlock fCtx body
+     return value
+   (ShortFn     _ _ _ expr) -> evalExpression fCtx expr
 
 makeFnCtx :: [Value] -> [String] -> EvalContext -> Either EvalError EvalContext
 makeFnCtx values args ctx = if length values /= length args
