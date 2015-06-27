@@ -43,6 +43,8 @@ evalStatement ctx (StatementReturn expr) = do
   result <- evalExpression ctx expr
   return (ctx, result)
 evalStatement ctx (StatementIf test blk elPart) = evalIf ctx test blk elPart
+evalStatement ctx (StatementWhile test blk) = evalWhile ctx test blk
+-- for loops don't make sense yet because there is no iterable type
 evalStatement _ st = Left $ "Evaluation not implemented for " ++ show st
 
 evalElsePart :: EvalContext -> ElsePart -> Either EvalError (EvalContext, Value)
@@ -58,12 +60,22 @@ evalIf ctx test blk elPart = do
   if asBool then evalBlock ctx blk
     else evalElsePart ctx elPart
 
+evalWhile :: EvalContext -> Expression -> Block -> Either EvalError (EvalContext, Value)
+evalWhile ctx test blk = do
+  testResult <- evalExpression ctx test
+  asBool <- ensureBool testResult
+  if not asBool
+     then return (ctx, NilValue)
+     else do
+      (ctx', _) <- evalBlock ctx blk
+      evalWhile ctx' test blk
+
 evalBlock :: EvalContext -> Block -> Either EvalError (EvalContext, Value)
 evalBlock ctx (Block stmts) = evalStmts ctx stmts
   where evalStmts ctx []     = Right (ctx, NilValue)
         evalStmts ctx [stmt] = evalStatement ctx stmt
         evalStmts ctx (s:ss) = do
-          (ctx', value) <- evalStatement ctx s
+          (ctx', _) <- evalStatement ctx s
           evalStmts ctx' ss
 
 litToVal :: LiteralValue -> Value

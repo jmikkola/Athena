@@ -7,12 +7,14 @@ Athena
 
 ## TODO
 
-- Evaluate statements (inc. handling variables)
+- Handle character types
+- Make nested scopes
 - Evaluate function calls
-- Evaluate if, while, and for statements
 - Parse functions as statements
 - Handle closures in evaluation
+- Parse and evaluate if expressions
 - Parse contants
+- Parse & evaluate list literals
 - Add pattern matching
 - Add destructuring let form
 - Add if-let, while-let forms
@@ -21,3 +23,4 @@ Athena
 - Add interface contraints to functions
 - Add module definitions
 - Add short function syntax
+- Parse & evaluate list comprehensions
