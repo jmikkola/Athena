@@ -2,7 +2,7 @@ Athena
 
 ## Building
 
-    cabal build
+Simply run `make` to build and test.
 
 
 ## TODO
