@@ -10,7 +10,7 @@ import Eval
 import Parse
 
 main :: IO ()
-main = repl "expression> " tryParsing Map.empty
+main = repl "expression> " tryParsing emptyContext
 
 trim :: String -> String
 trim = let revTrim = reverse . dropWhile isSpace

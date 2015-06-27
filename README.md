@@ -8,7 +8,6 @@ Athena
 ## TODO
 
 - Handle character types
-- Make nested scopes
 - Evaluate function calls
 - Parse functions as statements
 - Handle closures in evaluation

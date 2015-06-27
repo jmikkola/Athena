@@ -18,9 +18,69 @@ data Value = IntVal Int
            deriving (Eq, Show)
 
 type EvalError = String
-type EvalContext = Map String Value
 
 type EvalResult = Either EvalError Value
+
+type ScopeVars = Map String Value
+
+data EvalContext = EvalContext ScopeVars | NestedContext ScopeVars EvalContext
+                 deriving (Eq, Show)
+
+emptyContext :: EvalContext
+emptyContext = EvalContext Map.empty
+
+newScope :: EvalContext -> EvalContext
+newScope ctx = NestedContext Map.empty ctx
+
+getScope :: EvalContext -> ScopeVars
+getScope (EvalContext   scopeVars)   = scopeVars
+getScope (NestedContext scopeVars _) = scopeVars
+
+getParent :: EvalContext -> EvalContext
+getParent (NestedContext _ parent) = parent
+getParent ctx                      = error ("Error in interpreter: trying to get parent of " ++ show ctx)
+
+getInScope :: String -> ScopeVars -> EvalResult
+getInScope name scopeVars = case Map.lookup name scopeVars of
+  Nothing  -> Left $ "Variable not found: " ++ name
+  Just val -> Right val
+
+getVar :: String -> EvalContext -> EvalResult
+getVar name ctx = case ctx of
+  (EvalContext   scopeVars)        -> getInScope name scopeVars
+  (NestedContext scopeVars parent) -> case getInScope name scopeVars of
+    Right val -> Right val
+    Left  _   -> getVar name parent
+
+insertNewVar :: String -> Value -> ScopeVars -> Either EvalError ScopeVars
+insertNewVar name value scopeVars = case Map.lookup name scopeVars of
+  Just _  -> Left $ "Variable already declared in scope: " ++ name
+  _       -> return $ Map.insert name value scopeVars
+
+letVar :: String -> Value -> EvalContext -> Either EvalError EvalContext
+letVar name value ctx = case ctx of
+  (EvalContext   scopeVars)        -> do
+    scopeVars' <- insertNewVar name value scopeVars
+    return $ EvalContext scopeVars'
+  (NestedContext scopeVars parent) -> do
+    scopeVars' <- insertNewVar name value scopeVars
+    return $ NestedContext scopeVars' parent
+
+setExisting :: String -> Value -> ScopeVars -> Either EvalError ScopeVars
+setExisting name value scopeVars = case Map.lookup name scopeVars of
+  Just _  -> return $ Map.insert name value scopeVars
+  _       -> Left $ name ++ " not defined"
+
+updateVar :: String -> Value -> EvalContext -> Either EvalError EvalContext
+updateVar name value ctx = case ctx of
+  (EvalContext   scopeVars)        -> do
+    scopeVars' <- setExisting name value scopeVars
+    return $ EvalContext scopeVars'
+  (NestedContext scopeVars parent) -> case setExisting name value scopeVars of
+    Right scopeVars' -> Right $ NestedContext scopeVars' parent
+    Left  err        -> do
+      parent' <- updateVar name value parent
+      return $ NestedContext scopeVars parent'
 
 orLeft :: Maybe a -> b -> Either b a
 orLeft (Just a) _ = Right a
@@ -32,13 +92,12 @@ evalStatement ctx (StatementExpr expr) = do
   return (ctx, result)
 evalStatement ctx (StatementLet var expr) = do
   value <- evalExpression ctx expr
-  return (Map.insert var value ctx, value)
-evalStatement ctx (StatementAssign var expr) =
-  case Map.lookup var ctx of
-   Nothing -> Left $ "Trying to set var that doesn't exist: " ++ var
-   Just _  -> do
-     value <- evalExpression ctx expr
-     return (Map.insert var value ctx, value)
+  ctx' <- letVar var value ctx
+  return (ctx', value)
+evalStatement ctx (StatementAssign var expr) = do
+  value <- evalExpression ctx expr
+  ctx' <- updateVar var value ctx
+  return (ctx', value)
 evalStatement ctx (StatementReturn expr) = do
   result <- evalExpression ctx expr
   return (ctx, result)
@@ -71,12 +130,16 @@ evalWhile ctx test blk = do
       evalWhile ctx' test blk
 
 evalBlock :: EvalContext -> Block -> Either EvalError (EvalContext, Value)
-evalBlock ctx (Block stmts) = evalStmts ctx stmts
-  where evalStmts ctx []     = Right (ctx, NilValue)
-        evalStmts ctx [stmt] = evalStatement ctx stmt
-        evalStmts ctx (s:ss) = do
-          (ctx', _) <- evalStatement ctx s
-          evalStmts ctx' ss
+evalBlock ctx (Block stmts) = do
+  (ctx', value) <- evalStmts (newScope ctx) stmts
+  return (getParent ctx', value)
+
+evalStmts :: EvalContext -> [Statement] -> Either EvalError (EvalContext, Value)
+evalStmts ctx []     = Right (ctx, NilValue)
+evalStmts ctx [stmt] = evalStatement ctx stmt
+evalStmts ctx (s:ss) = do
+  (ctx', _) <- evalStatement ctx s
+  evalStmts ctx' ss
 
 litToVal :: LiteralValue -> Value
 litToVal (LiteralInt    i) = IntVal    i
@@ -87,7 +150,7 @@ evalExpression :: EvalContext -> Expression -> EvalResult
 evalExpression _   (ExpressionLit lit)    =
   Right $ litToVal lit
 evalExpression ctx (ExpressionVar varname)    =
-  Map.lookup varname ctx `orLeft` ("Variable not found: " ++ varname)
+  getVar varname ctx
 evalExpression ctx (ExpressionParen inner)    =
   evalExpression ctx inner
 evalExpression ctx (ExpressionFnCall fn args) =
