@@ -11,6 +11,7 @@ data Closure = Closure EvalContext FunctionDef
 
 data Value = IntVal Int
            | FloatVal Float
+           | CharVal Char
            | StringVal String
            | StructVal String [Value]
            | FunctionVal Closure
@@ -145,6 +146,7 @@ litToVal :: LiteralValue -> Value
 litToVal (LiteralInt    i) = IntVal    i
 litToVal (LiteralFloat  f) = FloatVal  f
 litToVal (LiteralString s) = StringVal s
+litToVal (LiteralChar   c) = CharVal   c
 
 evalExpression :: EvalContext -> Expression -> EvalResult
 evalExpression _   (ExpressionLit lit)    =

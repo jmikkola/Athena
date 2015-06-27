@@ -7,7 +7,6 @@ Athena
 
 ## TODO
 
-- Handle character types
 - Evaluate function calls
 - Parse functions as statements
 - Handle closures in evaluation
