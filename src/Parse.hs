@@ -92,6 +92,7 @@ data Statement = StatementExpr Expression
                | StatementIf Expression Block ElsePart
                | StatementWhile Expression Block
                | StatementFor VariableName Expression Block
+               | StatementFn FunctionDef
                deriving (Show, Eq)
 
 instance Display Statement where
@@ -102,6 +103,7 @@ instance Display Statement where
   display (StatementIf test blk ep) = "if " ++ display test ++ " " ++ display blk ++ display ep
   display (StatementWhile test blk) = "while " ++ display test ++ " " ++ display blk
   display (StatementFor var expr blk) = "for " ++ var ++ " in " ++ display expr ++ " " ++ display blk
+  display (StatementFn funcDef) = display funcDef
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
@@ -183,6 +185,7 @@ statement = choice [ try letStatement
                    , try whileStatement
                    , try forStatement
                    , try assignmentStatement
+                   , try fnStatement
                    , expressionStatment
                    ]
 
@@ -215,6 +218,9 @@ returnStatement = do
   _ <- any1LinearWhitespace
   expr <- expression
   return $ StatementReturn expr
+
+fnStatement :: Parser Statement
+fnStatement = liftM StatementFn $ functionDef
 
 ifStatement :: Parser Statement
 ifStatement = do

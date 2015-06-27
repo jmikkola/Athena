@@ -226,6 +226,7 @@ testStatements = tableTest statement
                                                       (ExpressionBinary Plus
                                                        (ExpressionVar "i") (intLitExpr 1))])))
                  , (undisplay (StatementFor "x" exampleBoolExpr exampleBlock))
+                 , (undisplay $ StatementFn $ exampleFnDef)
                  ]
 
 exampleBoolExpr = (ExpressionBinary Less (ExpressionVar "i") (intLitExpr 10))
@@ -277,6 +278,14 @@ testTypeDef = tableTest typeDef
                                             ]))
               ]
 
+exampleFnDef = FunctionDef "cons"
+                      [ FnArg "item" (Just $ TypeVar "a")
+                      , FnArg "rest" (Just $ NamedType "List" [TypeVar "a"])
+                      ]
+                      (Just $ NamedType "List" [TypeVar "a"])
+                      (Block [StatementReturn $ ExpressionBinary Plus
+                              (ExpressionVar "item") (ExpressionVar "rest")])
+
 testFunctionDef = tableTest functionDef
                   [ ("fn f() {}", Just $ FunctionDef "f" [] Nothing (Block []))
                   , ("fn add(a, b) {}", Just $ FunctionDef "add"
@@ -290,13 +299,7 @@ testFunctionDef = tableTest functionDef
                                                        [FnArg "l" (Just $ NamedType "List" [TypeVar "a"])]
                                                        (Just $ TypeVar "a")
                                                        (Block  []))
-                  , (undisplay $ FunctionDef "cons"
-                      [ FnArg "item" (Just $ TypeVar "a")
-                      , FnArg "rest" (Just $ NamedType "List" [TypeVar "a"])
-                      ]
-                      (Just $ NamedType "List" [TypeVar "a"])
-                      (Block [StatementReturn $ ExpressionBinary Plus
-                              (ExpressionVar "item") (ExpressionVar "rest")]))
+                  , (undisplay $ exampleFnDef)
                   , (undisplay $ FunctionDef "cons"
                       [FnArg "item" Nothing, FnArg "rest" Nothing] Nothing (Block []))
                   ]
