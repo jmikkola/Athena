@@ -177,6 +177,7 @@ statement = choice [ try letStatement
                    , try returnStatement
                    , try ifStatement
                    , try whileStatement
+                   , try forStatement
                    , try assignmentStatement
                    , expressionStatment
                    ]
@@ -256,6 +257,19 @@ whileStatement = do
   _ <- any1LinearWhitespace
   body <- block
   return $ StatementWhile test body
+
+forStatement :: Parser Statement
+forStatement = do
+  _ <- forKwd
+  _ <- any1LinearWhitespace
+  loopVar <- valueName
+  _ <- any1LinearWhitespace
+  _ <- inKwd
+  _ <- any1LinearWhitespace
+  expr <- expression
+  _ <- any1LinearWhitespace
+  body <- block
+  return $ StatementFor loopVar expr body
 
 block :: Parser Block
 block = do

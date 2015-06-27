@@ -222,6 +222,7 @@ testStatements = tableTest statement
                                               (Block [StatementAssign "i"
                                                       (ExpressionBinary Plus
                                                        (ExpressionVar "i") (intLitExpr 1))])))
+                 , (undisplay (StatementFor "x" exampleBoolExpr exampleBlock))
                  ]
 
 exampleBoolExpr = (ExpressionBinary Less (ExpressionVar "i") (intLitExpr 10))
