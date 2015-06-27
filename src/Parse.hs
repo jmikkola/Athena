@@ -84,7 +84,7 @@ instance Display ElsePart where
   display (Else blk) = "else " ++ display blk
   display (ElseIf expr blk ep) = "else if " ++ display expr ++ " " ++ display blk ++ display ep
 
--- TODO: add function declaration, type declaration
+-- TODO: add type declarations and constants
 data Statement = StatementExpr Expression
                | StatementLet VariableName Expression
                | StatementAssign VariableName Expression

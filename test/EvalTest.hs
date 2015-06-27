@@ -2,7 +2,7 @@ module Main where
 
 import Control.Monad (liftM)
 import qualified Data.Map as Map
-import Test.HUnit ( Assertion, Test( TestList ), (~:), (~?=) )
+import Test.HUnit ( Assertion, Test(..), (~:), (~?=), assertFailure )
 import Test.Framework (defaultMain)
 
 import TestUtil ( asGroup )
@@ -14,6 +14,7 @@ main = defaultMain $
        asGroup [ ("expressions", testExpressions)
                , ("scopes", testScopes)
                , ("while", testWhile)
+               , ("closures", testClosures)
                ]
 
 intLiteral = ExpressionLit . LiteralInt
@@ -112,6 +113,24 @@ testWhile =
         Just [("a", IntVal 55), ("b", IntVal 34), ("i", IntVal 0)])
      ]
 
+testClosures =
+  let makeTest (name, blk, expectedScope) = name ~: assertScopeContains blk expectedScope
+  in TestList $ map makeTest
+     [ ("adder closure",
+        [ StatementFn (FunctionDef "makeAddr" [FnArg "n" Nothing] Nothing
+                       (Block [ StatementFn (FunctionDef "addN" [FnArg "m" Nothing] Nothing
+                                             (Block [StatementReturn (ExpressionBinary
+                                                                       Plus (var "n") (var "m"))]))
+                              , StatementReturn (var "addN")]))
+        , StatementLet "add10" (ExpressionFnCall "makeAddr" [intExpr 10])
+        , StatementLet "add100" (ExpressionFnCall "makeAddr" [intExpr 100])
+        , StatementLet "a" (ExpressionFnCall "add10" [intExpr 5])
+        , StatementLet "b" (ExpressionFnCall "add10" [intExpr 10])
+        , StatementLet "c" (ExpressionFnCall "add100" [intExpr 5])
+        ],
+        [("a", IntVal 15), ("b", IntVal 20), ("c", IntVal 105)])
+     ]
+
 exampleContext :: EvalContext
 exampleContext = EvalContext $ Map.fromList [ ("anInt", IntVal 123)
                                             , ("aFloat", FloatVal 123.4)
@@ -127,6 +146,15 @@ tryEvalExpr expr = case evalExpression exampleContext expr of
 
 assertScopeIs :: [Statement] -> Maybe [(String, Value)] -> Test
 assertScopeIs stmts resultScope = (tryEvalStmts stmts) ~?= (liftM (EvalContext . Map.fromList) $ resultScope)
+
+assertScopeContains :: [Statement] -> [(String, Value)] -> Test
+assertScopeContains stmts resultVals =
+  case evalStmts emptyContext stmts of
+   Left  err      -> TestCase $ assertFailure ("Expected statements to evaluate, got " ++ err)
+   Right (ctx, _) -> TestList (map (ctxContains ctx) resultVals)
+
+ctxContains :: EvalContext -> (String, Value) -> Test
+ctxContains ctx (name, value) = (getVar name ctx) ~?= (Right value)
 
 tryEvalStmts :: [Statement] -> Maybe EvalContext
 tryEvalStmts stmts = case evalStmts emptyContext stmts of

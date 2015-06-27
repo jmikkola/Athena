@@ -7,12 +7,10 @@ Athena
 
 ## TODO
 
-- Evaluate function calls
-- Parse functions as statements
-- Handle closures in evaluation
 - Parse and evaluate if expressions
 - Parse contants
 - Parse & evaluate list literals
+- Add function expressions
 - Add pattern matching
 - Add destructuring let form
 - Add if-let, while-let forms
