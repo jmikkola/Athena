@@ -68,6 +68,11 @@ evalUnary op val = case val of
     case op of
      Negate -> Right . FloatVal $ 0 - f
      _      -> Left $ "Can't apply unary op " ++ (display op) ++ " to a float"
+  (StructVal _ _) ->
+    case op of
+     Not -> do
+       boolVal <- ensureBool val
+       return $ boolToStruct (not boolVal)
   _             -> Left $ "Can't apply unary op " ++ (display op)
 
 evalBinary :: BinaryOp -> Value -> Value -> EvalResult

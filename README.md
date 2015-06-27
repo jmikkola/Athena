@@ -7,7 +7,6 @@ Athena
 
 ## TODO
 
-- Add `!` unary operator
 - Add `for` loops
 - Evaluate statements (inc. handling variables)
 - Evaluate if, while, and for statements

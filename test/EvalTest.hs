@@ -43,6 +43,10 @@ testExpressions =
                                                             (intLiteral 100) (intLiteral 42))
                                                          , (varExpr "anInt")]
                                , Just $ StructVal "Pair" [(IntVal 142), (IntVal 123)])
+                             , ( "not True"
+                               , ExpressionUnary Not (ExpressionStruct "True" [])
+                               , Just $ StructVal "False" []
+                               )
                              ]
 
 testContext :: EvalContext
