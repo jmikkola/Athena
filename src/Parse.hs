@@ -30,7 +30,7 @@ module Parse ( Display (..)
 
 import Control.Monad ( liftM )
 import Data.Char ( digitToInt )
-import Data.List ( concatMap, intercalate )
+import Data.List ( intercalate )
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -42,8 +42,8 @@ data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
                  deriving (Eq, Show)
 
 instance Display FunctionDef where
-  display (FunctionDef name args maybeType block) =
-    "fn " ++ name ++ "(" ++ displayedArgs ++ ") " ++ retType ++ display block
+  display (FunctionDef name args maybeType blk) =
+    "fn " ++ name ++ "(" ++ displayedArgs ++ ") " ++ retType ++ display blk
     where displayedArgs = displayCommaSep args
           retType = case maybeType of
             Nothing -> ""
@@ -78,8 +78,8 @@ data ElsePart = NoElse | Else Block | ElseIf Expression Block ElsePart
 
 instance Display ElsePart where
   display NoElse = ""
-  display (Else block) = "else " ++ display block
-  display (ElseIf expr block ep) = "else if " ++ display expr ++ " " ++ display block ++ display ep
+  display (Else blk) = "else " ++ display blk
+  display (ElseIf expr blk ep) = "else if " ++ display expr ++ " " ++ display blk ++ display ep
 
 -- TODO: add function declaration, type declaration
 data Statement = StatementExpr Expression
@@ -96,9 +96,9 @@ instance Display Statement where
   display (StatementLet var expr) = "let " ++ var ++ " = " ++ display expr ++ "\n"
   display (StatementAssign var expr) = var ++ " = " ++ display expr ++ "\n"
   display (StatementReturn expr) = "return " ++ display expr ++ "\n"
-  display (StatementIf test block ep) = "if " ++ display test ++ " " ++ display block ++ display ep
-  display (StatementWhile test block) = "while " ++ display test ++ " " ++ display block
-  display (StatementFor var expr block) = "for " ++ var ++ " in " ++ display expr ++ " " ++ display block
+  display (StatementIf test blk ep) = "if " ++ display test ++ " " ++ display blk ++ display ep
+  display (StatementWhile test blk) = "while " ++ display test ++ " " ++ display blk
+  display (StatementFor var expr blk) = "for " ++ var ++ " in " ++ display expr ++ " " ++ display blk
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq

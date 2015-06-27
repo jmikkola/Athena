@@ -31,8 +31,8 @@ litToVal (LiteralFloat  f) = FloatVal  f
 litToVal (LiteralString s) = StringVal s
 
 evalExpression :: EvalContext -> Expression -> EvalResult
-evalExpression _   (ExpressionLit literal)    =
-  Right $ litToVal literal
+evalExpression _   (ExpressionLit lit)    =
+  Right $ litToVal lit
 evalExpression ctx (ExpressionVar varname)    =
   Map.lookup varname ctx `orLeft` ("Variable not found: " ++ varname)
 evalExpression ctx (ExpressionParen inner)    =
@@ -56,7 +56,7 @@ evalExpression ctx (ExpressionStruct name vs) =
     return $ StructVal name vals
 
 applyFn :: EvalContext -> FunctionName -> [Value] -> EvalResult
-applyFn ctx name argVals = undefined -- TODO
+applyFn = undefined -- TODO
 
 evalUnary :: UnaryOp -> Value -> EvalResult
 evalUnary op val = case val of
@@ -64,6 +64,7 @@ evalUnary op val = case val of
     case op of
      Negate -> Right . IntVal $ 0 - i
      Flip   -> Right . IntVal $ complement i
+     _      -> Left $ "Can't apply unary op " ++ (display op) ++ " to an int"
   (FloatVal f)  ->
     case op of
      Negate -> Right . FloatVal $ 0 - f
@@ -73,6 +74,7 @@ evalUnary op val = case val of
      Not -> do
        boolVal <- ensureBool val
        return $ boolToStruct (not boolVal)
+     _      -> Left $ "Can't apply unary op " ++ (display op) ++ " to a structure"
   _             -> Left $ "Can't apply unary op " ++ (display op)
 
 evalBinary :: BinaryOp -> Value -> Value -> EvalResult

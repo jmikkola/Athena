@@ -9,6 +9,7 @@ Athena
 
 - Add `for` loops
 - Evaluate statements (inc. handling variables)
+- Evaluate function calls
 - Evaluate if, while, and for statements
 - Parse functions as statements
 - Handle closures in evaluation
