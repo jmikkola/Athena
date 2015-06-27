@@ -180,6 +180,11 @@ evalExpression ctx (ExpressionStruct name vs) =
   do
     vals <- mapM (evalExpression ctx) vs
     return $ StructVal name vals
+evalExpression ctx (ExpressionIf test ifCase elseCase) =
+  do
+    testResult <- evalExpression ctx test
+    asBool <- ensureBool testResult
+    evalExpression ctx (if asBool then ifCase else elseCase)
 
 applyFn :: EvalContext -> FunctionName -> [Value] -> EvalResult
 applyFn ctx fname argValues = do

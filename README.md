@@ -7,7 +7,6 @@ Athena
 
 ## TODO
 
-- Parse and evaluate if expressions
 - Add ability to start interpreter with file contents
 - Print less output after statements
 - Parse comments

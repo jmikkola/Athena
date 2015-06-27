@@ -164,8 +164,8 @@ testExpression = tableTest expression
                  , (undisplay $ ExpressionStruct "Pbair" [(intLitExpr 23), trueExpr])
                  , (undisplay $ ExpressionUnary Not (ExpressionStruct "True" []))
                  , (undisplay $ exampleIfExpr)
-                 , (undisplay $ ExpressionIf (intLitExpr 1) (intLitExpr 2) exampleIfExpr)
-                 , (undisplay $ ExpressionIf (intLitExpr 1) exampleIfExpr (intLitExpr 3))
+                 , (undisplay $ ExpressionIf (intLitExpr 11) (intLitExpr 12) exampleIfExpr)
+                 , (undisplay $ ExpressionIf (intLitExpr 11)  exampleIfExpr  (intLitExpr 13))
                  ]
 
 testFnCall = tableTest (functionCallExpression "foo")
