@@ -14,6 +14,7 @@ data Value = IntVal Int
            | StringVal String
            | StructVal String [Value]
            | FunctionVal Closure
+           | NilValue -- Because we don't have typechecking yet
            deriving (Eq, Show)
 
 type EvalError = String
@@ -24,6 +25,46 @@ type EvalResult = Either EvalError Value
 orLeft :: Maybe a -> b -> Either b a
 orLeft (Just a) _ = Right a
 orLeft Nothing  b = Left b
+
+evalStatement :: EvalContext -> Statement -> Either EvalError (EvalContext, Value)
+evalStatement ctx (StatementExpr expr) = do
+  result <- evalExpression ctx expr
+  return (ctx, result)
+evalStatement ctx (StatementLet var expr) = do
+  value <- evalExpression ctx expr
+  return (Map.insert var value ctx, value)
+evalStatement ctx (StatementAssign var expr) =
+  case Map.lookup var ctx of
+   Nothing -> Left $ "Trying to set var that doesn't exist: " ++ var
+   Just _  -> do
+     value <- evalExpression ctx expr
+     return (Map.insert var value ctx, value)
+evalStatement ctx (StatementReturn expr) = do
+  result <- evalExpression ctx expr
+  return (ctx, result)
+evalStatement ctx (StatementIf test blk elPart) = evalIf ctx test blk elPart
+evalStatement _ st = Left $ "Evaluation not implemented for " ++ show st
+
+evalElsePart :: EvalContext -> ElsePart -> Either EvalError (EvalContext, Value)
+evalElsePart ctx elPart = case elPart of
+  NoElse                    -> Right (ctx, NilValue)
+  (Else        blk)         -> evalBlock ctx blk
+  (ElseIf test blk elPart') -> evalIf ctx test blk elPart'
+
+evalIf :: EvalContext -> Expression -> Block -> ElsePart -> Either EvalError (EvalContext, Value)
+evalIf ctx test blk elPart = do
+  testResult <- evalExpression ctx test
+  asBool <- ensureBool testResult
+  if asBool then evalBlock ctx blk
+    else evalElsePart ctx elPart
+
+evalBlock :: EvalContext -> Block -> Either EvalError (EvalContext, Value)
+evalBlock ctx (Block stmts) = evalStmts ctx stmts
+  where evalStmts ctx []     = Right (ctx, NilValue)
+        evalStmts ctx [stmt] = evalStatement ctx stmt
+        evalStmts ctx (s:ss) = do
+          (ctx', value) <- evalStatement ctx s
+          evalStmts ctx' ss
 
 litToVal :: LiteralValue -> Value
 litToVal (LiteralInt    i) = IntVal    i
