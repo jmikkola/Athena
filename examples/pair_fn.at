@@ -1,0 +1,11 @@
+fn pair(a, b) { fn pair_inner(f) { return f(a, b) }; return pair_inner }
+fn pair_head(a, b) { return a }
+fn pair_tail(a, b) { return b }
+fn head(p) { return p(pair_head) }
+fn tail(p) { return p(pair_tail) }
+let stack = pair(1, 0)
+stack = pair(2, stack)
+stack = pair(3, stack)
+head(stack)
+head(tail(stack))
+head(tail(tail(stack)))
