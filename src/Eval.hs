@@ -104,6 +104,14 @@ evalStatement ctx (StatementReturn expr) = do
   return (ctx, result)
 evalStatement ctx (StatementIf test blk elPart) = evalIf ctx test blk elPart
 evalStatement ctx (StatementWhile test blk) = evalWhile ctx test blk
+evalStatement ctx (StatementFn funcDef) =
+  let (FunctionDef name args _ body) = funcDef
+      value = FunctionVal (Closure ctx funcDef)
+  in do
+    -- TODO: walk the function definition to find which variables are closed over; look for returns
+    ctx' <- letVar name value ctx
+    return (ctx', value)
+
 -- for loops don't make sense yet because there is no iterable type
 evalStatement _ st = Left $ "Evaluation not implemented for " ++ show st
 
