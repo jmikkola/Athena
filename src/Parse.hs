@@ -32,6 +32,9 @@ import Control.Monad ( liftM )
 import Data.Char ( digitToInt )
 import Data.List ( intercalate )
 
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
@@ -153,13 +156,14 @@ displayInParens ds = "(" ++ displayCommaSep ds ++ ")"
 displayCommaSep :: (Display a) => [a] -> String
 displayCommaSep = (intercalate ", ") . (map display)
 
-data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String
+data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String | LiteralChar Char
                   deriving (Show, Eq)
 
 instance Display LiteralValue where
-  display (LiteralFloat f)  = show f
-  display (LiteralInt i)    = show i
+  display (LiteralFloat  f) = show f
+  display (LiteralInt    i) = show i
   display (LiteralString s) = show s
+  display (LiteralChar   c) = show c
 
 type VariableName = String
 type FunctionName = String
@@ -324,7 +328,31 @@ literalExpression :: Parser Expression
 literalExpression = liftM ExpressionLit $ literal
 
 literal :: Parser LiteralValue
-literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral]
+literal = choice [try hexLiteral, try octalLiteral, numericLiteral, stringLiteral, charLiteral]
+
+charLiteral :: Parser LiteralValue
+charLiteral = do
+  _ <- char '\''
+  ch <- noneOf ['\\', '\''] <|> escapedCh
+  _ <- char '\''
+  return $ LiteralChar ch
+
+escapedCh :: Parser Char
+escapedCh = do
+  _ <- char '\\'
+  ch <- anyChar
+  return $ escapeReplace ch
+
+escapeReplace :: Char -> Char
+escapeReplace ch = case Map.lookup ch escapeCodes of
+  Nothing -> ch
+  Just c' -> c'
+
+escapeCodes :: Map Char Char
+escapeCodes = Map.fromList [ ('n', '\n')
+                           , ('r', '\r')
+                           , ('t', '\t')
+                           ]
 
 numericLiteral :: Parser LiteralValue
 numericLiteral = do

@@ -82,6 +82,9 @@ testLiterals = tableTest literal
                , ("0o74", Just (LiteralInt 60))
                , ("1e5", Nothing)
                , (escapedString "foo bar", Just (LiteralString "foo bar"))
+               , (undisplay $ LiteralChar 'c')
+               , (undisplay $ LiteralChar '\\')
+               , (undisplay $ LiteralChar '\n')
                ]
 
 testHexLiteral = tableTest hexNum
