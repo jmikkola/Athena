@@ -291,6 +291,9 @@ exampleFnDef = FunctionDef "cons"
                       (Block [StatementReturn $ ExpressionBinary Plus
                               (ExpressionVar "item") (ExpressionVar "rest")])
 
+exampleShortFn = ShortFn "head" [FnArg "lst" Nothing] Nothing
+                   (ExpressionFnCall "lst" [ExpressionVar "consFirst"])
+
 testFunctionDef = tableTest functionDef
                   [ ("fn f() {}", Just $ FunctionDef "f" [] Nothing (Block []))
                   , ("fn add(a, b) {}", Just $ FunctionDef "add"
@@ -307,4 +310,5 @@ testFunctionDef = tableTest functionDef
                   , (undisplay $ exampleFnDef)
                   , (undisplay $ FunctionDef "cons"
                       [FnArg "item" Nothing, FnArg "rest" Nothing] Nothing (Block []))
+                  , (undisplay exampleShortFn)
                   ]

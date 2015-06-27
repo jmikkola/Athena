@@ -42,15 +42,18 @@ class Display a where
   display :: a -> String
 
 data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
+                 | ShortFn String [FnArg] (Maybe TypeDef) Expression
                  deriving (Eq, Show)
 
 instance Display FunctionDef where
   display (FunctionDef name args maybeType blk) =
-    "fn " ++ name ++ "(" ++ displayedArgs ++ ") " ++ retType ++ display blk
-    where displayedArgs = displayCommaSep args
-          retType = case maybeType of
-            Nothing -> ""
-            Just t  -> display t ++ " "
+    "fn " ++ name ++ displayInParens args ++ " " ++ displayRet maybeType ++ display blk
+  display (ShortFn name args maybeType expr) =
+    "fn " ++ name ++ displayInParens args ++ " " ++ displayRet maybeType ++ "= " ++ display expr
+
+displayRet :: Maybe TypeDef -> String
+displayRet Nothing  = ""
+displayRet (Just t) = display t ++ " "
 
 data FnArg = FnArg { argName :: String, argType :: (Maybe TypeDef) }
              deriving (Eq, Show)
@@ -596,9 +599,11 @@ typeVar = do
   varName <- many1 lower
   return $ TypeVar varName
 
--- TODO: Support short fn definition
 functionDef :: Parser FunctionDef
-functionDef = do
+functionDef = try functionDefLong <|> functionDefShort <?> "function definition"
+
+fnStart :: Parser (String, [FnArg], Maybe TypeDef)
+fnStart = do
   _ <- fnKwd
   _ <- any1LinearWhitespace
   fnName <- valueName
@@ -608,8 +613,21 @@ functionDef = do
     retType <- typeDef
     _ <- any1LinearWhitespace
     return retType
+  return (fnName, args, retType)
+
+functionDefLong :: Parser FunctionDef
+functionDefLong = do
+  (fnName, args, retType) <- fnStart
   body <- block
   return $ FunctionDef fnName args retType body
+
+functionDefShort :: Parser FunctionDef
+functionDefShort = do
+  (fnName, args, retType) <- fnStart
+  _ <- char '='
+  _ <- any1Whitespace
+  body <- expression
+  return $ ShortFn fnName args retType body
 
 fnArgs :: Parser [FnArg]
 fnArgs = do

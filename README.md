@@ -7,14 +7,15 @@ Athena
 
 ## TODO
 
+- Add function expressions
 - Add ability to start interpreter with file contents
 - Print less output after statements
 - Parse comments
 - Decide syntax for type declarations
 - Decide how creating instances of structs should work (e.g. when passing them as like functions)
+- Break up parsing and evaluation into sub modules
 - Parse contants
 - Parse & evaluate list literals
-- Add function expressions
 - Add pattern matching
 - Add string operations
 - Add some built-in functions
