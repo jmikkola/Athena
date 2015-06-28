@@ -16,6 +16,7 @@ module Parse ( Display (..)
              , getArgs
              , fnArgNames
              , anyWhitespace
+             , any1Whitespace
              , digits
              , literal
              , doubleQuotedString
@@ -30,9 +31,12 @@ module Parse ( Display (..)
              , block
              , typeDef
              , functionDef
+             , parseLineComment
+             , parseBlockComment
+             , parseComment
              ) where
 
-import Control.Monad ( liftM )
+import Control.Monad ( liftM, foldM )
 import Data.Char ( digitToInt )
 import Data.List ( intercalate )
 
@@ -501,7 +505,6 @@ parenExpression = do
 
 functionCallExpression :: String -> Parser Expression
 functionCallExpression fnName = do
-  _ <- anyWhitespace
   args <- fnCallArgs
   return $ ExpressionFnCall fnName args
 
@@ -571,9 +574,9 @@ binOp op = do
 binaryExpressionLevel :: Parser Expression -> Parser Expression -> [BinaryOp] -> Parser Expression
 binaryExpressionLevel self nextLevel ops = do
   left <- nextLevel
-  _ <- anyWhitespace
+  _ <- try anyWhitespace
   op <- choice $ map (try . binOp) ops
-  _ <- anyWhitespace
+  _ <- try anyWhitespace
   right <- self
   return $ ExpressionBinary op left right
 
@@ -714,11 +717,19 @@ underscore = char '_'
 anyWhitespaceCh :: Parser Char
 anyWhitespaceCh = oneOf whitespaceChs
 
+anyWhitespaceS :: Parser String
+-- `try` is needed here so that it can back out of parsing a division operator
+anyWhitespaceS = many1 anyWhitespaceCh <|> try parseComment
+
 anyWhitespace :: Parser String
-anyWhitespace = many $ anyWhitespaceCh
+anyWhitespace = do
+  whitespaces <- many $ anyWhitespaceS
+  return $ concat whitespaces
 
 any1Whitespace :: Parser String
-any1Whitespace = many1 anyWhitespaceCh
+any1Whitespace = do
+  whitespaces <- many1 $ anyWhitespaceS
+  return $ concat whitespaces
 
 linearWhitespaceCh :: Parser Char
 linearWhitespaceCh = oneOf " \t"
@@ -731,3 +742,40 @@ any1LinearWhitespace = many1 linearWhitespaceCh
 
 statementSep :: Parser String
 statementSep = choice [string "\n", string ";"]
+
+parseComment :: Parser String
+parseComment = try parseLineComment <|> parseBlockComment <?> "Comment"
+
+parseLineComment :: Parser String
+parseLineComment = do
+  start <- string "//"
+  comment <- many $ noneOf "\r\n"
+  return $ start ++ comment
+
+parseBlockComment :: Parser String
+parseBlockComment = do
+  start <- string "/*"
+  contentList <- blockCommentContents
+  return $ concat $ start : contentList
+
+blockCommentContents :: Parser [String]
+blockCommentContents = starContent <|> nonStarConents
+
+nonStarConents :: Parser [String]
+nonStarConents = do
+  content <- many1 $ noneOf "*"
+  rest <- starContent
+  return $ content : rest
+
+starContent :: Parser [String]
+starContent = try blockCommentEnd <|> starRest
+
+starRest = do
+  star <- string "*"
+  rest <- blockCommentContents
+  return $ star : rest
+
+blockCommentEnd :: Parser [String]
+blockCommentEnd = do
+  end <- string "*/"
+  return [end]

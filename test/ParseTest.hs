@@ -29,6 +29,9 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("type def", testTypeDef)
                              , ("function", testFunctionDef)
                              , ("file", testFile)
+                             , ("lineComment", testLineComment)
+                             , ("blockComment", testBlockComment)
+                             , ("Comment in whitespace", testCommentInWhitespace)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -121,12 +124,24 @@ flLitExpr = ExpressionLit . LiteralFloat
 
 exampleIfExpr = ExpressionIf (intLitExpr 1) (intLitExpr 2) (intLitExpr 3)
 
+exampleMathExpr = ExpressionBinary Plus (intLitExpr 1)
+                  (ExpressionBinary Divide (intLitExpr 3) (intLitExpr 5))
+
 testExpression = tableTest expression
                  [ ("1", Just (intLitExpr 1))
                  , ("(123)", Just (ExpressionParen (intLitExpr 123)))
                  , ("var1", Just (ExpressionVar "var1"))
                  , ("barFn()", Just (ExpressionFnCall "barFn" []))
-                 , ("1 + foo  ( 3 * 4 , bar(\"zig\") ) / 5",
+                 , ("1 + 3", Just (ExpressionBinary Plus (intLitExpr 1) (intLitExpr 3)))
+                 , ("1 + 3 / 5", Just exampleMathExpr)
+                 , ("1 /* comment */ + 3 / 5 /* another comment! */", Just exampleMathExpr)
+                 , (undisplay $ exampleMathExpr)
+                 , ("1+3/5", Just exampleMathExpr)
+                 , ("bar(\"zig\")",
+                    Just (ExpressionFnCall "bar" [ExpressionLit (LiteralString "zig")]))
+                 , ("foo( 3 * 4 )",
+                    Just (ExpressionFnCall "foo" [ExpressionBinary Times (intLitExpr 3) (intLitExpr 4)]))
+                 , ("1 + foo( 3 * 4 /* comment */ , bar(\"zig\") ) / 5",
                     Just (ExpressionBinary Plus (intLitExpr 1)
                          (ExpressionBinary Divide
                            (ExpressionFnCall "foo"
@@ -174,7 +189,8 @@ testFnCall = tableTest (functionCallExpression "foo")
              , ("()", Just (ExpressionFnCall "foo" []))
              , ("(123)", Just (ExpressionFnCall "foo" [intLitExpr 123]))
              , ("(   123  )", Just (ExpressionFnCall "foo" [intLitExpr 123]))
-             , ("  (123)", Just (ExpressionFnCall "foo" [intLitExpr 123]))
+             , ("( /* comment */  123  )", Just (ExpressionFnCall "foo" [intLitExpr 123]))
+             , ("  (123)", Nothing)
              ]
 
 testFnArgs = tableTest fnCallArgs
@@ -186,7 +202,7 @@ testFnArgs = tableTest fnCallArgs
             , ("(123 )", Just [intLitExpr 123])
             , ("(  123  )", Just [intLitExpr 123])
             , ("(123,456)", Just [intLitExpr 123, intLitExpr 456])
-            , ("(123,  456)", Just [intLitExpr 123, intLitExpr 456])
+            , ("(123, /* comment */  456)", Just [intLitExpr 123, intLitExpr 456])
             , ("(123  ,456)", Just [intLitExpr 123, intLitExpr 456])
             , ("(,)", Nothing)
             , ("(,123)", Nothing)
@@ -328,6 +344,31 @@ testFile = tableTest parseFile
            [ ("", Just $ [])
            , ("fn add(a, b) = a + b", Just $ [_addFn])
            , ("\n\nfn add(a, b) = a + b\n\n", Just $ [_addFn])
-           , ("\n   \n\n fn   add(a, b) = a + b\nfn bar(n) {\n\nlet m = 3\nreturn m * n\n}",
+           , ("\n   \n\n fn   add(a, b) = a + b\n/* comment */fn bar(n) {\n\nlet m = 3\nreturn m * n\n}",
               Just $ [_addFn, _barFn])
            ]
+
+testLineComment = tableTest parseLineComment
+                  [ ("//\n", Just "//")
+                  , ("// foo! ", Just "// foo! ")
+                  , ("//////", Just "//////")
+                  , ("//**/", Just "//**/")
+                  , ("// not a block comment: /*", Just "// not a block comment: /*")
+                  , ("// trailing newlines\n\n ", Just "// trailing newlines")
+                  ]
+
+testBlockComment = tableTest parseBlockComment
+                   [ ("/**/", Just "/**/")
+                   , ("/*  */ \n", Just "/*  */")
+                   , ("/*\n*\n*/", Just "/*\n*\n*/")
+                   , ("/***/", Just "/***/")
+                   , ("/****/", Just "/****/")
+                   ]
+
+makeWhitespaceTest parseFn str = str ~: assertParses parseFn str (Just str)
+
+testCommentInWhitespace = TestList $ map (makeWhitespaceTest any1Whitespace)
+                           [ " "
+                           , "/* foo */"
+                           , "\n/* // foo\nbar*/  // still whitespace"
+                           ]

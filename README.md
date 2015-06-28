@@ -11,6 +11,7 @@ Simply run `make` to build and test, or run `make run` to run athena.
 
 - Parse comments
 - Add pattern matching
+- Figure out how to make let bindings recursive
 - Add function expressions
 - Print less output after statements
 - Decide syntax for type declarations
