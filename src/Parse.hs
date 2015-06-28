@@ -114,6 +114,7 @@ data Statement = StatementExpr Expression
                | StatementIf Expression Block ElsePart
                | StatementWhile Expression Block
                | StatementFor VariableName Expression Block
+               | StatementMatch Expression [MatchCase]
                | StatementFn FunctionDef
                deriving (Show, Eq)
 
@@ -125,7 +126,26 @@ instance Display Statement where
   display (StatementIf test blk ep) = "if " ++ display test ++ " " ++ display blk ++ display ep
   display (StatementWhile test blk) = "while " ++ display test ++ " " ++ display blk
   display (StatementFor var expr blk) = "for " ++ var ++ " in " ++ display expr ++ " " ++ display blk
+  display (StatementMatch expr cases) = "match " ++ display expr ++ " {\n" ++ concatMap display cases ++ "}"
   display (StatementFn funcDef) = display funcDef
+
+data MatchCase = MatchCase MatchPattern Block
+               deriving (Show, Eq)
+
+instance Display MatchCase where
+  display (MatchCase pattern blk) = display pattern ++ " " ++ display blk
+
+-- TODO: add list patterns
+data MatchPattern = UnderscorePattern | LiteralPattern LiteralValue | StructPattern String [MatchPattern]
+                  deriving (Show, Eq)
+
+instance Display MatchPattern where
+  display UnderscorePattern = "_"
+  display (LiteralPattern val) = display val
+  display (StructPattern name subPttns) =
+    case subPttns of
+     [] -> name
+     _  -> name ++ displayInParens subPttns
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
