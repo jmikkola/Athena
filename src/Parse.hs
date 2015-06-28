@@ -770,6 +770,7 @@ nonStarConents = do
 starContent :: Parser [String]
 starContent = try blockCommentEnd <|> starRest
 
+starRest :: Parser [String]
 starRest = do
   star <- string "*"
   rest <- blockCommentContents

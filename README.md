@@ -9,7 +9,6 @@ Simply run `make` to build and test, or run `make run` to run athena.
 
 ## TODO
 
-- Parse comments
 - Add pattern matching
 - Figure out how to make let bindings recursive
 - Add function expressions

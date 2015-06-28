@@ -1,8 +1,35 @@
-fn pair(a, b) { fn pair_inner(f) { return f(a, b) }; return pair_inner }
-fn pair_head(a, b) { return a }
-fn pair_tail(a, b) { return b }
-fn head(p) { return p(pair_head) }
-fn tail(p) { return p(pair_tail) }
+// Creates a pair of two values.
+fn pair(a, b) {
+    // Store the functions in the closed-over state
+    fn pair_inner(f) {
+        return f(a, b)
+    }
+    return pair_inner
+}
+
+
+fn pair_head(a, b) {
+    return a
+}
+
+fn pair_tail(a, b) {
+    return b
+}
+
+/*
+ * Takes the head of a list made out of pairs
+ */
+fn head(p) {
+    return p(pair_head)
+}
+
+/*
+ * Gives the tail of a list made out of pairs
+ */
+fn tail(p) {
+	return p(pair_tail)
+}
+
 let stack = pair(1, 0)
 stack = pair(2, stack)
 stack = pair(3, stack)
