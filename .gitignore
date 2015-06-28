@@ -8,3 +8,4 @@ TAGS
 .cabal-sandbox
 athena
 dist
+.stack-work

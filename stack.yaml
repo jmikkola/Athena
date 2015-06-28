@@ -2,4 +2,5 @@ flags: {}
 packages:
 - '.'
 extra-deps: []
+system-ghc: false
 resolver: lts-2.15

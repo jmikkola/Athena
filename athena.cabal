@@ -61,7 +61,7 @@ executable athena
     base >=4.6,
     containers >= 0.5,
     parsec >=3.1.8,
-    readline >=1.0.3
+    haskeline >=0.7
 
   -- Directories containing source files.
   hs-source-dirs:      src
@@ -74,8 +74,7 @@ library
   build-depends:
     base >=4.6,
     containers >= 0.5,
-    parsec >=3.1.8,
-    readline >=1.0.3
+    parsec >=3.1.8
   hs-source-dirs:      src
   default-language:    Haskell2010
   exposed-modules:
@@ -90,15 +89,13 @@ test-suite ParseTests
     containers >= 0.5,
     parsec >=3.1.8,
     HUnit >= 1.2,
-    hpc >= 0.7,
-    hpc-coveralls >= 0.9,
     test-framework-hunit,
     test-framework,
     athena
   type:                exitcode-stdio-1.0
   main-is:             ParseTest.hs
   default-language:    Haskell2010
-  ghc-options:    -fhpc -Wall
+  ghc-options:         -Wall
 
 test-suite EvalTests
   hs-source-dirs: test, src
@@ -108,12 +105,10 @@ test-suite EvalTests
     containers >= 0.5,
     parsec >=3.1.8,
     HUnit >= 1.2,
-    hpc >= 0.7,
-    hpc-coveralls >= 0.9,
     test-framework-hunit,
     test-framework,
     athena
   type:                exitcode-stdio-1.0
   main-is:             EvalTest.hs
   default-language:    Haskell2010
-  ghc-options:    -fhpc -Wall
+  ghc-options:         -Wall
