@@ -2,15 +2,19 @@ module Main where
 
 import Control.Applicative ( (<*) )
 import Data.Char ( isSpace )
+import System.Environment ( getArgs )
 
 import System.Console.Haskeline ( InputT, getInputLine, runInputT, defaultSettings, outputStrLn )
 import Text.Parsec ( parse, eof )
 
 import Eval
-import Parse
+import Parse hiding ( getArgs )
 
 main :: IO ()
-main = runInputT defaultSettings (loop emptyContext)
+main = do
+  args <- getArgs
+  putStrLn $ show args
+  runInputT defaultSettings (loop emptyContext)
 
 loop :: EvalContext -> InputT IO ()
 loop ctx = do
