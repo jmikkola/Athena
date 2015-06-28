@@ -31,6 +31,7 @@ module Parse ( Display (..)
              , statement
              , ifStatement
              , parseMatchPattern
+             , parseMatchCase
              , block
              , typeDef
              , functionDef
@@ -376,6 +377,13 @@ parseUnderscoreMatch = do
 
 parseVarMatch :: Parser MatchPattern
 parseVarMatch = liftM VarPattern $ valueName
+
+parseMatchCase :: Parser MatchCase
+parseMatchCase = do
+  pattern <- parseMatchPattern
+  _ <- any1Whitespace
+  blk <- block
+  return $ MatchCase pattern blk
 
 block :: Parser Block
 block = do

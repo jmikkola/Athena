@@ -33,6 +33,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("blockComment", testBlockComment)
                              , ("Comment in whitespace", testCommentInWhitespace)
                              , ("test match patterns", testMatchPattern)
+                             , ("test match case", testMatchCase)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -388,3 +389,10 @@ testMatchPattern = tableTest parseMatchPattern
                    , ("Cons()", Nothing)
                    , ("Cons (_)", Nothing)
                    ]
+
+exampleMatchCase = StructPattern "Cons" [UnderscorePattern, VarPattern "rest"]
+
+testMatchCase = tableTest parseMatchCase
+                [ ("True {}", Just $ MatchCase (StructPattern "True" []) (Block []))
+                , (undisplay $ MatchCase exampleMatchCase exampleBlock)
+                ]
