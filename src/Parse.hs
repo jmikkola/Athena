@@ -11,6 +11,7 @@ module Parse ( Display (..)
              , LiteralValue (..)
              , FunctionName
              , VariableName
+             , parseFile
              , fnName
              , getArgs
              , fnArgNames
@@ -200,6 +201,11 @@ unwrapOr Nothing  b = b
 
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
+
+parseFile :: Parser [Statement]
+parseFile = do
+  _ <- anyWhitespace
+  statement `sepEndBy` any1Whitespace
 
 -- Statements starting with a keyword are safe to "try" because they will fail fast
 statement :: Parser Statement

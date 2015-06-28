@@ -28,6 +28,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("block", testBlock)
                              , ("type def", testTypeDef)
                              , ("function", testFunctionDef)
+                             , ("file", testFile)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -300,7 +301,7 @@ testFunctionDef = tableTest functionDef
                                                              [FnArg "a" Nothing, FnArg "b" Nothing]
                                                              Nothing
                                                              (Block []))
-                  , ("fn five() { return 1 + 4 }", Just $ FunctionDef "five" [] Nothing
+                  , ("fn five() {\nreturn 1 + 4\n}", Just $ FunctionDef "five" [] Nothing
                                                           (Block  [StatementReturn $ ExpressionBinary
                                                                    Plus (intLitExpr 1) (intLitExpr 4)]))
                   , ("fn head(l List[a]) a {}", Just $ FunctionDef "head"
@@ -312,3 +313,21 @@ testFunctionDef = tableTest functionDef
                       [FnArg "item" Nothing, FnArg "rest" Nothing] Nothing (Block []))
                   , (undisplay exampleShortFn)
                   ]
+
+_arg s = FnArg s Nothing
+_var s = ExpressionVar s
+
+_addFn = StatementFn (ShortFn "add" [_arg "a", _arg "b"] Nothing
+                      (ExpressionBinary Plus (_var "a") (_var "b")))
+
+_barFn = StatementFn (FunctionDef "bar" [_arg "n"] Nothing
+                      (Block [ StatementLet "m" (intLitExpr 3)
+                             , StatementReturn (ExpressionBinary Times (_var "m") (_var "n"))]))
+
+testFile = tableTest parseFile
+           [ ("", Just $ [])
+           , ("fn add(a, b) = a + b", Just $ [_addFn])
+           , ("\n\nfn add(a, b) = a + b\n\n", Just $ [_addFn])
+           , ("\n   \n\n fn   add(a, b) = a + b\nfn bar(n) {\n\nlet m = 3\nreturn m * n\n}",
+              Just $ [_addFn, _barFn])
+           ]
