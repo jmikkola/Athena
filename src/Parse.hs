@@ -11,6 +11,8 @@ module Parse ( Display (..)
              , LiteralValue (..)
              , FunctionName
              , VariableName
+             , MatchCase (..)
+             , MatchPattern (..)
              , parseFile
              , fnName
              , getArgs
@@ -28,6 +30,7 @@ module Parse ( Display (..)
              , fnCallArgs
              , statement
              , ifStatement
+             , parseMatchPattern
              , block
              , typeDef
              , functionDef
@@ -136,16 +139,16 @@ instance Display MatchCase where
   display (MatchCase pattern blk) = display pattern ++ " " ++ display blk
 
 -- TODO: add list patterns
-data MatchPattern = UnderscorePattern | LiteralPattern LiteralValue | StructPattern String [MatchPattern]
+data MatchPattern = UnderscorePattern | StructPattern String [MatchPattern] | VarPattern String
                   deriving (Show, Eq)
 
 instance Display MatchPattern where
   display UnderscorePattern = "_"
-  display (LiteralPattern val) = display val
   display (StructPattern name subPttns) =
     case subPttns of
      [] -> name
      _  -> name ++ displayInParens subPttns
+  display (VarPattern name) = name
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
@@ -334,6 +337,45 @@ forStatement = do
   _ <- any1LinearWhitespace
   body <- block
   return $ StatementFor loopVar expr body
+
+parseMatchPattern :: Parser MatchPattern
+parseMatchPattern = parseStructMatch <|> parseUnderscoreMatch <|> parseVarMatch
+
+parseStructMatch :: Parser MatchPattern
+parseStructMatch = do
+  name <- typeName
+  subPatterns <- optionMaybe subPatternList
+  return $ StructPattern name (unwrapOr subPatterns [])
+
+subPatternList :: Parser [MatchPattern]
+subPatternList = do
+  _ <- char '('
+  _ <- anyWhitespace
+  pattern <- parseMatchPattern
+  rest <- moreSubPatterns
+  return $ pattern : rest
+
+moreSubPatterns :: Parser [MatchPattern]
+moreSubPatterns = endSubPatternList <|> do
+  _ <- char ','
+  _ <- any1Whitespace
+  pattern <- parseMatchPattern
+  rest <- moreSubPatterns
+  return $ pattern : rest
+
+endSubPatternList :: Parser [MatchPattern]
+endSubPatternList = do
+  _ <- anyWhitespace
+  _ <- char ')'
+  return []
+
+parseUnderscoreMatch :: Parser MatchPattern
+parseUnderscoreMatch = do
+  _ <- char '_'
+  return UnderscorePattern
+
+parseVarMatch :: Parser MatchPattern
+parseVarMatch = liftM VarPattern $ valueName
 
 block :: Parser Block
 block = do

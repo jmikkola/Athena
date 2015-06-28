@@ -32,6 +32,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("lineComment", testLineComment)
                              , ("blockComment", testBlockComment)
                              , ("Comment in whitespace", testCommentInWhitespace)
+                             , ("test match patterns", testMatchPattern)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -372,3 +373,18 @@ testCommentInWhitespace = TestList $ map (makeWhitespaceTest any1Whitespace)
                            , "/* foo */"
                            , "\n/* // foo\nbar*/  // still whitespace"
                            ]
+
+testMatchPattern = tableTest parseMatchPattern
+                   [ (undisplay $ UnderscorePattern)
+                   , (undisplay $ VarPattern "foo")
+                   , (undisplay $ StructPattern "True" [])
+                   , ("Cons( _ )", Just $ StructPattern "Cons" [UnderscorePattern])
+                   , (undisplay $ StructPattern "Cons" [ VarPattern "head"
+                                                       , StructPattern "Nil" []])
+                   , ("Cons(_, Cons(second, rest))",
+                      Just $ StructPattern "Cons" [ UnderscorePattern
+                                                  , StructPattern "Cons" [ VarPattern "second"
+                                                                         , VarPattern "rest" ]])
+                   , ("Cons()", Nothing)
+                   , ("Cons (_)", Nothing)
+                   ]
