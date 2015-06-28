@@ -34,6 +34,7 @@ main = defaultMain $ asGroup [ ("digits", testParseDigits)
                              , ("Comment in whitespace", testCommentInWhitespace)
                              , ("test match patterns", testMatchPattern)
                              , ("test match case", testMatchCase)
+                             , ("Test match statement", testMatchStatement)
                              ]
 
 maybeEqEither :: (Eq a) => Maybe a -> Either l a -> Bool
@@ -251,6 +252,7 @@ testStatements = tableTest statement
                                                        (ExpressionVar "i") (intLitExpr 1))])))
                  , (undisplay (StatementFor "x" exampleBoolExpr exampleBlock))
                  , (undisplay $ StatementFn $ exampleFnDef)
+                 , (undisplay exampleMatchStatement)
                  ]
 
 exampleBoolExpr = (ExpressionBinary Less (ExpressionVar "i") (intLitExpr 10))
@@ -390,9 +392,22 @@ testMatchPattern = tableTest parseMatchPattern
                    , ("Cons (_)", Nothing)
                    ]
 
-exampleMatchCase = StructPattern "Cons" [UnderscorePattern, VarPattern "rest"]
+examplePattern = StructPattern "Cons" [UnderscorePattern, VarPattern "rest"]
 
 testMatchCase = tableTest parseMatchCase
                 [ ("True {}", Just $ MatchCase (StructPattern "True" []) (Block []))
-                , (undisplay $ MatchCase exampleMatchCase exampleBlock)
+                , (undisplay $ MatchCase examplePattern exampleBlock)
                 ]
+
+exampleMatchStatement = StatementMatch (ExpressionFnCall "foo" [])
+                        [ MatchCase examplePattern exampleBlock
+                        , MatchCase UnderscorePattern (Block [])]
+
+testMatchStatement = tableTest parseMatchStatement
+                     [ ("match x {\n  True {}\n  _ {}\n}",
+                        Just $ StatementMatch (_var "x")
+                               [ MatchCase (StructPattern "True" []) (Block [])
+                               , MatchCase UnderscorePattern (Block [])])
+                     , (undisplay exampleMatchStatement)
+                     , ("match x {\n True {} _ {} }", Nothing)
+                     ]

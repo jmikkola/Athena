@@ -32,6 +32,7 @@ module Parse ( Display (..)
              , ifStatement
              , parseMatchPattern
              , parseMatchCase
+             , parseMatchStatement
              , block
              , typeDef
              , functionDef
@@ -244,6 +245,7 @@ statement = choice [ try letStatement
                    , try forStatement
                    , try assignmentStatement
                    , try fnStatement
+                   , try parseMatchStatement
                    , expressionStatment
                    ]
 
@@ -384,6 +386,28 @@ parseMatchCase = do
   _ <- any1Whitespace
   blk <- block
   return $ MatchCase pattern blk
+
+parseMatchStatement :: Parser Statement
+parseMatchStatement = do
+  _ <- matchKwd
+  _ <- any1LinearWhitespace
+  expr <- expression
+  _ <- any1LinearWhitespace
+  _ <- char '{'
+  _ <- anyWhitespace
+  cases <- parseMatchCases
+  return $ StatementMatch expr cases
+
+parseMatchCases :: Parser [MatchCase]
+parseMatchCases = do
+  matchCase <- parseMatchCase
+  _ <- anyLinearWhitespace
+  _ <- statementSep
+  _ <- anyWhitespace
+  rest <- parseMatchCases <|> do
+    _ <- char '}'
+    return []
+  return $ matchCase : rest
 
 block :: Parser Block
 block = do
@@ -777,6 +801,9 @@ thenKwd = string "then"
 
 returnKwd :: Parser String
 returnKwd = string "return"
+
+matchKwd :: Parser String
+matchKwd = string "match"
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
