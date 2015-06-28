@@ -1,6 +1,9 @@
-./dist/build/athena/athena: Makefile athena.cabal stack.yaml src/*.hs test/*.hs
+athena: Makefile athena.cabal stack.yaml src/*.hs test/*.hs
 	stack build
 	stack test
 
-run: ./dist/build/athena/athena
+run:
+	stack build
 	stack exec athena
+
+.PHONY: run athena
