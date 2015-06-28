@@ -1,6 +1,7 @@
 module Main where
 
 import Control.Applicative ( (<*) )
+import Control.Monad ( foldM )
 import Data.Char ( isSpace )
 import System.Environment ( getArgs )
 
@@ -10,11 +11,39 @@ import Text.Parsec ( parse, eof )
 import Eval
 import Parse hiding ( getArgs )
 
+findMatchingFlags :: [String] -> String -> [String]
+findMatchingFlags (f:value:fs) flag = if f == flag then value : rest else rest
+  where rest = findMatchingFlags (value:fs) flag
+findMatchingFlags _            _    = []
+
 main :: IO ()
 main = do
   args <- getArgs
-  putStrLn $ show args
-  runInputT defaultSettings (loop emptyContext)
+  ctx <- foldM runFile emptyContext (findMatchingFlags args "-f")
+  runInputT defaultSettings (loop ctx)
+
+runFile :: EvalContext -> String -> IO EvalContext
+runFile ctx filename = do
+  contents <- readFile filename
+  case evalFile ctx filename contents of
+   Right ctx' -> return ctx'
+   Left  err  -> do
+     putStrLn ("Error evaluating " ++ filename ++ " " ++ err)
+     return ctx
+
+evalFile :: EvalContext -> String -> String -> Either String EvalContext
+evalFile ctx filename contents = do
+  statements <- applyLeft show $ parse parseFile filename contents
+  foldM handleStatement ctx statements
+
+applyLeft :: (a -> b) -> (Either a r) -> (Either b r)
+applyLeft fn (Left  a) = Left (fn a)
+applyLeft _  (Right r) = Right r
+
+handleStatement :: EvalContext -> Statement -> Either String EvalContext
+handleStatement ctx stmt = do
+  (ctx', _) <- evalStatement ctx stmt
+  return ctx'
 
 loop :: EvalContext -> InputT IO ()
 loop ctx = do

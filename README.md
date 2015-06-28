@@ -10,7 +10,6 @@ Simply run `make` to build and test, or run `make run` to run athena.
 ## TODO
 
 - Add function expressions
-- Add ability to start interpreter with file contents
 - Print less output after statements
 - Parse comments
 - Decide syntax for type declarations
