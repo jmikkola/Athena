@@ -1,5 +1,6 @@
 module Eval where
 
+import Control.Monad ( foldM )
 import Data.Bits (complement, (.&.), (.|.))
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -83,6 +84,11 @@ updateVar name value ctx = case ctx of
       parent' <- updateVar name value parent
       return $ NestedContext scopeVars parent'
 
+addToCtx :: String -> Value -> EvalContext -> EvalContext
+addToCtx name value ctx = case ctx of
+  (EvalContext scopeVars)          -> EvalContext   (Map.insert name value scopeVars)
+  (NestedContext scopeVars parent) -> NestedContext (Map.insert name value scopeVars) parent
+
 orLeft :: Maybe a -> b -> Either b a
 orLeft (Just a) _ = Right a
 orLeft Nothing  b = Left b
@@ -111,8 +117,30 @@ evalStatement ctx (StatementFn funcDef) =
     -- TODO: walk the function definition to find which variables are closed over; look for returns
     ctx' <- letVar name value ctx
     return (ctx', value)
+evalStatement ctx (StatementMatch expr cases) = do
+  result <- evalExpression ctx expr
+  evalCases (newScope ctx) result cases
 -- for loops don't make sense yet because there is no iterable type
 evalStatement _ st = Left $ "Evaluation not implemented for " ++ show st
+
+evalCases :: EvalContext -> Value -> [MatchCase] -> Either EvalError (EvalContext, Value)
+evalCases ctx _   []     = Right (ctx, NilValue)
+evalCases ctx val (c:cs) =
+  let (MatchCase pattern blk) = c
+  in case patternMatch ctx pattern val of
+      Nothing   -> evalCases ctx val cs
+      Just ctx' -> evalBlock ctx' blk
+
+patternMatch :: EvalContext -> MatchPattern -> Value -> Maybe EvalContext
+patternMatch ctx ptrn val = case ptrn of
+  UnderscorePattern       -> Just ctx
+  VarPattern s            -> Just $ addToCtx s val ctx
+  StructPattern name ptns -> case val of
+    (StructVal vname vparts) ->
+      if vname /= name || length ptns /= length vparts
+      then Nothing
+      else foldM (\ctx' (p, v) -> patternMatch ctx' p v) ctx (zip ptns vparts)
+    _                        -> Nothing
 
 evalElsePart :: EvalContext -> ElsePart -> Either EvalError (EvalContext, Value)
 evalElsePart ctx elPart = case elPart of
