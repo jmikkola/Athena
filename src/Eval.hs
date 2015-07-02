@@ -126,12 +126,10 @@ evalStatement ctx (StatementReturn expr) = do
 evalStatement ctx (StatementIf test blk elPart) = evalIf ctx test blk elPart
 evalStatement ctx (StatementWhile test blk) = evalWhile ctx test blk
 evalStatement ctx (StatementFn funcDef) =
-  let value = FunctionVal (Closure ctx funcDef)
-      name  = fnName funcDef
-  in do
+  let name = fnName funcDef
     -- TODO: walk the function definition to find which variables are closed over; look for returns
-    ctx' <- letVar name value ctx
-    return (ctx', value)
+      (ctx', value) = (\fn -> (addToCtx name fn ctx, fn)) (FunctionVal (Closure ctx' funcDef))
+  in return (ctx', value)
 evalStatement ctx (StatementMatch expr cases) = do
   result <- evalExpression ctx expr
   evalCases (newScope ctx) result cases
