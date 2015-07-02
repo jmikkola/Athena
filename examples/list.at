@@ -1,0 +1,61 @@
+// Create an empty list
+fn empty() = Nil
+
+// Add an item to a list
+fn add(x, list) = Cons(x, list)
+
+// Get the first item of a list
+fn head(list) {
+    match list {
+        Nil {
+            return Nothing
+        }
+        Cons(head, _) {
+            return Just(head)
+        }
+    }
+}
+
+fn length(list) {
+    match list {
+        Nil {
+            return 0
+        }
+        Cons(_, rest) {
+            return 1 + length(rest)
+        }
+    }
+}
+
+fn map(fn, list) {
+    match list {
+        Nil {
+            return empty()
+        }
+        Cons(head, rest) {
+            return add(fn(head), map(fn, rest))
+        }
+    }
+}
+
+fn foldr(fn, init, list) {
+    match list {
+        Nil {
+            return init
+        }
+        Cons(head, rest) {
+            return fn(head, foldr(fn, init, rest))
+        }
+    }
+}
+
+fn foldl(fn, init, list) {
+    match list {
+        Nil {
+            return init
+        }
+        Cons(head, rest) {
+            return foldl(fn, fn(head, init), rest)
+        }
+    }
+}
