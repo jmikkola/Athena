@@ -141,6 +141,7 @@ patternMatch ctx ptrn val = case ptrn of
       then Nothing
       else foldM (\ctx' (p, v) -> patternMatch ctx' p v) ctx (zip ptns vparts)
     _                        -> Nothing
+  LiteralPattern lit      -> if val == (litToVal lit) then Just ctx else Nothing
 
 evalElsePart :: EvalContext -> ElsePart -> Either EvalError (EvalContext, Value)
 evalElsePart ctx elPart = case elPart of
