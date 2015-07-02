@@ -2,6 +2,7 @@ module Eval where
 
 import Control.Monad ( foldM )
 import Data.Bits (complement, (.&.), (.|.))
+import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -9,6 +10,9 @@ import Parse
 
 data Closure = Closure EvalContext FunctionDef
              deriving (Eq, Show)
+
+instance Display Closure where
+  display (Closure _ fndef) = fnName fndef
 
 data Value = IntVal Int
            | FloatVal Float
@@ -18,6 +22,17 @@ data Value = IntVal Int
            | FunctionVal Closure
            | NilValue -- Because we don't have typechecking yet
            deriving (Eq, Show)
+
+instance Display Value where
+  display (IntVal i)            = show i
+  display (FloatVal f)          = show f
+  display (CharVal c)           = show c
+  display (StringVal s)         = show s
+  display (StructVal name vals) =
+    if null vals then name
+    else name ++ "(" ++ (intercalate ", " $ map display vals) ++ ")"
+  display (FunctionVal cls)     = "fn " ++ display cls
+  display NilValue              = "()"
 
 type EvalError = String
 

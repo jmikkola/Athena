@@ -73,5 +73,5 @@ handleParsed stmt ctx = case evalStatement ctx stmt of
     outputStrLn err
     return ctx
   Right (ctx', result) -> do
-    outputStrLn $ show result
+    outputStrLn $ display result
     return ctx'

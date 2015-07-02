@@ -11,7 +11,6 @@ Simply run `make` to build and test, or run `make run` to run athena.
 
 - Figure out how to make let bindings recursive
 - Add function expressions
-- Print less output after statements
 - Decide syntax for type declarations
 - Decide how creating instances of structs should work (e.g. when passing them as like functions)
 - Break up parsing and evaluation into sub modules
