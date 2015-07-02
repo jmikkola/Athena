@@ -9,7 +9,6 @@ Simply run `make` to build and test, or run `make run` to run athena.
 
 ## TODO
 
-- Figure out how to make let bindings recursive
 - Add function expressions
 - Decide syntax for type declarations
 - Decide how creating instances of structs should work (e.g. when passing them as like functions)
