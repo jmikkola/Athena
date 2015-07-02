@@ -142,15 +142,17 @@ instance Display MatchCase where
 
 -- TODO: add list patterns
 data MatchPattern = UnderscorePattern | StructPattern String [MatchPattern] | VarPattern String
+                  | LiteralPattern LiteralValue
                   deriving (Show, Eq)
 
 instance Display MatchPattern where
-  display UnderscorePattern = "_"
+  display UnderscorePattern             = "_"
   display (StructPattern name subPttns) =
     case subPttns of
      [] -> name
      _  -> name ++ displayInParens subPttns
-  display (VarPattern name) = name
+  display (VarPattern name)             = name
+  display (LiteralPattern lit)          = display lit
 
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
@@ -342,7 +344,7 @@ forStatement = do
   return $ StatementFor loopVar expr body
 
 parseMatchPattern :: Parser MatchPattern
-parseMatchPattern = parseStructMatch <|> parseUnderscoreMatch <|> parseVarMatch
+parseMatchPattern = parseStructMatch <|> parseUnderscoreMatch <|> parseVarMatch <|> parseLiteralMatch
 
 parseStructMatch :: Parser MatchPattern
 parseStructMatch = do
@@ -379,6 +381,9 @@ parseUnderscoreMatch = do
 
 parseVarMatch :: Parser MatchPattern
 parseVarMatch = liftM VarPattern $ valueName
+
+parseLiteralMatch :: Parser MatchPattern
+parseLiteralMatch = liftM LiteralPattern $ literal
 
 parseMatchCase :: Parser MatchCase
 parseMatchCase = do

@@ -390,6 +390,7 @@ testMatchPattern = tableTest parseMatchPattern
                                                                          , VarPattern "rest" ]])
                    , ("Cons()", Nothing)
                    , ("Cons (_)", Nothing)
+                   , (undisplay $ LiteralPattern (LiteralInt 10))
                    ]
 
 examplePattern = StructPattern "Cons" [UnderscorePattern, VarPattern "rest"]
