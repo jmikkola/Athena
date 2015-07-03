@@ -11,6 +11,7 @@ import TypeInference
 main = defaultMain $ asGroup [ ("replacements", testReplacements)
                              , ("contains var", testContainsVar)
                              , ("merge equal vars", testMergeEqualVars)
+                             , ("running inference", testRunInference)
                              ]
 
 testReplacements = TestList [ testGetMissingVar
@@ -99,6 +100,32 @@ testMergeSameTypes =
       expected = Right (knownTypes', replacements', [SameType (TypeVar "c") (TypeVar "c")])
   in result ~?= expected
 
+testRunInference = TestList [ testRunSameTypes
+                            , testRunRecursiveTypes
+                            ]
+
+testRunSameTypes =
+  "run inference on three equal type vars" ~:
+  let relationships = createRelationships [("a", "b"), ("b", "c")]
+      result = runInference relationships emptyKnownTypes emptyReplacements
+      expected = Right (emptyKnownTypes, createReplacements [("a", "c"), ("b", "c")])
+  in result ~?= expected
+
+testRunRecursiveTypes =
+  "run inference in the precense of recursive types" ~:
+  let kt = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "b"])
+                        , (TypeVar "x", TypeDefinition (TypeName "List") [TypeVar "y"])
+                        , (TypeVar "y", TypeDefinition (TypeName "Int") []) ]
+      replacements = emptyReplacements
+      relationships = createRelationships [("a", "x")]
+      result = runInference relationships kt replacements
+
+      kt' = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "b"])
+                         , (TypeVar "y", TypeDefinition (TypeName "Int") []) ]
+      replacements' = createReplacements [("x", "a"), ("b", "y")]
+      expected = Right (kt', replacements')
+  in result ~?= expected
+
 exampleKnownTypes = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "b"])
                                  , (TypeVar "b", TypeDefinition (TypeName "Pair") [TypeVar "c", TypeVar "d"])
                                  , (TypeVar "c", TypeDefinition (TypeName "Int") [])
@@ -110,6 +137,12 @@ exampleReplacements = createReplacements [("a", "c"), ("f", "b"), ("g", "b")]
 
 createReplacements :: [(String, String)] -> Replacements
 createReplacements = Map.fromList . map (\(a,b) -> (TypeVar a, TypeVar b))
+
+createRelationships :: [(String, String)] -> [Relationship]
+createRelationships = map createRelationship
+
+createRelationship :: (String, String) -> Relationship
+createRelationship (a, b) = SameType (TypeVar a) (TypeVar b)
 
 isLeft :: Either a b -> Bool
 isLeft (Left _) = True

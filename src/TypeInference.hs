@@ -56,6 +56,9 @@ variables:
 -}
 type KnownTypes = Map TypeVar TypeDefinition
 
+emptyKnownTypes :: KnownTypes
+emptyKnownTypes = Map.empty
+
 {-
 Test functions to allow avoiding infinite loops
 -}
@@ -129,3 +132,12 @@ be an Int but foo() to be Numeric).
 data Relationship = SameType TypeVar TypeVar
                   | InstanceOf TypeVar TypeVar
                   deriving (Eq, Show)
+
+runInference :: [Relationship] -> KnownTypes -> Replacements -> Either String (KnownTypes, Replacements)
+runInference []     kt replacements = return (kt, replacements)
+runInference (r:rs) kt replacements =
+  case r of
+   (InstanceOf a b) -> error "Not implemented"
+   (SameType   a b) -> do
+     (kt', replacements', newRelations) <- mergeEqual kt replacements a b
+     runInference (newRelations ++ rs) kt' replacements'
