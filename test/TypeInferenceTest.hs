@@ -17,19 +17,23 @@ testReplacements = TestList [ testGetMissingVar
                             , testReplaceExistingVar
                             ]
 
-testGetMissingVar = "getting a replacement that doesn't exist returns the original variable" ~:
-                    (TypeVar "foo") ~=? getReplacement (TypeVar "foo") exampleReplacements
+testGetMissingVar =
+  "getting a replacement that doesn't exist returns the original variable" ~:
+  (TypeVar "foo") ~=? getReplacement (TypeVar "foo") exampleReplacements
 
-testGetExistingVar = "getting a replaced var returns the replacement" ~:
-                     (TypeVar "b") ~=? getReplacement (TypeVar "f") exampleReplacements
+testGetExistingVar =
+  "getting a replaced var returns the replacement" ~:
+  (TypeVar "b") ~=? getReplacement (TypeVar "f") exampleReplacements
 
-testAddNewReplacement = "adding a new replacement" ~:
-                        addReplacement (TypeVar "a") (TypeVar "b") emptyReplacements ~?=
-                        createReplacements [("a", "b")]
+testAddNewReplacement =
+  "adding a new replacement" ~:
+  addReplacement (TypeVar "a") (TypeVar "b") emptyReplacements ~?=
+  createReplacements [("a", "b")]
 
-testReplaceExistingVar = "replacing an existing var replaces all references" ~:
-                         addReplacement (TypeVar "b") (TypeVar "a") exampleReplacements ~?=
-                         createReplacements [("b", "a"), ("a", "c"), ("f", "a"), ("g", "a")]
+testReplaceExistingVar =
+  "replacing an existing var replaces all references" ~:
+  addReplacement (TypeVar "b") (TypeVar "a") exampleReplacements ~?=
+  createReplacements [("b", "a"), ("a", "c"), ("f", "a"), ("g", "a")]
 
 exampleReplacements = createReplacements [("a", "c"), ("f", "b"), ("g", "b")]
 
