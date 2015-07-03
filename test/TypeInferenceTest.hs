@@ -9,6 +9,7 @@ import TestUtil ( asGroup )
 import TypeInference
 
 main = defaultMain $ asGroup [ ("replacements", testReplacements)
+                             , ("contains var", testContainsVar)
                              ]
 
 testReplacements = TestList [ testGetMissingVar
@@ -34,6 +35,24 @@ testReplaceExistingVar =
   "replacing an existing var replaces all references" ~:
   addReplacement (TypeVar "b") (TypeVar "a") exampleReplacements ~?=
   createReplacements [("b", "a"), ("a", "c"), ("f", "a"), ("g", "a")]
+
+testContainsVar = TestList [ testNotContaining
+                           , testSimpleContaining
+                           ]
+
+testNotContaining =
+  "a type that doesn't contain a var" ~:
+  False ~=? containsVar exampleKnownTypes (TypeVar "a") (TypeDefinition (TypeName "Foo") [TypeVar "b"])
+
+testSimpleContaining =
+  "a type that clearly contains a var" ~:
+  True ~=? containsVar exampleKnownTypes (TypeVar "c") (TypeDefinition (TypeName "Foo") [TypeVar "a"])
+
+exampleKnownTypes = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "b"])
+                                 , (TypeVar "b", TypeDefinition (TypeName "Pair") [TypeVar "c", TypeVar "d"])
+                                 , (TypeVar "c", TypeDefinition (TypeName "Int") [])
+                                 , (TypeVar "f", TypeDefinition (TypeName "Float") [])
+                                 ]
 
 exampleReplacements = createReplacements [("a", "c"), ("f", "b"), ("g", "b")]
 

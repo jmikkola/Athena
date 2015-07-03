@@ -57,6 +57,32 @@ variables:
 type KnownTypes = Map TypeVar TypeDefinition
 
 {-
+Test functions to allow avoiding infinite loops
+-}
+--containsSelf :: TypeVar -> KnownTypes -> Bool
+--containsSelf var kt =
+
+{-
+Example case this would need to detect:
+(code)
+    let c = [b]
+        _ = a == b and b == c
+
+The type of `c` contains the type of `b`. In evaluating the type of
+`a == b`, the type variable for t(b) got replaced with the one for
+t(a). So to detect that types b and c can't resolve, it would need to
+look up the replacement for b to see that it is recursive.
+-}
+containsVar :: KnownTypes -> TypeVar -> TypeDefinition -> Bool
+containsVar kt tvar (TypeDefinition _ subvars) = any (isVar kt tvar) subvars
+
+isVar :: KnownTypes -> TypeVar -> TypeVar -> Bool
+isVar kt tvar tested = if tvar == tested then True
+                       else case Map.lookup tested kt of
+                             Nothing   -> False
+                             Just tdef -> containsVar kt tvar tdef
+
+{-
 The two possible relationships between type variables. Either they
 actually refer to the same type (e.g. in an expression `a == b`,
 expressions a and b are the exact same type), or one is at least as
