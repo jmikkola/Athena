@@ -16,12 +16,14 @@ type Replacements = Map TypeVar TypeVar
 emptyReplacements :: Replacements
 emptyReplacements = Map.empty
 
+{- Add a replacement to the existing set of replacements -}
 addReplacement :: TypeVar -> TypeVar -> Replacements -> Replacements
 addReplacement replaced replacement replacements = Map.insert replaced replacement updated
   -- replace anything referencing the replaced variable with the replacement
   where updated = Map.map (\tvar -> if tvar == replaced then replacement else tvar) replacements
--- TODO: what if `replaced` was already mapped to something? Will that ever happen?        
+-- TODO: what if `replaced` was already mapped to something? Will that ever happen?
 
+{- Gets a replacement out of the set of replacements -}
 getReplacement :: TypeVar -> Replacements -> TypeVar
 getReplacement tvar replacements =
   case Map.lookup tvar replacements of
@@ -29,6 +31,30 @@ getReplacement tvar replacements =
    Nothing -> tvar
    -- Otherwise, return its replacement
    Just t' -> t'
+
+{-
+Before defining what we know about type variables, we first have to
+have a way to describe a type.
+-}
+newtype TypeName = TypeName String
+                 deriving (Eq, Ord, Show)
+
+{-
+Type definitions are composed with N type variables, where N is the
+kind of the type. (e.g. 2 for Pair[a, b])
+
+This allows recursion in type definitions without weird traversals to
+match inner types (e.g. append :: a -> List[a] -> List[a], the inner
+type of list must be matched with the type of the first argument).
+-}
+data TypeDefinition = TypeDefinition TypeName [TypeVar]
+                    deriving (Eq, Show)
+
+{-
+Now, finally, we can define what we currently know about the type
+variables:
+-}
+type KnownTypes = Map TypeVar TypeDefinition
 
 {-
 The two possible relationships between type variables. Either they
