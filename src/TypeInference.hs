@@ -76,6 +76,49 @@ varContainsVar kt tvar tested = case Map.lookup tested kt of
   Nothing   -> False
   Just tdef -> containsVar kt tvar tdef
 
+
+{-
+Now to actually do some of the real work of merging types.
+
+This doesn't (yet) handle interfaces, so it would fail to merge String
+and Eq, for example.
+-}
+mergeEqual :: KnownTypes -> Replacements -> TypeVar -> TypeVar ->
+             Either String (KnownTypes, Replacements, [Relationship])
+mergeEqual kt replacements varA varB =
+  let repA = getReplacement varA replacements
+      repB = getReplacement varB replacements
+  in if repA == repB
+        -- Handle the silly case where the two equal
+     then return (kt, replacements, [])
+     else let typeA = Map.lookup repA kt
+              typeB = Map.lookup repB kt
+          in case (typeA, typeB) of
+              (Nothing, Nothing) -> return (kt, addReplacement repA repB replacements, [])
+              (Just _,  Nothing) -> return (kt, addReplacement repB repA replacements, [])
+              (Nothing, Just _)  -> return (kt, addReplacement repA repB replacements, [])
+              (Just da, Just db) -> mergeTypes kt replacements repA da repB db
+
+mergeTypes :: KnownTypes -> Replacements -> TypeVar -> TypeDefinition -> TypeVar -> TypeDefinition
+           -> Either String (KnownTypes, Replacements, [Relationship])
+mergeTypes kt replacements varA tdefA varB tdefB =
+  let (TypeDefinition typeA subtypesA) = tdefA
+      (TypeDefinition typeB subtypesB) = tdefB
+  in if typeA /= typeB
+     then Left $ "Can't merge incompatible types " ++ show typeA ++ " and " ++ show typeB
+     else if length subtypesA /= length subtypesB
+          then Left $ "Compiler error: subtype lengths should match: " ++
+                      show subtypesA ++ ", " ++ show subtypesB
+          else let remainingRelationships = requireSame subtypesA subtypesB
+                   replacements' = addReplacement varB varA replacements
+                   kt' = Map.delete varB kt
+               in return (kt', replacements', remainingRelationships)
+
+-- Helper function
+requireSame :: [TypeVar] -> [TypeVar] -> [Relationship]
+requireSame (x:xs) (y:ys) = (SameType x y) : requireSame xs ys
+requireSame _      _      = []
+
 {-
 The two possible relationships between type variables. Either they
 actually refer to the same type (e.g. in an expression `a == b`,

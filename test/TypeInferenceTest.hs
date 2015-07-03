@@ -10,6 +10,7 @@ import TypeInference
 
 main = defaultMain $ asGroup [ ("replacements", testReplacements)
                              , ("contains var", testContainsVar)
+                             , ("merge equal vars", testMergeEqualVars)
                              ]
 
 testReplacements = TestList [ testGetMissingVar
@@ -58,6 +59,46 @@ testDoesNotContainSelf =
   "a type var that doesn't contain itself" ~:
   False ~=? containsSelf exampleKnownTypes (TypeVar "a")
 
+
+testMergeEqualVars = TestList [ testMergeUnknownVars
+                              , testMergeOneKnownVar
+                              , testMergeOneKnownVar2
+                              , testMergeDifferentTypes
+                              , testMergeSameTypes
+                              ]
+
+testMergeUnknownVars =
+  "merge as equal two untyped variables" ~:
+  let result = mergeEqual (Map.empty) emptyReplacements (TypeVar "x") (TypeVar "y")
+      expected = Right (Map.empty, createReplacements [("x", "y")], [])
+  in result ~?= expected
+
+testMergeOneKnownVar =
+  "merge as equal a typed variable and an untyped variable" ~:
+  let result = mergeEqual exampleKnownTypes emptyReplacements (TypeVar "x") (TypeVar "a")
+      expected = Right (exampleKnownTypes, createReplacements [("x", "a")], [])
+  in result ~?= expected
+
+testMergeOneKnownVar2 =
+  "merge as equal an untyped variable and a typed variable" ~:
+  let result = mergeEqual exampleKnownTypes emptyReplacements (TypeVar "a") (TypeVar "x")
+      expected = Right (exampleKnownTypes, createReplacements [("x", "a")], [])
+  in result ~?= expected
+
+testMergeDifferentTypes =
+  "merging incompatible types results in an error" ~:
+  True ~=? (isLeft $ mergeEqual exampleKnownTypes emptyReplacements (TypeVar "c") (TypeVar "f"))
+
+testMergeSameTypes =
+  "merge two typed variables with the same type" ~:
+  let knownTypes = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "c"])
+                                , (TypeVar "b", TypeDefinition (TypeName "List") [TypeVar "c"]) ]
+      result = mergeEqual knownTypes emptyReplacements (TypeVar "a") (TypeVar "b")
+      knownTypes' = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "c"]) ]
+      replacements' = createReplacements [("b", "a")]
+      expected = Right (knownTypes', replacements', [SameType (TypeVar "c") (TypeVar "c")])
+  in result ~?= expected
+
 exampleKnownTypes = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "b"])
                                  , (TypeVar "b", TypeDefinition (TypeName "Pair") [TypeVar "c", TypeVar "d"])
                                  , (TypeVar "c", TypeDefinition (TypeName "Int") [])
@@ -69,3 +110,7 @@ exampleReplacements = createReplacements [("a", "c"), ("f", "b"), ("g", "b")]
 
 createReplacements :: [(String, String)] -> Replacements
 createReplacements = Map.fromList . map (\(a,b) -> (TypeVar a, TypeVar b))
+
+isLeft :: Either a b -> Bool
+isLeft (Left _) = True
+isLeft _        = False
