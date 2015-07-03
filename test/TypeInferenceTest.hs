@@ -37,21 +37,32 @@ testReplaceExistingVar =
   createReplacements [("b", "a"), ("a", "c"), ("f", "a"), ("g", "a")]
 
 testContainsVar = TestList [ testNotContaining
-                           , testSimpleContaining
+                           , testContaining
+                           , testDoesContainSelf
+                           , testDoesNotContainSelf
                            ]
 
 testNotContaining =
   "a type that doesn't contain a var" ~:
   False ~=? containsVar exampleKnownTypes (TypeVar "a") (TypeDefinition (TypeName "Foo") [TypeVar "b"])
 
-testSimpleContaining =
-  "a type that clearly contains a var" ~:
+testContaining =
+  "a type that contains a var" ~:
   True ~=? containsVar exampleKnownTypes (TypeVar "c") (TypeDefinition (TypeName "Foo") [TypeVar "a"])
+
+testDoesContainSelf =
+  "a type var that contains itself" ~:
+  True ~=? containsSelf exampleKnownTypes (TypeVar "loop")
+
+testDoesNotContainSelf =
+  "a type var that doesn't contain itself" ~:
+  False ~=? containsSelf exampleKnownTypes (TypeVar "a")
 
 exampleKnownTypes = Map.fromList [ (TypeVar "a", TypeDefinition (TypeName "List") [TypeVar "b"])
                                  , (TypeVar "b", TypeDefinition (TypeName "Pair") [TypeVar "c", TypeVar "d"])
                                  , (TypeVar "c", TypeDefinition (TypeName "Int") [])
                                  , (TypeVar "f", TypeDefinition (TypeName "Float") [])
+                                 , (TypeVar "loop", TypeDefinition (TypeName "Loop") [TypeVar "loop"])
                                  ]
 
 exampleReplacements = createReplacements [("a", "c"), ("f", "b"), ("g", "b")]
