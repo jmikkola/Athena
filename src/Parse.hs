@@ -661,9 +661,45 @@ binaryOpLevel (l:ls) = binExprCurr
                              ]
 binaryOpLevel []     = nonBinaryExpression
 
+data PartialOp = PartialOp BinaryOp Expression (Maybe PartialOp)
+               deriving (Show)
+
+makeBinaryParser :: [[BinaryOp]] -> Parser Expression
+makeBinaryParser []         = nonBinaryExpression
+makeBinaryParser (level:ls) =
+  let nextParser = makeBinaryParser ls
+      opParsers  = map binOp level
+
+      -- Parses [op term]+
+      opLevel    = do
+        operator  <- choice opParsers
+        _         <- anyWhitespace
+        operand   <- nextParser
+        continued <- optionMaybe $ do
+          anyWhitespace
+          opLevel
+        return $ PartialOp operator operand continued
+
+      -- Parses term [op term]*
+      exprLevel  = do
+        operand   <- nextParser
+        operation <- optionMaybe $ do
+          anyWhitespace
+          opLevel
+        return $ case operation of
+          Nothing        -> operand
+          (Just partial) -> foldExpr operand partial
+  in exprLevel
+
+foldExpr :: Expression -> PartialOp -> Expression
+foldExpr l (PartialOp op r rest) =
+  let expr = ExpressionBinary op l r
+  in case rest of
+      Nothing     -> expr
+      (Just next) -> foldExpr expr next
 
 binaryExpression :: Parser Expression
-binaryExpression = binaryOpLevel binaryOpLevels
+binaryExpression = makeBinaryParser binaryOpLevels
 
 binOp :: BinaryOp -> Parser BinaryOp
 binOp op = do
