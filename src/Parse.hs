@@ -653,14 +653,6 @@ binaryOpLevels = [ [LessEq, GreaterEq, NotEq, Equals, Less, Greater]
                  , [Power]
                  ]
 
-binaryOpLevel :: [[BinaryOp]] -> Parser Expression
-binaryOpLevel (l:ls) = binExprCurr
-  where binExprNext = binaryOpLevel ls
-        binExprCurr = choice [ try $ binaryExpressionLevel binExprCurr binExprNext l
-                             , binExprNext
-                             ]
-binaryOpLevel []     = nonBinaryExpression
-
 data PartialOp = PartialOp BinaryOp Expression (Maybe PartialOp)
                deriving (Show)
 
@@ -668,23 +660,24 @@ makeBinaryParser :: [[BinaryOp]] -> Parser Expression
 makeBinaryParser []         = nonBinaryExpression
 makeBinaryParser (level:ls) =
   let nextParser = makeBinaryParser ls
-      opParsers  = map binOp level
+      -- try is needed to back out of parsing <= and try < instead
+      opParsers  = map (try . binOp) level
 
       -- Parses [op term]+
       opLevel    = do
         operator  <- choice opParsers
-        _         <- anyWhitespace
+        _         <- try anyWhitespace
         operand   <- nextParser
-        continued <- optionMaybe $ do
-          anyWhitespace
+        continued <- optionMaybe $ try $ do
+          _ <- anyWhitespace
           opLevel
         return $ PartialOp operator operand continued
 
       -- Parses term [op term]*
       exprLevel  = do
         operand   <- nextParser
-        operation <- optionMaybe $ do
-          anyWhitespace
+        operation <- optionMaybe $ try $ do
+          _ <- anyWhitespace
           opLevel
         return $ case operation of
           Nothing        -> operand
@@ -705,15 +698,6 @@ binOp :: BinaryOp -> Parser BinaryOp
 binOp op = do
   _ <- string $ display op
   return op
-
-binaryExpressionLevel :: Parser Expression -> Parser Expression -> [BinaryOp] -> Parser Expression
-binaryExpressionLevel self nextLevel ops = do
-  left <- nextLevel
-  _ <- try anyWhitespace
-  op <- choice $ map (try . binOp) ops
-  _ <- try anyWhitespace
-  right <- self
-  return $ ExpressionBinary op left right
 
 unaryOp :: Parser UnaryOp
 unaryOp = choice $ map (try . uOp) [Negate, Flip, Not]
