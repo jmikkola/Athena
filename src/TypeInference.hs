@@ -122,6 +122,20 @@ requireSame :: [TypeVar] -> [TypeVar] -> [Relationship]
 requireSame (x:xs) (y:ys) = (SameType x y) : requireSame xs ys
 requireSame _      _      = []
 
+mergeLess :: KnownTypes -> Replacements -> TypeVar -> TypeVar ->
+            Either String (KnownTypes, Replacements, [Relationship])
+mergeLess kt replacements varA varB =
+  let repA = getReplacement varA replacements
+      repB = getReplacement varB replacements
+  in if repA == repB
+     then Left $ "Compiler error: asserted that type was less than itself: " ++ show repA
+     else case (Map.lookup repA kt, Map.lookup repB kt) of
+           (Nothing, Nothing) -> undefined -- TODO
+
+requireLess :: [TypeVar] -> [TypeVar] -> [Relationship]
+requireLess (x:xs) (y:ys) = (InstanceOf x y) : requireLess xs ys
+requireLess _      _      = []
+
 {-
 The two possible relationships between type variables. Either they
 actually refer to the same type (e.g. in an expression `a == b`,
@@ -137,7 +151,9 @@ runInference :: [Relationship] -> KnownTypes -> Replacements -> Either String (K
 runInference []     kt replacements = return (kt, replacements)
 runInference (r:rs) kt replacements =
   case r of
-   (InstanceOf a b) -> error "Not implemented"
+   (InstanceOf a b) -> do
+     (kt', replacements', newRelations) <- mergeLess kt replacements a b
+     runInference (newRelations ++ rs) kt' replacements'
    (SameType   a b) -> do
      (kt', replacements', newRelations) <- mergeEqual kt replacements a b
      runInference (newRelations ++ rs) kt' replacements'
