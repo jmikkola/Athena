@@ -14,12 +14,31 @@ emptyGraph = Map.empty
 -- https://en.wikipedia.org/wiki/Kosaraju's_algorithm
 findSCC :: (Ord a) => Graph a -> [Set a]
 findSCC graph =
-  let nodeStack = collectStack (nodeSet graph) graph []
+  let nodeStack = collectStack graph (nodeSet graph) []
   in getComponents (transpose graph) nodeStack
 
-collectStack :: (Ord a) => Set a -> Graph a -> [a] -> [a]
-collectStack remainingNodes graph stack =
-  undefined
+collectStack :: (Ord a) => Graph a -> Set a -> [a] -> [a]
+collectStack graph remainingNodes stack =
+  case setPop remainingNodes of
+   Nothing                -> stack
+   Just (node, remaining) ->
+     let remaining' = Set.difference remaining (reachable graph node)
+         (stack', _) = dfsStack graph node (stack, Set.empty)
+     in collectStack graph remaining' stack'
+
+dfsStack :: (Ord a) => Graph a -> a -> ([a], Set a) -> ([a], Set a)
+dfsStack graph node (stack, seen) =
+  if Set.member node seen then (stack, seen)
+  else let chldrn = children graph node
+           seen' = Set.insert node seen
+           (stack', seen'') = foldl (\stSn child -> dfsStack graph child stSn) (stack, seen') chldrn
+       in (node : stack', seen'')
+
+-- Set function for convenience
+setPop :: Set a -> Maybe (a, Set a)
+setPop set =
+  if Set.null set then Nothing
+  else Just $ Set.deleteFindMin set
 
 getComponents :: (Ord a) => Graph a -> [a] -> [Set a]
 getComponents graph nodes = map (reachable graph) nodes
