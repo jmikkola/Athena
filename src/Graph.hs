@@ -15,7 +15,7 @@ emptyGraph = Map.empty
 findSCC :: (Ord a) => Graph a -> [Set a]
 findSCC graph =
   let nodeStack = collectStack graph (nodeSet graph) []
-  in getComponents (transpose graph) nodeStack
+  in getComponents (transpose graph) Set.empty nodeStack
 
 collectStack :: (Ord a) => Graph a -> Set a -> [a] -> [a]
 collectStack graph remainingNodes stack =
@@ -26,6 +26,7 @@ collectStack graph remainingNodes stack =
          (stack', _) = dfsStack graph node (stack, Set.empty)
      in collectStack graph remaining' stack'
 
+-- Push nodes on to the stack after visiting them in DFS order
 dfsStack :: (Ord a) => Graph a -> a -> ([a], Set a) -> ([a], Set a)
 dfsStack graph node (stack, seen) =
   if Set.member node seen then (stack, seen)
@@ -40,16 +41,24 @@ setPop set =
   if Set.null set then Nothing
   else Just $ Set.deleteFindMin set
 
-getComponents :: (Ord a) => Graph a -> [a] -> [Set a]
-getComponents graph nodes = map (reachable graph) nodes
+getComponents :: (Ord a) => Graph a -> Set a -> [a] -> [Set a]
+getComponents graph _       []        = []
+getComponents graph reached (node:ns) =
+  let reached' = dfs graph reached node
+      component = Set.difference reached' reached
+      stack = filter (\n -> Set.notMember n reached') ns
+  in component : getComponents graph reached' stack
 
 -- Finds all nodes reachable from the given starting node
 -- (includes the starting node).
 reachable :: (Ord a) => Graph a -> a -> Set a
-reachable graph starting = dfs Set.empty starting
-  where dfs seen node =
-          if Set.member node seen then seen
-          else foldl dfs (Set.insert node seen) (children graph node)
+reachable graph starting = dfs graph Set.empty starting
+
+dfs :: (Ord a) => Graph a -> Set a -> a -> Set a
+dfs graph seen node =
+  if Set.member node seen
+  then seen
+  else foldl (dfs graph) (Set.insert node seen) (children graph node)
 
 children :: (Ord a) => Graph a -> a -> [a]
 children graph node = case Map.lookup node graph of
@@ -93,3 +102,9 @@ exampleGraph = Map.fromList $
                [ ('a', [])  , ('b', "cd") , ('c', []) , ('d', "e")
                , ('e', "f") , ('f', "dg") , ('g', []) , ('h', "ij")
                , ('i', "k") , ('j', "k")  , ('k', []) ]
+
+exampleGraph2 :: Graph Char
+exampleGraph2 = Map.fromList $
+               map (\(v, e) -> (v, Set.fromList e))
+               [ ('a', "b"), ('b', "cef"), ('c', "dg"), ('d', "ch")
+               , ('e', "af"), ('f', "g"), ('g', "f"), ('h', "gd") ]
