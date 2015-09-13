@@ -14,7 +14,7 @@ emptyGraph = Map.empty
 -- https://en.wikipedia.org/wiki/Kosaraju's_algorithm
 findSCC :: (Ord a) => Graph a -> [Set a]
 findSCC graph =
-  let nodeStack = collectStack (nodeSet graph) (cleanup graph) []
+  let nodeStack = collectStack (nodeSet graph) graph []
   in getComponents (transpose graph) nodeStack
 
 collectStack :: (Ord a) => Set a -> Graph a -> [a] -> [a]
@@ -24,28 +24,18 @@ collectStack remainingNodes graph stack =
 getComponents :: (Ord a) => Graph a -> [a] -> [Set a]
 getComponents graph nodes = map (reachable graph) nodes
 
+-- Finds all nodes reachable from the given starting node
+-- (includes the starting node).
 reachable :: (Ord a) => Graph a -> a -> Set a
 reachable graph starting = dfs Set.empty starting
   where dfs seen node =
-          if Set.member node seen
-          then seen
-          else let seen' = Set.insert node seen
-                   children = case Map.lookup node graph of
-                     Nothing -> []
-                     Just cl -> Set.toList cl
-               in foldl dfs seen' children
+          if Set.member node seen then seen
+          else foldl dfs (Set.insert node seen) (children graph node)
 
-{-
-findSCC' :: (Ord a) => Graph a -> [a] -> Set a -> [Set a]
-findSCC' g stack inStack =
-  let allNodes = nodes g
-  in
--}
-
--- Cheap hack: transpose twice to make sure all nodes are listed as keys,
--- even if they have no outgoing edges.
-cleanup :: (Ord a) => Graph a -> Graph a
-cleanup = transpose . transpose
+children :: (Ord a) => Graph a -> a -> [a]
+children graph node = case Map.lookup node graph of
+  Nothing -> []
+  Just cl -> Set.toList cl
 
 -- Returns the set of all nodes mentioned anywhere in the graph.
 nodeSet :: (Ord a) => Graph a -> Set a
