@@ -13,16 +13,46 @@ emptyGraph = Map.empty
 -- Korasaju's algorithm for finding strongly connected components
 -- https://en.wikipedia.org/wiki/Kosaraju's_algorithm
 findSCC :: (Ord a) => Graph a -> [Set a]
-findSCC g = findSCC' g [] Set.empty
+findSCC graph =
+  let nodeStack = collectStack (nodeSet graph) (cleanup graph) []
+  in getComponents (transpose graph) nodeStack
 
+collectStack :: (Ord a) => Set a -> Graph a -> [a] -> [a]
+collectStack remainingNodes graph stack =
+  undefined
+
+getComponents :: (Ord a) => Graph a -> [a] -> [Set a]
+getComponents graph nodes = map (reachable graph) nodes
+
+reachable :: (Ord a) => Graph a -> a -> Set a
+reachable graph starting = dfs Set.empty starting
+  where dfs seen node =
+          if Set.member node seen
+          then seen
+          else let seen' = Set.insert node seen
+                   children = case Map.lookup node graph of
+                     Nothing -> []
+                     Just cl -> Set.toList cl
+               in foldl dfs seen' children
+
+{-
 findSCC' :: (Ord a) => Graph a -> [a] -> Set a -> [Set a]
-findSCC' g stack inStack = undefined
+findSCC' g stack inStack =
+  let allNodes = nodes g
+  in
+-}
+
+-- Cheap hack: transpose twice to make sure all nodes are listed as keys,
+-- even if they have no outgoing edges.
+cleanup :: (Ord a) => Graph a -> Graph a
+cleanup = transpose . transpose
 
 -- Returns the set of all nodes mentioned anywhere in the graph.
 nodeSet :: (Ord a) => Graph a -> Set a
 nodeSet g = Set.union (Set.fromList $ Map.keys g) referencedNodes
   where referencedNodes = Map.fold Set.union Set.empty g
 
+-- Returns the list of all nodes in the graph.
 nodes :: (Ord a) => Graph a -> [a]
 nodes = Set.toList . nodeSet
 
@@ -32,13 +62,16 @@ edges g = Map.foldWithKey collectEdges [] g
   where collectEdge a b es = (a, b) : es
         collectEdges n e es = Set.fold (collectEdge n) es e
 
+-- Reverses the direction of an edge
 flipEdge (a, b) = (b, a)
 
+-- Adds an edge (from, to) to the graph.
 addEdge :: (Ord a) => Graph a -> (a, a) -> Graph a
 addEdge g (v1, v2) = Map.alter ensureEdge v1 g
   where ensureEdge Nothing  = Just $ Set.singleton v2
         ensureEdge (Just e) = Just $ Set.insert v2 e
 
+-- Reverse the direction of all edges in the graph.
 transpose :: (Ord a) => Graph a -> Graph a
 transpose g =
   let newEdges = map flipEdge $ edges g
