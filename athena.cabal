@@ -51,7 +51,7 @@ executable athena
   main-is:             Main.hs
 
   -- Modules included in this executable, other than Main.
-  -- other-modules:
+  other-modules: TypeInference, Graph
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -129,7 +129,7 @@ test-suite BinaryExprTest
 
 test-suite TypeInferenceTests
   hs-source-dirs: test, src
-  other-modules: TypeInference
+  other-modules: TypeInference, Graph
   build-depends:
     base >=4.6,
     containers >= 0.5,
