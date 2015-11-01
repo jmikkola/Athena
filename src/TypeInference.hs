@@ -2,158 +2,106 @@ module TypeInference where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Control.Monad.Error
+import Control.Monad.Reader
+import Control.Monad.State
 
--- Define the type used for type variables
-newtype TypeVar = TypeVar String
-                deriving (Eq, Ord, Show)
+import Eval
 
-{-
-When two type variables are combined, there must be a way to figure
-out what a type variable in the remaining code actually referrs to.
--}
-type Replacements = Map TypeVar TypeVar
+type TypeVar = String
+type TypeConstructor = String
 
-emptyReplacements :: Replacements
-emptyReplacements = Map.empty
+data Type = TVar TypeVar
+          | TInt
+          | TBool
+          | TFloat
+          | TFun Type Type
+          | TCon TypeConstructor [Type]
+          deriving (Eq, Ord, Show)
 
-{- Add a replacement to the existing set of replacements -}
-addReplacement :: TypeVar -> TypeVar -> Replacements -> Replacements
-addReplacement replaced replacement replacements = Map.insert replaced replacement updated
-  -- replace anything referencing the replaced variable with the replacement
-  where updated = Map.map (\tvar -> if tvar == replaced then replacement else tvar) replacements
--- TODO: what if `replaced` was already mapped to something? Will that ever happen?
+data Scheme = Scheme [TypeVar] Type
+            deriving (Show)
 
-{- Gets a replacement out of the set of replacements -}
-getReplacement :: TypeVar -> Replacements -> TypeVar
-getReplacement tvar replacements =
-  case Map.lookup tvar replacements of
-   -- If the variable hasn't been replaced yet, return the variable
-   Nothing -> tvar
-   -- Otherwise, return its replacement
-   Just t' -> t'
+type Substitution = Map TypeVar Type
 
-{-
-Before defining what we know about type variables, we first have to
-have a way to describe a type.
--}
-newtype TypeName = TypeName String
-                 deriving (Eq, Ord, Show)
+newtype TypeEnv = TypeEnv (Map TypeVar Scheme)
 
-{-
-Type definitions are composed with N type variables, where N is the
-kind of the type. (e.g. 2 for Pair[a, b])
+data TIEnv = TIEnv {}
 
-This allows recursion in type definitions without weird traversals to
-match inner types (e.g. append :: a -> List[a] -> List[a], the inner
-type of list must be matched with the type of the first argument).
--}
-data TypeDefinition = TypeDefinition TypeName [TypeVar]
-                    deriving (Eq, Show)
+data TIState = TIState { tiSupply :: Int
+                       , tiSubst :: Substitution }
 
-{-
-Now, finally, we can define what we currently know about the type
-variables:
--}
-type KnownTypes = Map TypeVar TypeDefinition
+-- Heavy-duty monad stuff 
+type TI a = ErrorT String (ReaderT TIEnv (StateT TIState IO)) a
 
-emptyKnownTypes :: KnownTypes
-emptyKnownTypes = Map.empty
+class Types a where
+  freeTypeVars :: a -> Set TypeVar
+  apply :: Substitution -> a -> a
 
-{-
-Test functions to allow avoiding infinite loops
--}
-containsSelf :: KnownTypes -> TypeVar -> Bool
-containsSelf kt var = varContainsVar kt var var
+instance Types Type where
+  freeTypeVars t = case t of
+    (TVar n)      -> Set.singleton n
+    (TFun t1 t2)  -> Set.union (freeTypeVars t1) (freeTypeVars t2)
+    (TCon _ ts)   -> foldl Set.union Set.empty (map freeTypeVars ts)
+    _             -> Set.empty
+  apply s t = case t of
+    (TVar n)     -> case Map.lookup n s of
+      Nothing -> TVar n
+      Just t  -> t
+    (TFun t1 t2) -> TFun (apply s t1) (apply s t2)
+    (TCon c ts)  -> TCon c (map (apply s) ts)
+    t            -> t
 
-containsVar :: KnownTypes -> TypeVar -> TypeDefinition -> Bool
-containsVar kt tvar (TypeDefinition _ subvars) = any (isVar kt tvar) subvars
+instance Types Scheme where
+  -- Free type variables in t not listed in vars
+  freeTypeVars (Scheme vars t) = Set.difference (freeTypeVars t) (Set.fromList vars)
+  -- Original vars, but t has a modified s applied to it (modified by removing any variables
+  -- from s found in vars)
+  apply s (Scheme vars t) = Scheme vars (apply (foldr Map.delete s vars) t)
 
--- Helper function
-isVar :: KnownTypes -> TypeVar -> TypeVar -> Bool
-isVar kt tvar tested = if tvar == tested then True
-                       else varContainsVar kt tvar tested
+instance Types TypeEnv where
+  freeTypeVars (TypeEnv env) = freeTypeVars (Map.elems env)
+  apply s (TypeEnv env) = TypeEnv (Map.map (apply s) env)
 
--- Helper function
-varContainsVar :: KnownTypes -> TypeVar -> TypeVar -> Bool
-varContainsVar kt tvar tested = case Map.lookup tested kt of
-  Nothing   -> False
-  Just tdef -> containsVar kt tvar tdef
+instance Types a => Types [a] where
+  freeTypeVars l = foldr Set.union Set.empty (map freeTypeVars l)
+  apply s = map (apply s)
 
+nullSubst :: Substitution
+nullSubst = Map.empty
 
-{-
-Now to actually do some of the real work of merging types.
+composeSubst :: Substitution -> Substitution -> Substitution
+-- The union of s1 and the result of applying s1 to s2
+composeSubst s1 s2 = Map.union (Map.map (apply s1) s2) s1
 
-This doesn't (yet) handle interfaces, so it would fail to merge String
-and Eq, for example.
--}
-mergeEqual :: KnownTypes -> Replacements -> TypeVar -> TypeVar ->
-             Either String (KnownTypes, Replacements, [Relationship])
-mergeEqual kt replacements varA varB =
-  let repA = getReplacement varA replacements
-      repB = getReplacement varB replacements
-  in if repA == repB
-        -- Handle the silly case where the two equal
-     then return (kt, replacements, [])
-     else let typeA = Map.lookup repA kt
-              typeB = Map.lookup repB kt
-          in case (typeA, typeB) of
-              (Nothing, Nothing) -> return (kt, addReplacement repA repB replacements, [])
-              (Just _,  Nothing) -> return (kt, addReplacement repB repA replacements, [])
-              (Nothing, Just _)  -> return (kt, addReplacement repA repB replacements, [])
-              (Just da, Just db) -> mergeTypes kt replacements repA da repB db
+-- Does what it sounds like
+remove :: TypeEnv -> TypeVar -> TypeEnv
+remove (TypeEnv env) var = TypeEnv (Map.delete var env)
 
-mergeTypes :: KnownTypes -> Replacements -> TypeVar -> TypeDefinition -> TypeVar -> TypeDefinition
-           -> Either String (KnownTypes, Replacements, [Relationship])
-mergeTypes kt replacements varA tdefA varB tdefB =
-  let (TypeDefinition typeA subtypesA) = tdefA
-      (TypeDefinition typeB subtypesB) = tdefB
-  in if typeA /= typeB
-     then Left $ "Can't merge incompatible types " ++ show typeA ++ " and " ++ show typeB
-     else if length subtypesA /= length subtypesB
-          then Left $ "Compiler error: subtype lengths should match: " ++
-                      show subtypesA ++ ", " ++ show subtypesB
-          else let remainingRelationships = requireSame subtypesA subtypesB
-                   replacements' = addReplacement varB varA replacements
-                   kt' = Map.delete varB kt
-               in return (kt', replacements', remainingRelationships)
+generalize :: TypeEnv -> Type -> Scheme
+generalize env t = Scheme vars t
+  where vars = Set.toList (Set.difference (freeTypeVars t) (freeTypeVars env))
 
--- Helper function
-requireSame :: [TypeVar] -> [TypeVar] -> [Relationship]
-requireSame (x:xs) (y:ys) = (SameType x y) : requireSame xs ys
-requireSame _      _      = []
+runTI :: TI a -> IO (Either String a, TIState)
+runTI t =
+  do
+    (res, st) <- runStateT (runReaderT (runErrorT t) initTIEnv) initTIState
+    return (res, st)
+  where initTIEnv = TIEnv {}
+        initTIState = TIState { tiSupply = 0, tiSubst = nullSubst }
 
-mergeLess :: KnownTypes -> Replacements -> TypeVar -> TypeVar ->
-            Either String (KnownTypes, Replacements, [Relationship])
-mergeLess kt replacements varA varB =
-  let repA = getReplacement varA replacements
-      repB = getReplacement varB replacements
-  in if repA == repB
-     then Left $ "Compiler error: asserted that type was less than itself: " ++ show repA
-     else case (Map.lookup repA kt, Map.lookup repB kt) of
-           (Nothing, Nothing) -> undefined -- TODO
+newTyVar :: String -> TI Type
+newTyVar prefix = do
+  state <- get
+  let varNum = tiSupply state
+  put state { tiSupply = varNum + 1 }
+  return (TVar (prefix ++ show varNum))
 
-requireLess :: [TypeVar] -> [TypeVar] -> [Relationship]
-requireLess (x:xs) (y:ys) = (InstanceOf x y) : requireLess xs ys
-requireLess _      _      = []
-
-{-
-The two possible relationships between type variables. Either they
-actually refer to the same type (e.g. in an expression `a == b`,
-expressions a and b are the exact same type), or one is at least as
-specific as another (e.g. `a == foo()`, it might be possible for a to
-be an Int but foo() to be Numeric).
--}
-data Relationship = SameType TypeVar TypeVar
-                  | InstanceOf TypeVar TypeVar
-                  deriving (Eq, Show)
-
-runInference :: [Relationship] -> KnownTypes -> Replacements -> Either String (KnownTypes, Replacements)
-runInference []     kt replacements = return (kt, replacements)
-runInference (r:rs) kt replacements =
-  case r of
-   (InstanceOf a b) -> do
-     (kt', replacements', newRelations) <- mergeLess kt replacements a b
-     runInference (newRelations ++ rs) kt' replacements'
-   (SameType   a b) -> do
-     (kt', replacements', newRelations) <- mergeEqual kt replacements a b
-     runInference (newRelations ++ rs) kt' replacements'
+instantiate :: Scheme -> TI Type
+instantiate (Scheme vars t) = do
+  -- trust that the language disallow writing typevars with the prefix '__v'
+  nvars <- mapM (\_ -> newTyVar "__v") vars
+  let s = Map.fromList (zip vars nvars)
+  return $ apply s t
