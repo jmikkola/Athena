@@ -1,0 +1,25 @@
+type TypeVar = String
+
+data Scheme = Scheme(List[TypeVar], Type)
+
+data Type = {
+    TVar(TypeVar)
+    TInt, TBool, TFloat
+    TFun(Type, Type)
+    TCon(TypeConstructor, List[Type])
+}
+
+data TIState = TIState {
+    supply: Int
+    subst: Substitution
+}
+
+data Exp = {
+    EVar { var: String }
+    ELit(Literal)
+    EAbs {
+      thing: String
+      exp: Exp
+    }
+    ELet { name: String, val: Exp, exp: Exp }
+}
