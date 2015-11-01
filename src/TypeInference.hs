@@ -13,6 +13,13 @@ import Eval
 type TypeVar = String
 type TypeConstructor = String
 
+data Exp = EVar String
+         | ELit Lit
+         | EApp Exp Exp
+         | EAbs String Exp
+         | ELet String Exp Exp
+         deriving (Eq, Ord, Show)
+
 data Type = TVar TypeVar
           | TInt
           | TBool
@@ -33,7 +40,7 @@ data TIEnv = TIEnv {}
 data TIState = TIState { tiSupply :: Int
                        , tiSubst :: Substitution }
 
--- Heavy-duty monad stuff 
+-- Heavy-duty monad stuff
 type TI a = ErrorT String (ReaderT TIEnv (StateT TIState IO)) a
 
 class Types a where
@@ -126,10 +133,22 @@ mostGeneralUnifier t1 t2 = case (t1, t2) of
     -- Is this logic right?
     if c /= c' || (length ts) /= (length ts')
     then unifyError t1 t2
-    else do
-      ss <- mapM (\(a,b) -> mostGeneralUnifier a b) (zip ts ts')
-      return (foldl composeSubst nullSubst ss)
+    else mguList nullSubst ts ts'
+--         do
+--      ss <- mapM (\(a,b) -> mostGeneralUnifier a b) (zip ts ts')
+--      return (foldl composeSubst nullSubst ss)
   _                        -> unifyError t1 t2
+
+
+-- This might be the right logic for two TCon`s
+mguList :: Substitution -> [Type] -> [Type] -> TI Substitution
+mguList s []     []       = return s
+mguList _ []     _        = error "This should have been detected earlier"
+mguList _ _      []       = error "This should have been detected earlier"
+mguList s (t:ts) (t':ts') = do
+  s1 <- mostGeneralUnifier (apply s t) (apply s t')
+  let s2 = composeSubst s1 s
+  mguList s1 ts ts'
 
 varBind :: TypeVar -> Type -> TI Substitution
 varBind u t | t == TVar u                    = return nullSubst
