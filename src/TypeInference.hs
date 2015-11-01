@@ -99,9 +99,40 @@ newTyVar prefix = do
   put state { tiSupply = varNum + 1 }
   return (TVar (prefix ++ show varNum))
 
+-- Substitutes variables in the scheme for new variables
 instantiate :: Scheme -> TI Type
 instantiate (Scheme vars t) = do
   -- trust that the language disallow writing typevars with the prefix '__v'
   nvars <- mapM (\_ -> newTyVar "__v") vars
   let s = Map.fromList (zip vars nvars)
   return $ apply s t
+
+unifyError :: (Show a, Show b) => a -> b -> TI Substitution
+unifyError a b = throwError error
+  where error = "Types do not unify: " ++ show a ++ " and " ++ show b
+
+mostGeneralUnifier :: Type -> Type -> TI Substitution
+mostGeneralUnifier t1 t2 = case (t1, t2) of
+  (TFun l r,  TFun l' r')  -> do
+    s1 <- mostGeneralUnifier l l'
+    s2 <- mostGeneralUnifier (apply s1 r) (apply s1 r')
+    return $ composeSubst s1 s2
+  (TVar u,    t)           -> varBind u t
+  (t,         TVar u)      -> varBind u t
+  (TInt,      TInt)        -> return nullSubst
+  (TFloat,    TFloat)      -> return nullSubst
+  (TBool,     TBool)       -> return nullSubst
+  (TCon c ts, TCon c' ts') ->
+    -- Is this logic right?
+    if c /= c' || (length ts) /= (length ts')
+    then unifyError t1 t2
+    else do
+      ss <- mapM (\(a,b) -> mostGeneralUnifier a b) (zip ts ts')
+      return (foldl composeSubst nullSubst ss)
+  _                        -> unifyError t1 t2
+
+varBind :: TypeVar -> Type -> TI Substitution
+varBind u t | t == TVar u                    = return nullSubst
+            | Set.member u (freeTypeVars t) =
+              throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
+            | otherwise                     = return (Map.singleton u t)
