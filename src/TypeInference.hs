@@ -8,16 +8,22 @@ import Control.Monad.Error
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Eval
+--import Eval
 
 type TypeVar = String
 type TypeConstructor = String
 
+-- Temporary - I hope
 data Exp = EVar String
          | ELit Lit
          | EApp Exp Exp
          | EAbs String Exp
          | ELet String Exp Exp
+         deriving (Eq, Ord, Show)
+
+data Lit = LInt Int
+         | LBool Bool
+         | LFloat Float
          deriving (Eq, Ord, Show)
 
 data Type = TVar TypeVar
@@ -34,11 +40,14 @@ data Scheme = Scheme [TypeVar] Type
 type Substitution = Map TypeVar Type
 
 newtype TypeEnv = TypeEnv (Map TypeVar Scheme)
+                deriving (Show)
 
 data TIEnv = TIEnv {}
+           deriving (Show)
 
 data TIState = TIState { tiSupply :: Int
                        , tiSubst :: Substitution }
+             deriving (Show)
 
 -- Heavy-duty monad stuff
 type TI a = ErrorT String (ReaderT TIEnv (StateT TIState IO)) a
@@ -155,3 +164,41 @@ varBind u t | t == TVar u                    = return nullSubst
             | Set.member u (freeTypeVars t) =
               throwError $ "occur check fails: " ++ u ++ " vs. " ++ show t
             | otherwise                     = return (Map.singleton u t)
+
+tiLiteral :: TypeEnv -> Lit -> TI (Substitution, Type)
+tiLiteral _ (LInt _)   = return (nullSubst, TInt)
+tiLiteral _ (LFloat _) = return (nullSubst, TFloat)
+tiLiteral _ (LBool _)  = return (nullSubst, TBool)
+
+ti :: TypeEnv -> Exp -> TI (Substitution, Type)
+ti (TypeEnv env) (EVar n)       = case Map.lookup n env of
+  Nothing    -> throwError $ "unbound variable: " ++ n
+  Just sigma -> do
+     t <- instantiate sigma
+     return (nullSubst, t)
+ti env           (ELit l)       = tiLiteral env l
+ti env           (EAbs n e)     = do
+  tv <- newTyVar "__v"
+  let TypeEnv env' = remove env n
+      -- Isn't that just an insert?
+      env'' = TypeEnv (Map.union env' (Map.singleton n (Scheme [] tv)))
+  (s1, t1) <- ti env'' e
+  return (s1, TFun (apply s1 tv) t1)
+ti env           (EApp e1 e2)   = do
+  tv <- newTyVar "__v"
+  (s1, t1) <- ti env e1
+  (s2, t2) <- ti (apply s1 env) e2
+  s3 <- mostGeneralUnifier (apply s2 t1) (TFun t2 tv)
+  return (s3 `composeSubst` s2 `composeSubst` s1, apply s3 tv)
+ti env           (ELet x e1 e2) = do
+  (s1, t1) <- ti env e1
+  let TypeEnv env' = remove env x
+      t'           = generalize (apply s1 env) t1
+      env''        = TypeEnv (Map.insert x t' env')
+  (s2, t2) <- ti (apply s1 env'') e2
+  return (composeSubst s1 s2, t2)
+
+typeInference :: Map TypeVar Scheme -> Exp -> TI Type
+typeInference env e = do
+  (s, t) <- ti (TypeEnv env) e
+  return $ apply s t
