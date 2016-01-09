@@ -1,7 +1,7 @@
 module TypeInference where
 
 import Control.Monad (foldM)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -70,6 +70,19 @@ mergeTypes t1 t2 =
   then Left $ show t1 ++ " is not compatible with " ++ show t2
   else Right (t1, zip v1 v2)
 
+mergeMaybeTypes :: Maybe TypeNode -> Maybe TypeNode -> ErrorS (Maybe TypeNode, EqualityRules)
+mergeMaybeTypes (Just t1) (Just t2) = do
+  (tn, er) <- mergeTypes t1 t2
+  return (Just tn, er)
+mergeMaybeTypes Nothing   t2        = Right (t2, [])
+mergeMaybeTypes t1        Nothing   = Right (t1, [])
+
+-- TODO: test this
+collapseEqual :: Rules -> ErrorS (VarTypes, Subs)
+collapseEqual rules = do
+  (ts, extra_er) <- collapseSpecifiedTypes rules
+  applyEqualRules (extra_er ++ equalPairs rules) ts Map.empty
+
 collapseSpecifiedTypes :: Rules -> ErrorS (VarTypes, EqualityRules)
 collapseSpecifiedTypes rules =
   foldM addSpecified (Map.empty, []) (specifiedTypes rules)
@@ -81,25 +94,38 @@ collapseSpecifiedTypes rules =
               return (Map.insert tv tn'' ts, rules ++ er)
 
 applyEqualRules :: EqualityRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
-applyEqualRules rules vars subs = foldM applyRule (vars, subs) rules
-  where applyRule (vars, subs) (v1, v2) = undefined
+applyEqualRules []     vars subs = Right (vars, subs)
+applyEqualRules (r:rs) vars subs =
+  let (raw_v1, raw_v2) = r
+      v1 = applySubs subs raw_v1
+      v2 = applySubs subs raw_v2
+      type1 = Map.lookup v1 vars
+      type2 = Map.lookup v2 vars
+      -- Default to the first type variable that has been set to
+      -- something to make the output more predictable. This doesn't
+      -- actually do anything for the algorithm.
+      (replaced, replacement) = if isNothing type1 && isJust type2
+                                then (v2, v1) else (v1, v2)
+  in do
+    (result, new_rules) <- mergeMaybeTypes type1 type2
+    let subs = addReplacement subs replaced replacement
+    let vars = addReplacementToTypes vars result replaced replacement
+    applyEqualRules (new_rules ++ rs) vars subs
+
+addReplacementToTypes vars result replaced replacement =
+  let withoutReplaced = Map.delete replaced vars
+      withResult = case result of
+        Nothing -> Map.delete replacement withoutReplaced
+        Just t  -> Map.insert replacement t withoutReplaced
+  in Map.map (applySubToType replaced replacement) withResult
 
 replace replaced replacement tv = if tv == replaced then replacement else tv
 
--- TODO: extract to a replacable class?
 addReplacement :: Subs -> TypeVar -> TypeVar -> Subs
 addReplacement oldSubs replaced replacement =
   if replaced == replacement then oldSubs
   else let subs' = Map.map (replace replaced replacement) oldSubs
        in Map.insert replaced replacement subs'
 
-applySubToType (TypeNode con vs) replaced replacement =
+applySubToType replaced replacement (TypeNode con vs) =
   TypeNode con (map (replace replaced replacement) vs)
-{-
-To convert next:
-- collapse_equal
-  - apply_equal_rules
-    - merge_types (done)
-    - add_replacement
-    - apply_sub_to_types
--}
