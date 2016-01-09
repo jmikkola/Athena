@@ -125,3 +125,18 @@ test-suite BinaryExprTest
   type:                exitcode-stdio-1.0
   main-is:             BinaryExprTest.hs
   default-language:    Haskell2010
+
+test-suite GraphTest
+  hs-source-dirs: test, src
+  other-modules: Graph, TestUtil
+  build-depends:
+    base >=4.6,
+    containers >= 0.5,
+    parsec >=3.1.8,
+    HUnit >= 1.2,
+    test-framework-hunit,
+    test-framework,
+    athena
+  type:                exitcode-stdio-1.0
+  main-is:             GraphTest.hs
+  default-language:    Haskell2010
