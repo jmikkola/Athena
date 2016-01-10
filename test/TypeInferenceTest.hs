@@ -15,15 +15,19 @@ import TypeInference
 main = defaultMain $
        asGroup [ ("getTypeForVar", testGetTypeForVar)
                , ("getFullTypeForVar", testGetFullTypeForVar)
-               , ("non-generic inference", testNonGeneric)
                , ("equalityPairsFromSet", testEqualityPairsFromSet)
+               , ("non-generic inference", testNonGeneric)
+               , ("generic inference", testGenericTI)
                ]
 
 emptyResult :: InfResult
 emptyResult = (Map.empty, Map.empty)
 
+nilTN = TypeNode "()" []
 strTN = TypeNode "String" []
 intTN = TypeNode "Int" []
+pairTN l r = TypeNode "Pair" [l, r]
+listTN l = TypeNode "List" [l]
 
 exampleResult1 :: InfResult
 exampleResult1 = (Map.fromList [(1, strTN), (2, intTN),
@@ -51,12 +55,10 @@ makeRules :: [Rules -> Rules] -> Rules
 makeRules [] = emptyRules
 makeRules (r:rs) = r (makeRules rs)
 
-inferTypeFor :: TypeVar -> [Rules -> Rules] -> ErrorS TypeNode
+inferTypeFor :: TypeVar -> [Rules -> Rules] -> ErrorS (Maybe TypeNode)
 inferTypeFor var rules = do
   result <- doInfer rules
-  return $ case getTypeForVar result var of
-    Nothing -> error "var wasn't defined"
-    Just t  -> t
+  return $ getTypeForVar result var
 
 testNonGeneric =
   TestList [ "empty" ~:
@@ -86,12 +88,50 @@ testNonGeneric =
                       setEqual 5 2, setEqual 4 5] ~?=
              Right (Map.fromList [(1, intTN)], Map.fromList [(2, 1), (3, 1), (4, 1), (5, 1)])
 
-           , "rejects invalid generic relation" ~:
+           , "applies recursive equality" ~:
+             doInfer [ specify 1 (pairTN 11 12), specify 2 (pairTN 21 22)
+                     , specify 11 intTN, specify 22 strTN, setEqual 1 2 ] ~?=
+             Right (Map.fromList [(1, (pairTN 11 22)), (11, intTN), (22, strTN)],
+                    Map.fromList [(2, 1), (21, 11), (12, 22)])
+           ]
+
+testGenericTI =
+  TestList ["rejects invalid generic relation" ~:
              isLeft (doInfer [instanceOf 1 2, specify 1 intTN, specify 2 strTN]) ~?= True
 
            , "applies generic relations" ~:
              inferTypeFor 2 [specify 1 intTN, instanceOf 2 1] ~?=
-             Right intTN
+             Right (Just intTN)
+
+           , "ignores reverse relationships" ~:
+             inferTypeFor 2 [specify 1 intTN, instanceOf 1 2] ~?=
+             Right Nothing
+
+           , "accepts circular relationships" ~:
+             inferTypeFor 2 [specify 1 intTN, instanceOf 2 1, instanceOf 1 2] ~?=
+             Right (Just intTN)
+
+           , "applies generics recursively" ~:
+             doInfer [ specify 1 (pairTN 11 12), specify 2 (pairTN 21 22)
+                     , specify 11 intTN, specify 22 strTN, instanceOf 1 2 ] ~?=
+             Right (Map.fromList [ (1, pairTN 11 12), (2, pairTN 21 22)
+                                 , (11, intTN), (12, strTN), (22, strTN) ],
+                    Map.empty)
+
+           , "allows multiple generic instantiations" ~:
+             doInfer [ specify 1 (listTN 11), specify 2 (listTN 21), specify 3 (listTN 31)
+                     , specify 21 intTN, specify 31 strTN
+                     , instanceOf 2 1, instanceOf 3 1 ] ~?=
+             Right (Map.fromList [ (1, listTN 11), (2, listTN 21), (3, listTN 31)
+                                 , (21, intTN), (31, strTN) ],
+                    Map.empty)
+
+           , "applies equality constraint from generic" ~:
+             inferTypeFor 22 [ specify 1 (TypeNode "Fn2" [11, 11, 12])
+                             , specify 2 (TypeNode "Fn2" [21, 22, 23])
+                             , specify 12 nilTN, specify 21 intTN
+                             , instanceOf 2 1] ~?=
+             Right (Just intTN)
            ]
 
 emptyVarSet :: Set TypeVar
