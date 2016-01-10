@@ -22,19 +22,19 @@ main = defaultMain $
 emptyResult :: InfResult
 emptyResult = (Map.empty, Map.empty)
 
-strTypeNode = TypeNode "String" []
-intTypeNode = TypeNode "Int" []
+strTN = TypeNode "String" []
+intTN = TypeNode "Int" []
 
 exampleResult1 :: InfResult
-exampleResult1 = (Map.fromList [(1, strTypeNode), (2, intTypeNode),
+exampleResult1 = (Map.fromList [(1, strTN), (2, intTN),
                                 (101, TypeNode "List" [1]), (102, TypeNode "Set" [10])],
                   Map.fromList [(3, 2), (10, 12), (5, 1)])
 
 testGetTypeForVar =
   TestList [ "missing type var" ~: getTypeForVar emptyResult 1 ~?= Nothing
-           , "existing type var" ~: getTypeForVar exampleResult1 2 ~?= Just intTypeNode
+           , "existing type var" ~: getTypeForVar exampleResult1 2 ~?= Just intTN
            , "replaced but missing" ~: getTypeForVar exampleResult1 10 ~?= Nothing
-           , "replaced and defined" ~: getTypeForVar exampleResult1 5 ~?= Just strTypeNode ]
+           , "replaced and defined" ~: getTypeForVar exampleResult1 5 ~?= Just strTN ]
 
 testGetFullTypeForVar =
   TestList [ "simple type" ~: getFullTypeForVar exampleResult1 1 ~?=
@@ -51,25 +51,47 @@ makeRules :: [Rules -> Rules] -> Rules
 makeRules [] = emptyRules
 makeRules (r:rs) = r (makeRules rs)
 
+inferTypeFor :: TypeVar -> [Rules -> Rules] -> ErrorS TypeNode
+inferTypeFor var rules = do
+  result <- doInfer rules
+  return $ case getTypeForVar result var of
+    Nothing -> error "var wasn't defined"
+    Just t  -> t
+
 testNonGeneric =
-  TestList [ "empty" ~: infer emptyRules ~?= Right (Map.empty, Map.empty)
-           , "specify" ~: infer (specify 1 intTypeNode emptyRules) ~?=
-             Right (Map.fromList [(1, intTypeNode)], Map.empty)
-           , "equal" ~: infer (setEqual 1 2 emptyRules) ~?=
+  TestList [ "empty" ~:
+             infer emptyRules ~?= Right (Map.empty, Map.empty)
+
+           , "specify" ~:
+             infer (specify 1 intTN emptyRules) ~?=
+             Right (Map.fromList [(1, intTN)], Map.empty)
+
+           , "equal" ~:
+             infer (setEqual 1 2 emptyRules) ~?=
              Right (Map.empty, Map.fromList [(2, 1)])
+
            , "simple replacement" ~:
-             doInfer [setEqual 1 2, specify 1 intTypeNode] ~?=
-             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)])
+             doInfer [setEqual 1 2, specify 1 intTN] ~?=
+             Right (Map.fromList [(1, intTN)], Map.fromList [(2, 1)])
+
            , "replace equal values" ~:
-             doInfer [setEqual 1 2, specify 1 intTypeNode, specify 2 intTypeNode] ~?=
-             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)])
+             doInfer [setEqual 1 2, specify 1 intTN, specify 2 intTN] ~?=
+             Right (Map.fromList [(1, intTN)], Map.fromList [(2, 1)])
+
            , "catches incompatible sub" ~:
-             isLeft (doInfer [setEqual 1 2, specify 1 intTypeNode, specify 2 strTypeNode])
-             ~?= True
+             isLeft (doInfer [setEqual 1 2, specify 1 intTN, specify 2 strTN]) ~?= True
+
            , "more complicated sub" ~:
-             doInfer [specify 1 intTypeNode, setEqual 3 4, setEqual 1 5, setEqual 1 2,
+             doInfer [specify 1 intTN, setEqual 3 4, setEqual 1 5, setEqual 1 2,
                       setEqual 5 2, setEqual 4 5] ~?=
-             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1), (3, 1), (4, 1), (5, 1)])
+             Right (Map.fromList [(1, intTN)], Map.fromList [(2, 1), (3, 1), (4, 1), (5, 1)])
+
+           , "rejects invalid generic relation" ~:
+             isLeft (doInfer [instanceOf 1 2, specify 1 intTN, specify 2 strTN]) ~?= True
+
+           , "applies generic relations" ~:
+             inferTypeFor 2 [specify 1 intTN, instanceOf 2 1] ~?=
+             Right intTN
            ]
 
 emptyVarSet :: Set TypeVar
