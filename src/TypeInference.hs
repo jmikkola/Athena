@@ -7,6 +7,8 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Graph
+
 type ErrorS = Either String
 
 type TypeVar = Int
@@ -216,6 +218,12 @@ updateDefault :: Ord k => a -> (a -> a) -> k -> Map k a -> Map k a
 updateDefault defaultVal updateFn = Map.alter alterF
   where alterF existing = Just $ updateFn $ fromMaybe defaultVal existing
 
+pickGenericPairs :: Graph TypeVar -> [Set TypeVar] -> GenericRules
+pickGenericPairs graph subcomponents =
+  let gatherChildren var = [(var, child) | child <- Graph.children graph var]
+      gatherSubcomponent subcomp = concatMap gatherChildren $ Set.toList subcomp
+  in concatMap gatherSubcomponent subcomponents
+
 {-
 Call tree:
 infer
@@ -223,7 +231,7 @@ infer
     - Graph.strongly_connected_components
     - equality_pairs_from_set (done)
     - apply_equal_rules (done)
-    - pick_generic_pairs
+    - pick_generic_pairs (done)
       - Graph.get_children
     - apply_generic_rules (done)
       - walk_for_equality_pairs (done)
