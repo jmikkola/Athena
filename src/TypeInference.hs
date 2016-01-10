@@ -147,6 +147,22 @@ equalityPairsFromSet items = case Set.toList items of
   (a:ss) -> zip ss (repeat a)
   _      -> []
 
+applyGenericRules :: GenericRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
+applyGenericRules genericPairs types subs =
+  let gatherEqualPairs []         eps typs = Right (eps, typs)
+      gatherEqualPairs ((i,g):gs) eps typs = do
+        let eps' = walkForEqualityPairs types i g ++ eps
+        let itype = Map.lookup i typs
+        let gtype = Map.lookup g typs
+        (result, newPairs) <- mergeMaybeGeneric itype gtype
+        let typs' = case result of
+              Nothing -> typs
+              Just t  -> Map.insert i t typs
+        gatherEqualPairs (newPairs ++ gs) eps' typs'
+   in do
+     (equalPairs, types') <- gatherEqualPairs genericPairs [] types
+     applyEqualRules equalPairs types' subs
+
 -- TODO: this is basically the same thing as mergeTypes
 mergeGeneric :: TypeNode -> TypeNode -> ErrorS (TypeNode, GenericRules)
 mergeGeneric inst general =
@@ -209,7 +225,7 @@ infer
     - apply_equal_rules (done)
     - pick_generic_pairs
       - Graph.get_children
-    - apply_generic_rules
+    - apply_generic_rules (done)
       - walk_for_equality_pairs (done)
         - equality_pairs_from_set (dup)
       - merge_generic (done)
