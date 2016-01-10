@@ -46,10 +46,11 @@ getFullTypeForVar ir var =
     return $ Constructor (constructor node) subtypes
 
 type EqualityRules = [(TypeVar, TypeVar)]
+type GenericRules = [(TypeVar, TypeVar)]
 
 data Rules = Rules { equalPairs :: EqualityRules
                    , specifiedTypes :: [(TypeVar, TypeNode)]
-                   , genericRelations :: [(TypeVar, TypeVar)] }
+                   , genericRelations :: GenericRules }
            deriving (Show)
 
 emptyRules :: Rules
@@ -146,6 +147,59 @@ equalityPairsFromSet items = case Set.toList items of
   (a:ss) -> zip ss (repeat a)
   _      -> []
 
+-- TODO: this is basically the same thing as mergeTypes
+mergeGeneric :: TypeNode -> TypeNode -> ErrorS (TypeNode, GenericRules)
+mergeGeneric inst general =
+  let v1 = components inst
+      v2 = components general
+  in if (constructor inst) /= (constructor general) || (length v1) /= (length v2)
+  then Left $ show inst ++ " is not a subtype of " ++ show general
+  else Right (inst, zip v1 v2)
+
+-- TODO: this is basically the same thing as mergeMaybeTypes
+mergeMaybeGeneric :: Maybe TypeNode -> Maybe TypeNode -> ErrorS (Maybe TypeNode, GenericRules)
+mergeMaybeGeneric (Just t1) (Just t2) = do
+  (tn, gr) <- mergeTypes t1 t2
+  return (Just tn, gr)
+mergeMaybeGeneric Nothing   t2        = Right (t2, [])
+mergeMaybeGeneric t1        Nothing   = Right (t1, [])
+
+{-
+If two different type variables end up being a generic instance of the same
+generic type variable, they need to be equal.
+
+E.g.
+id :: a -> a
+let c = id d
+
+the types of d and c must equal.
+
+This function looks for such cases and returns rules to apply.
+-}
+walkForEqualityPairs :: VarTypes -> TypeVar -> TypeVar -> EqualityRules
+walkForEqualityPairs types instVar genVar =
+  makeEqualityGroups $ gatherMappings types instVar genVar
+
+-- Gathers a map from generic var to the set of instance vars that map to it
+gatherMappings :: VarTypes -> TypeVar -> TypeVar -> Map TypeVar (Set TypeVar)
+gatherMappings types instVar genVar = gm instVar genVar Map.empty
+  where gm ivar gvar gmappings =
+          let gmappings' = updateDefault Set.empty (Set.insert ivar) gvar gmappings
+          in case (Map.lookup ivar types, Map.lookup gvar types) of
+            -- recursively gather mappings when both variables map to a type
+            (Just itype, Just gtype) ->
+              foldl (\gmps (i, g) -> gm i g gmps) gmappings'
+                    (zip (components itype) (components gtype))
+            _                        -> gmappings'
+
+makeEqualityGroups :: Map TypeVar (Set TypeVar) -> EqualityRules
+makeEqualityGroups gmappings =
+  concatMap equalityPairsFromSet $ Map.elems gmappings
+
+updateDefault :: Ord k => a -> (a -> a) -> k -> Map k a -> Map k a
+updateDefault defaultVal updateFn = Map.alter alterF
+  where alterF existing = Just $ updateFn $ fromMaybe defaultVal existing
+
 {-
 Call tree:
 infer
@@ -156,8 +210,8 @@ infer
     - pick_generic_pairs
       - Graph.get_children
     - apply_generic_rules
-      - walk_for_equality_pairs
+      - walk_for_equality_pairs (done)
         - equality_pairs_from_set (dup)
-      - merge_generic
+      - merge_generic (done)
       - apply_equal_rules (done)
 -}
