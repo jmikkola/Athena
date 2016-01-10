@@ -132,6 +132,18 @@ testGenericTI =
                              , specify 12 nilTN, specify 21 intTN
                              , instanceOf 2 1] ~?=
              Right (Just intTN)
+
+           , "applies generics for multiple levels" ~:
+             doInfer [specify 1 (listTN 11), specify 11 intTN, instanceOf 2 1, instanceOf 3 2] ~?=
+             -- TODO: is this actually right? or should 2 and 3 have generic instances of 11?
+             Right (Map.fromList [(1, listTN 11), (2, listTN 11), (3, listTN 11), (11, intTN)],
+                    Map.empty)
+
+           , "catches generic errors with separation" ~:
+             isLeft (doInfer [ specify 1 (listTN 11), specify 11 intTN
+                             , specify 4 (listTN 41), specify 41 strTN
+                             , instanceOf 2 1, instanceOf 4 3, instanceOf 3 2 ]) ~?=
+             True
            ]
 
 emptyVarSet :: Set TypeVar

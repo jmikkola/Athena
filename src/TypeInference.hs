@@ -71,7 +71,7 @@ instanceOf inst general rules = rules { genericRelations = g' }
 infer :: Rules -> ErrorS InfResult
 infer rules = do
   (types, subs) <- collapseEqual rules
-  applyGenericRules (genericRelations rules) types subs
+  applyGenerics (genericRelations rules) types subs
 
 mergeTypes :: TypeNode -> TypeNode -> ErrorS (TypeNode, EqualityRules)
 mergeTypes t1 t2 =
@@ -229,7 +229,7 @@ applyGenerics :: GenericRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
 applyGenerics grules types subs =
   let subbedGRs = [(applySubs subs i, applySubs subs g) | (i, g) <- grules]
       gRelations = Graph.fromEdges subbedGRs
-      subcomps = Graph.findSCC gRelations
+      subcomps = reverse $ Graph.findSCC gRelations
       gpairs = pickGenericPairs gRelations subcomps
   in do
     (types', subs') <- mergeSubcomponents subcomps types subs
