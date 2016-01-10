@@ -144,6 +144,10 @@ testGenericTI =
                              , specify 4 (listTN 41), specify 41 strTN
                              , instanceOf 2 1, instanceOf 4 3, instanceOf 3 2 ]) ~?=
              True
+
+           , "merges subcomponents" ~:
+             doInfer [ specify 1 intTN, instanceOf 2 1, instanceOf 1 2, instanceOf 3 2]
+             ~?= Right (Map.fromList [(1, intTN), (3, intTN)], Map.fromList [(2, 1)])
            ]
 
 emptyVarSet :: Set TypeVar
