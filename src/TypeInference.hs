@@ -4,6 +4,8 @@ import Control.Monad (foldM)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 type ErrorS = Either String
 
@@ -138,3 +140,24 @@ addReplacement oldSubs replaced replacement =
 
 applySubToType replaced replacement (TypeNode con vs) =
   TypeNode con (map (replace replaced replacement) vs)
+
+equalityPairsFromSet :: (Ord a) => Set a -> [(a, a)]
+equalityPairsFromSet items = case Set.toList items of
+  (a:ss) -> zip ss (repeat a)
+  _      -> []
+
+{-
+Call tree:
+infer
+  - _apply_generics
+    - Graph.strongly_connected_components
+    - equality_pairs_from_set (done)
+    - apply_equal_rules (done)
+    - pick_generic_pairs
+      - Graph.get_children
+    - apply_generic_rules
+      - walk_for_equality_pairs
+        - equality_pairs_from_set (dup)
+      - merge_generic
+      - apply_equal_rules (done)
+-}

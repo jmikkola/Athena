@@ -3,6 +3,7 @@ module Main where
 import Control.Monad (liftM)
 import Data.Either (isLeft)
 import qualified Data.Map as Map
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Test.HUnit ( Assertion, Test(..), (~:), (~?=), assertFailure )
 import Test.Framework (defaultMain)
@@ -14,7 +15,9 @@ import TypeInference
 main = defaultMain $
        asGroup [ ("getTypeForVar", testGetTypeForVar)
                , ("getFullTypeForVar", testGetFullTypeForVar)
-               , ("non-generic inference", testNonGeneric) ]
+               , ("non-generic inference", testNonGeneric)
+               , ("equalityPairsFromSet", testEqualityPairsFromSet)
+               ]
 
 emptyResult :: InfResult
 emptyResult = (Map.empty, Map.empty)
@@ -67,4 +70,14 @@ testNonGeneric =
              doInfer [specify 1 intTypeNode, setEqual 3 4, setEqual 1 5, setEqual 1 2,
                       setEqual 5 2, setEqual 4 5] ~?=
              Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1), (3, 1), (4, 1), (5, 1)])
+           ]
+
+emptyVarSet :: Set TypeVar
+emptyVarSet = Set.empty
+
+testEqualityPairsFromSet =
+  TestList [ "empty" ~: equalityPairsFromSet emptyVarSet ~?= []
+           , "1 elem" ~: equalityPairsFromSet (Set.singleton 1) ~?= []
+           , "multiple elems" ~: equalityPairsFromSet (Set.fromList [1, 2, 3, 4]) ~?=
+             [(2, 1), (3, 1), (4, 1)]
            ]
