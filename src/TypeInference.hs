@@ -69,8 +69,9 @@ instanceOf inst general rules = rules { genericRelations = g' }
   where g' = (inst, general) : genericRelations rules
 
 infer :: Rules -> ErrorS InfResult
--- TODO: add generics
-infer rules = collapseEqual rules
+infer rules = do
+  (types, subs) <- collapseEqual rules
+  applyGenericRules (genericRelations rules) types subs
 
 mergeTypes :: TypeNode -> TypeNode -> ErrorS (TypeNode, EqualityRules)
 mergeTypes t1 t2 =
@@ -224,18 +225,18 @@ pickGenericPairs graph subcomponents =
       gatherSubcomponent subcomp = concatMap gatherChildren $ Set.toList subcomp
   in concatMap gatherSubcomponent subcomponents
 
-{-
-Call tree:
-infer
-  - _apply_generics
-    - Graph.strongly_connected_components
-    - equality_pairs_from_set (done)
-    - apply_equal_rules (done)
-    - pick_generic_pairs (done)
-      - Graph.get_children
-    - apply_generic_rules (done)
-      - walk_for_equality_pairs (done)
-        - equality_pairs_from_set (dup)
-      - merge_generic (done)
-      - apply_equal_rules (done)
--}
+applyGenerics :: GenericRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
+applyGenerics grules types subs =
+  let subbedGRs = [(applySubs subs i, applySubs subs g) | (i, g) <- grules]
+      gRelations = Graph.fromEdges subbedGRs
+      subcomps = Graph.findSCC gRelations
+      gpairs = pickGenericPairs gRelations subcomps
+  in do
+    (types', subs') <- mergeSubcomponents subcomps types subs
+    applyGenericRules gpairs types' subs'
+
+mergeSubcomponents :: [Set TypeVar] -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
+mergeSubcomponents []     types subs = Right (types, subs)
+mergeSubcomponents (s:ss) types subs = do
+  (types', subs') <- applyEqualRules (equalityPairsFromSet s) types subs
+  mergeSubcomponents ss types' subs'

@@ -5,6 +5,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+-- A directed graph
 type Graph a = Map a (Set a)
 
 emptyGraph :: Graph a
@@ -42,7 +43,7 @@ setPop set =
   else Just $ Set.deleteFindMin set
 
 getComponents :: (Ord a) => Graph a -> Set a -> [a] -> [Set a]
-getComponents graph _       []        = []
+getComponents _     _       []        = []
 getComponents graph reached (node:ns) =
   let reached' = dfs graph reached node
       component = Set.difference reached' reached
@@ -81,6 +82,7 @@ edges g = Map.foldWithKey collectEdges [] g
         collectEdges n e es = Set.fold (collectEdge n) es e
 
 -- Reverses the direction of an edge
+flipEdge :: (a, b) -> (b, a)
 flipEdge (a, b) = (b, a)
 
 -- Adds an edge (from, to) to the graph.
@@ -95,3 +97,7 @@ transpose g =
   let newEdges = map flipEdge $ edges g
       justNodes = Map.fromList [(n, Set.empty) | n <- nodes g]
   in foldl addEdge justNodes newEdges
+
+-- Constructs a graph from a list of edges
+fromEdges :: (Ord a) => [(a, a)] -> Graph a
+fromEdges = foldl addEdge emptyGraph
