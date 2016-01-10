@@ -1,6 +1,7 @@
 module Main where
 
 import Control.Monad (liftM)
+import Data.Either (isLeft)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Test.HUnit ( Assertion, Test(..), (~:), (~?=), assertFailure )
@@ -58,4 +59,12 @@ testNonGeneric =
              Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)])
            , "replace equal values" ~:
              doInfer [setEqual 1 2, specify 1 intTypeNode, specify 2 intTypeNode] ~?=
-             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)]) ]
+             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)])
+           , "catches incompatible sub" ~:
+             isLeft (doInfer [setEqual 1 2, specify 1 intTypeNode, specify 2 strTypeNode])
+             ~?= True
+           , "more complicated sub" ~:
+             doInfer [specify 1 intTypeNode, setEqual 3 4, setEqual 1 5, setEqual 1 2,
+                      setEqual 5 2, setEqual 4 5] ~?=
+             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1), (3, 1), (4, 1), (5, 1)])
+           ]
