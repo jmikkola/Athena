@@ -12,7 +12,8 @@ import TypeInference
 
 main = defaultMain $
        asGroup [ ("getTypeForVar", testGetTypeForVar)
-               , ("getFullTypeForVar", testGetFullTypeForVar) ]
+               , ("getFullTypeForVar", testGetFullTypeForVar)
+               , ("non-generic inference", testNonGeneric) ]
 
 emptyResult :: InfResult
 emptyResult = (Map.empty, Map.empty)
@@ -38,3 +39,23 @@ testGetFullTypeForVar =
              (Just $ Constructor "Set" [Var 10])
            , "complex with inner"~: getFullTypeForVar exampleResult1 101 ~?=
              (Just $ Constructor "List" [Constructor "String" []]) ]
+
+doInfer :: [Rules -> Rules] -> ErrorS InfResult
+doInfer = infer . makeRules
+
+makeRules :: [Rules -> Rules] -> Rules
+makeRules [] = emptyRules
+makeRules (r:rs) = r (makeRules rs)
+
+testNonGeneric =
+  TestList [ "empty" ~: infer emptyRules ~?= Right (Map.empty, Map.empty)
+           , "specify" ~: infer (specify 1 intTypeNode emptyRules) ~?=
+             Right (Map.fromList [(1, intTypeNode)], Map.empty)
+           , "equal" ~: infer (setEqual 1 2 emptyRules) ~?=
+             Right (Map.empty, Map.fromList [(2, 1)])
+           , "simple replacement" ~:
+             doInfer [setEqual 1 2, specify 1 intTypeNode] ~?=
+             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)])
+           , "replace equal values" ~:
+             doInfer [setEqual 1 2, specify 1 intTypeNode, specify 2 intTypeNode] ~?=
+             Right (Map.fromList [(1, intTypeNode)], Map.fromList [(2, 1)]) ]

@@ -36,7 +36,7 @@ getTypeForVar :: InfResult -> TypeVar -> Maybe TypeNode
 getTypeForVar (types, subs) var = Map.lookup (applySubs subs var) types
 
 getFullTypeForVar :: InfResult -> TypeVar -> Maybe Type
-getFullTypeForVar ir@(types, subs) var =
+getFullTypeForVar ir var =
   let fullTypeOrVar v = fromMaybe (Var v) (getFullTypeForVar ir v)
   in do
     node <- getTypeForVar ir var
@@ -50,17 +50,22 @@ data Rules = Rules { equalPairs :: EqualityRules
                    , genericRelations :: [(TypeVar, TypeVar)] }
            deriving (Show)
 
+emptyRules :: Rules
 emptyRules = Rules [] [] []
 
-setEqual :: Rules -> TypeVar -> TypeVar -> Rules
-setEqual rules a b = rules { equalPairs = (a, b) : equalPairs rules }
+setEqual :: TypeVar -> TypeVar -> Rules -> Rules
+setEqual a b rules = rules { equalPairs = (a, b) : equalPairs rules }
 
-specify :: Rules -> TypeVar -> TypeNode -> Rules
-specify rules tv tn = rules { specifiedTypes = (tv, tn) : specifiedTypes rules }
+specify :: TypeVar -> TypeNode -> Rules -> Rules
+specify tv tn rules = rules { specifiedTypes = (tv, tn) : specifiedTypes rules }
 
-instanceOf ::  Rules -> TypeVar -> TypeVar -> Rules
-instanceOf rules inst general = rules { genericRelations = g' }
+instanceOf :: TypeVar -> TypeVar -> Rules -> Rules
+instanceOf inst general rules = rules { genericRelations = g' }
   where g' = (inst, general) : genericRelations rules
+
+infer :: Rules -> ErrorS InfResult
+-- TODO: add generics
+infer rules = collapseEqual rules
 
 mergeTypes :: TypeNode -> TypeNode -> ErrorS (TypeNode, EqualityRules)
 mergeTypes t1 t2 =
@@ -95,22 +100,26 @@ collapseSpecifiedTypes rules =
 
 applyEqualRules :: EqualityRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
 applyEqualRules []     vars subs = Right (vars, subs)
-applyEqualRules (r:rs) vars subs =
-  let (raw_v1, raw_v2) = r
-      v1 = applySubs subs raw_v1
-      v2 = applySubs subs raw_v2
+applyEqualRules (r:rs) vars subs = do
+  (newRules, vars, subs) <- equalRulesStep r vars subs
+  applyEqualRules (newRules ++ rs) vars subs
+
+equalRulesStep :: (TypeVar, TypeVar) -> VarTypes -> Subs -> ErrorS (EqualityRules, VarTypes, Subs)
+equalRulesStep (rv1, rv2) vars subs =
+  let v1 = applySubs subs rv1
+      v2 = applySubs subs rv2
       type1 = Map.lookup v1 vars
       type2 = Map.lookup v2 vars
       -- Default to the first type variable that has been set to
       -- something to make the output more predictable. This doesn't
       -- actually do anything for the algorithm.
       (replaced, replacement) = if isNothing type1 && isJust type2
-                                then (v2, v1) else (v1, v2)
+                                then (v1, v2) else (v2, v1)
   in do
-    (result, new_rules) <- mergeMaybeTypes type1 type2
-    let subs = addReplacement subs replaced replacement
-    let vars = addReplacementToTypes vars result replaced replacement
-    applyEqualRules (new_rules ++ rs) vars subs
+    (result, newRules) <- mergeMaybeTypes type1 type2
+    let subs' = addReplacement subs replaced replacement
+    let vars' = addReplacementToTypes vars result replaced replacement
+    return (newRules, vars', subs')
 
 addReplacementToTypes vars result replaced replacement =
   let withoutReplaced = Map.delete replaced vars
