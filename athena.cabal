@@ -59,6 +59,7 @@ executable athena
   -- Other library packages from which modules are imported.
   build-depends:
     base >=4.6,
+    array >=0.4,
     containers >= 0.5,
     parsec >=3.1.8,
     haskeline >=0.7
@@ -73,6 +74,7 @@ executable athena
 library
   build-depends:
     base >=4.6,
+    array >=0.4,
     containers >= 0.5,
     parsec >=3.1.8
   hs-source-dirs:      src
@@ -86,6 +88,7 @@ test-suite ParseTests
   other-modules: Parse, ParseTest, TestUtil
   build-depends:
     base >=4.6,
+    array >=0.4,
     containers >= 0.5,
     parsec >=3.1.8,
     HUnit >= 1.2,
@@ -101,6 +104,7 @@ test-suite EvalTests
   other-modules: Eval, EvalTest
   build-depends:
     base >=4.6,
+    array >=0.4,
     containers >= 0.5,
     parsec >=3.1.8,
     HUnit >= 1.2,
@@ -116,6 +120,7 @@ test-suite BinaryExprTest
   other-modules: Parser.BinaryExpr, TestUtil
   build-depends:
     base >=4.6,
+    array >=0.4,
     containers >= 0.5,
     parsec >=3.1.8,
     HUnit >= 1.2,
@@ -126,26 +131,12 @@ test-suite BinaryExprTest
   main-is:             BinaryExprTest.hs
   default-language:    Haskell2010
 
-test-suite GraphTest
-  hs-source-dirs: test, src
-  other-modules: Graph, TestUtil
-  build-depends:
-    base >=4.6,
-    containers >= 0.5,
-    parsec >=3.1.8,
-    HUnit >= 1.2,
-    test-framework-hunit,
-    test-framework,
-    athena
-  type:                exitcode-stdio-1.0
-  main-is:             GraphTest.hs
-  default-language:    Haskell2010
-
 test-suite TypeInferenceTest
   hs-source-dirs: test, src
   other-modules: TypeInference, TestUtil
   build-depends:
     base >=4.6,
+    array >=0.4,
     containers >= 0.5,
     parsec >=3.1.8,
     HUnit >= 1.2,

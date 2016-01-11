@@ -7,7 +7,10 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Graph
+import Data.Graph (Graph, Vertex)
+import qualified Data.Graph as Graph
+import Data.Array ((!))
+import qualified Data.Tree as Tree
 
 type ErrorS = Either String
 
@@ -27,6 +30,25 @@ type VarTypes = Map TypeVar TypeNode
 -- Substitutions
 type Subs = Map TypeVar TypeVar
 type InfResult = (VarTypes, Subs)
+
+data GenericGraph = GenericGraph { gg :: Graph
+                                 , v2k :: (Vertex -> (TypeVar, TypeVar, [TypeVar]))
+                                 , k2v :: (TypeVar -> Maybe Vertex)
+                                 }
+
+collectEdges :: Ord a => [(a, a)] -> Map a [a]
+collectEdges edges = foldl addEdge Map.empty edges
+  where addEdge m (start, end) = updateDefault [] (end :) start m
+
+makeGraph :: [(TypeVar, TypeVar)] -> GenericGraph
+makeGraph edges = let edges' = [(n, n, es) | (n, es) <- Map.toList $ collectEdges edges]
+                      (g, vf, kf) = Graph.graphFromEdges edges'
+                  in GenericGraph { gg = g, v2k = vf, k2v = kf }
+
+findSCC :: GenericGraph -> [[TypeVar]]
+findSCC g = map (map getTV . Tree.flatten) (Graph.scc (gg g))
+  where vf = v2k g
+        getTV vertex = let (var, _, _) = vf vertex in var
 
 genTypeVars :: VarGen
 genTypeVars = [0..]
@@ -146,9 +168,11 @@ applySubToType replaced replacement (TypeNode con vs) =
   TypeNode con (map (replace replaced replacement) vs)
 
 equalityPairsFromSet :: (Ord a) => Set a -> [(a, a)]
-equalityPairsFromSet items = case Set.toList items of
-  (a:ss) -> zip ss (repeat a)
-  _      -> []
+equalityPairsFromSet = equalityPairs . Set.toList
+
+equalityPairs :: (Eq a) => [a] -> [(a, a)]
+equalityPairs (a:ss) = zip ss (repeat a)
+equalityPairs _      = []
 
 applyGenericRules :: GenericRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
 applyGenericRules genericPairs types subs =
@@ -219,24 +243,27 @@ updateDefault :: Ord k => a -> (a -> a) -> k -> Map k a -> Map k a
 updateDefault defaultVal updateFn = Map.alter alterF
   where alterF existing = Just $ updateFn $ fromMaybe defaultVal existing
 
-pickGenericPairs :: Graph TypeVar -> [Set TypeVar] -> GenericRules
+getDefault :: Ord k => a -> k -> Map k a -> a
+getDefault def key m = case Map.lookup key m of
+  Nothing -> def
+  Just v  -> v
+
+pickGenericPairs :: Map TypeVar [TypeVar] -> [[TypeVar]] -> GenericRules
 pickGenericPairs graph subcomponents =
-  let gatherChildren var = [(var, child) | child <- Graph.children graph var]
-      gatherSubcomponent subcomp = concatMap gatherChildren $ Set.toList subcomp
-  in concatMap gatherSubcomponent subcomponents
+  let gatherChildren var = [(var, child) | child <- getDefault [] var graph]
+  in concatMap (concatMap gatherChildren) subcomponents
 
 applyGenerics :: GenericRules -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
 applyGenerics grules types subs =
   let subbedGRs = [(applySubs subs i, applySubs subs g) | (i, g) <- grules]
-      gRelations = Graph.fromEdges subbedGRs
-      subcomps = reverse $ Graph.findSCC gRelations
-      gpairs = pickGenericPairs gRelations subcomps
+      subcomps = findSCC (makeGraph subbedGRs)
+      gpairs = pickGenericPairs (collectEdges subbedGRs) subcomps
   in do
     (types', subs') <- mergeSubcomponents subcomps types subs
     applyGenericRules gpairs types' subs'
 
-mergeSubcomponents :: [Set TypeVar] -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
+mergeSubcomponents :: [[TypeVar]] -> VarTypes -> Subs -> ErrorS (VarTypes, Subs)
 mergeSubcomponents []     types subs = Right (types, subs)
 mergeSubcomponents (s:ss) types subs = do
-  (types', subs') <- applyEqualRules (equalityPairsFromSet s) types subs
+  (types', subs') <- applyEqualRules (equalityPairs s) types subs
   mergeSubcomponents ss types' subs'
