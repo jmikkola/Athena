@@ -56,7 +56,7 @@ class Display a where
 
 data FunctionDef = FunctionDef String [FnArg] (Maybe TypeDef) Block
                  | ShortFn String [FnArg] (Maybe TypeDef) Expression
-                 deriving (Eq, Show)
+                 deriving (Eq, Show, Ord)
 
 fnName :: FunctionDef -> String
 fnName (FunctionDef name _ _ _) = name
@@ -80,7 +80,7 @@ displayRet Nothing  = ""
 displayRet (Just t) = display t ++ " "
 
 data FnArg = FnArg { argName :: String, argType :: (Maybe TypeDef) }
-             deriving (Eq, Show)
+             deriving (Eq, Show, Ord)
 
 instance Display FnArg where
   display (FnArg name maybeType) = name ++ rest
@@ -89,7 +89,7 @@ instance Display FnArg where
             Just t  -> " " ++ display t
 
 data TypeDef = NilType | NamedType String [TypeDef] | TypeVar String
-             deriving (Eq, Show)
+             deriving (Eq, Show, Ord)
 
 instance Display TypeDef where
   display  NilType               = "()"
@@ -98,13 +98,13 @@ instance Display TypeDef where
   display (TypeVar   s)          = s
 
 data Block = Block [Statement]
-           deriving (Eq, Show)
+           deriving (Eq, Show, Ord)
 
 instance Display Block where
   display (Block statements) = "{\n" ++ (concatMap display statements) ++ "}\n"
 
 data ElsePart = NoElse | Else Block | ElseIf Expression Block ElsePart
-              deriving (Eq, Show)
+              deriving (Eq, Show, Ord)
 
 instance Display ElsePart where
   display NoElse = ""
@@ -121,7 +121,7 @@ data Statement = StatementExpr Expression
                | StatementFor VariableName Expression Block
                | StatementMatch Expression [MatchCase]
                | StatementFn FunctionDef
-               deriving (Show, Eq)
+               deriving (Show, Eq, Ord)
 
 instance Display Statement where
   display (StatementExpr expr) = display expr ++ "\n"
@@ -135,7 +135,7 @@ instance Display Statement where
   display (StatementFn funcDef) = display funcDef
 
 data MatchCase = MatchCase MatchPattern Block
-               deriving (Show, Eq)
+               deriving (Show, Eq, Ord)
 
 instance Display MatchCase where
   display (MatchCase pattern blk) = display pattern ++ " " ++ display blk
@@ -143,7 +143,7 @@ instance Display MatchCase where
 -- TODO: add list patterns
 data MatchPattern = UnderscorePattern | StructPattern String [MatchPattern] | VarPattern String
                   | LiteralPattern LiteralValue
-                  deriving (Show, Eq)
+                  deriving (Show, Eq, Ord)
 
 instance Display MatchPattern where
   display UnderscorePattern             = "_"
@@ -157,7 +157,7 @@ instance Display MatchPattern where
 data BinaryOp = Plus | Minus | Times | Divide | Mod | Power
               | Less | LessEq | Equals | Greater | GreaterEq | NotEq
               | And | Or
-              deriving (Show, Eq)
+              deriving (Show, Eq, Ord)
 
 instance Display BinaryOp where
   display Plus      = "+"
@@ -176,7 +176,7 @@ instance Display BinaryOp where
   display Or        = "||"
 
 data UnaryOp = Negate | Flip | Not
-             deriving (Show, Eq)
+             deriving (Show, Eq, Ord)
 
 instance Display UnaryOp where
   display Negate = "-"
@@ -191,7 +191,7 @@ data Expression = ExpressionLit LiteralValue
                 | ExpressionUnary UnaryOp Expression
                 | ExpressionStruct String [Expression]
                 | ExpressionIf Expression Expression Expression
-                deriving (Show, Eq)
+                deriving (Show, Eq, Ord)
 
 interleave :: [a] -> [a] -> [a]
 interleave (a:as) b = a : interleave b as
@@ -215,7 +215,7 @@ displayCommaSep :: (Display a) => [a] -> String
 displayCommaSep = (intercalate ", ") . (map display)
 
 data LiteralValue = LiteralFloat Float | LiteralInt Int | LiteralString String | LiteralChar Char
-                  deriving (Show, Eq)
+                  deriving (Show, Eq, Ord)
 
 instance Display LiteralValue where
   display (LiteralFloat  f) = show f

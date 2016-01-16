@@ -11,6 +11,7 @@ import Text.Parsec ( parse, eof )
 import Eval
 import Parse hiding ( getArgs )
 import TypeInference
+import InferExpression
 
 findMatchingFlags :: [String] -> String -> [String]
 findMatchingFlags (f:value:fs) flag = if f == flag then value : rest else rest
