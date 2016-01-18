@@ -4,9 +4,17 @@ import Control.Monad (foldM)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
+{-
+TODO: Add kind-checking where appropriate
+-}
+
 import Parse
   ( LiteralValue (..)
   , Expression (..)
+  , BinaryOp
+  , UnaryOp
+  , Statement (..)
+  , display
   )
 import TypeInference
   ( Rules
@@ -70,6 +78,11 @@ register a tistate =
       registry = Map.insert (asEntry a) tvar (tireg tistate)
   in (tvar, tistate { tivargen=vargen, tireg=registry })
 
+nextTV :: TIState -> (TypeVar, TIState)
+nextTV tistate =
+  let (tvar:vargen) = tivargen tistate
+  in (tvar, tistate { tivargen=vargen })
+
 lookupVar :: String -> TIState -> ErrorS (ScopedVar)
 lookupVar varName tistate =
   case Map.lookup varName (current $ tiscopes tistate) of
@@ -84,6 +97,9 @@ lookupCtor cfn tistate =
 
 addRule :: (Rules -> Rules) -> TIState -> TIState
 addRule rule tistate = tistate { tirules = rule (tirules tistate) }
+
+addRules :: [Rules -> Rules] -> TIState -> TIState
+addRules rules tistate = foldl (flip addRule) tistate rules
 
 boolTN :: TypeNode
 boolTN = TypeNode { constructor = "Bool", components = [] }
@@ -121,9 +137,9 @@ instance Typeable Expression where
                   else instanceOf varTV tv
        return (addRule rule tistate1, varTV)
      (ExpressionParen expr)              -> ti tistate expr
-     (ExpressionFnCall fname exprs)      -> undefined
-     (ExpressionBinary op left right)    -> undefined
-     (ExpressionUnary op expr)           -> undefined
+     (ExpressionFnCall fname exprs)      -> tiFnCall tistate expr fname exprs
+     (ExpressionBinary op left right)    -> tiFnCall tistate expr (display op) [left, right]
+     (ExpressionUnary op expr)           -> tiFnCall tistate expr (display op) [expr]
      (ExpressionStruct tname exprs)      -> do
        -- TODO: this might not correctly handle generic instantiation
        let (tv, tistate1) = register expr tistate
@@ -146,3 +162,14 @@ tiList st xs = recur st xs []
         recur tist (x:xs) rest = do
           (tist', xtv) <- ti tist x
           recur tist' xs (xtv:rest)
+
+tiFnCall :: TIState -> Expression -> String -> [Expression] -> ErrorS (TIState, TypeVar)
+tiFnCall tistate fncall fnname args = do
+  (tistate1, fnTypeVar) <- ti tistate (ExpressionVar fnname)
+  let (tv, tistate2) = register fncall tistate
+  (tistate3, argTypes) <- tiList tistate2 args
+  let (retTV, tistate4) = nextTV tistate3
+  let fnTypeName = "Fn<" ++ show (length args) ++ ">"
+  let fnTypeNode = TypeNode { constructor=fnTypeName, components=(argTypes ++ [retTV]) }
+  let rules = [setEqual tv retTV, specify fnTypeVar fnTypeNode]
+  return (addRules rules tistate4, tv)
