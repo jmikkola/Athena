@@ -14,6 +14,12 @@ import Parse
   , BinaryOp
   , UnaryOp
   , Statement (..)
+  , FunctionDef (..)
+  , FnArg
+  , TypeDef
+  , Block (..)
+  , ElsePart
+  , MatchPattern
   , display
   )
 import TypeInference
@@ -46,6 +52,9 @@ pushScope (Scopes cur pts) = Scopes { current = cur, parents = cur:pts }
 
 data TypeEntry = LitEntry LiteralValue
                | ExprEntry Expression
+               | StmtEntry Statement
+               | BlockEntry Block
+               | FnEntry FunctionDef
                deriving (Show, Eq, Ord)
 
 type Registry = Map TypeEntry TypeVar
@@ -104,6 +113,9 @@ addRules rules tistate = foldl (flip addRule) tistate rules
 boolTN :: TypeNode
 boolTN = TypeNode { constructor = "Bool", components = [] }
 
+nullTN :: TypeNode
+nullTN = TypeNode { constructor = "()", components = [] }
+
 class Typeable a where
   asEntry :: a -> TypeEntry
   ti :: TIState -> a -> ErrorS (TIState, TypeVar)
@@ -155,6 +167,50 @@ instance Typeable Expression where
        let tistate4 = addRule (specify ttv boolTN) $ addRule (setEqual itv etv) tistate3
        return (tistate4, itv)
 
+instance Typeable Statement where
+  asEntry = StmtEntry
+
+  ti tistate stmt =
+    case stmt of
+     (StatementExpr expr) -> ti tistate expr
+     (StatementLet varName expr) -> tiLet tistate varName expr
+     (StatementAssign varName expr) -> undefined
+     (StatementReturn expr) -> ti tistate expr
+     (StatementIf test ifblk elsepart) -> undefined
+     (StatementWhile test blk) -> undefined
+     (StatementFor varName listExpr blk) -> undefined
+     (StatementMatch expr cases) -> undefined
+     (StatementFn fnDef) -> undefined
+
+instance Typeable Block where
+  asEntry = BlockEntry
+
+  ti tistate blk@(Block []) = do
+    -- Special case: avoid blowing up for empty blocks by returning the `()` type
+    let (tv, tistate') = register blk tistate
+    return (addRule (specify tv nullTN) tistate', tv)
+  ti tistate (Block stmts)  = do
+    (tistate', tvs) <- tiList tistate stmts
+    -- If a block's type is used, it's always the last type
+    return (tistate', last tvs)
+
+instance Typeable FunctionDef where
+  asEntry = FnEntry
+
+  ti tistate fndef = do
+    let (tv, tistate1) = register fndef tistate
+    -- TODO: add function to scope here
+    (tistate2, fnname, args, tdef, bodyType) <- case fndef of
+          (FunctionDef name args tdef block) -> do
+            -- TODO: add args to scope here
+            (tistate', blockTv) <- ti tistate1 block
+            return (tistate', name, args, tdef, blockTv)
+          (ShortFn name args tdef expr) -> do
+            -- TODO: add args to scope here
+            (tistate', exprTv) <- ti tistate1 expr
+            return (tistate', name, args, tdef, exprTv)
+    return (tistate2, tv)
+
 tiList :: (Typeable a) => TIState -> [a] -> ErrorS (TIState, [TypeVar])
 -- now here is where having `fmap` would be nice...
 tiList st xs = recur st xs []
@@ -173,3 +229,6 @@ tiFnCall tistate fncall fnname args = do
   let fnTypeNode = TypeNode { constructor=fnTypeName, components=(argTypes ++ [retTV]) }
   let rules = [setEqual tv retTV, specify fnTypeVar fnTypeNode]
   return (addRules rules tistate4, tv)
+
+tiLet :: TIState -> String -> Expression -> ErrorS (TIState, TypeVar)
+tiLet = undefined
