@@ -20,7 +20,11 @@ import TypeInference
   , instanceOf
   )
 
-type Scope = Map String TypeVar
+data ScopedVar = ScopedVar { scTypeVar   :: TypeVar
+                           , scIsGeneric :: Bool
+                           }
+                 deriving (Show, Eq, Ord)
+type Scope = Map String ScopedVar
 data Scopes = Scopes { current :: Scope
                      , parents :: [Scope]
                      }
@@ -66,11 +70,11 @@ register a tistate =
       registry = Map.insert (asEntry a) tvar (tireg tistate)
   in (tvar, tistate { tivargen=vargen, tireg=registry })
 
-lookupVar :: String -> TIState -> ErrorS (TypeVar)
+lookupVar :: String -> TIState -> ErrorS (ScopedVar)
 lookupVar varName tistate =
   case Map.lookup varName (current $ tiscopes tistate) of
     Nothing -> Left $ "Variable " ++ varName ++ " not found in scope " ++ (show $ tiscopes tistate)
-    Just tv -> Right tv
+    Just sv -> Right sv
 
 lookupCtor :: String -> TIState -> ErrorS (String)
 lookupCtor cfn tistate =
@@ -109,8 +113,13 @@ instance Typeable Expression where
     case expr of
      (ExpressionLit lit)                 -> ti tistate lit
      (ExpressionVar varName)             -> do
-       tv <- lookupVar varName tistate
-       return (tistate, tv)
+       scopedVar <- lookupVar varName tistate
+       let varTV = scTypeVar scopedVar
+       let (tv, tistate1) = register expr tistate
+       let rule = if scIsGeneric scopedVar
+                  then setEqual varTV tv
+                  else instanceOf varTV tv
+       return (addRule rule tistate1, varTV)
      (ExpressionParen expr)              -> ti tistate expr
      (ExpressionFnCall fname exprs)      -> undefined
      (ExpressionBinary op left right)    -> undefined
