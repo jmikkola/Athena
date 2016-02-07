@@ -138,6 +138,15 @@ register tistate te tvar =
   let reg' = Map.insert te tvar (tireg tistate)
   in tistate { tireg=reg' }
 
+lookupTE :: TIState -> TE -> Maybe TypeVar
+lookupTE tistate te = Map.lookup te (tireg tistate)
+
+-- this is mostly just here to make lookupTE useable within the Monad
+requireTEVar :: TIState -> TE -> ErrorS TypeVar
+requireTEVar tistate te = case lookupTE tistate te of
+  Nothing -> Left $ "Could not find type var for: " ++ show te
+  Just tv -> Right tv
+
 lookupVar :: String -> TIState -> ErrorS (ScopedVar)
 lookupVar varName tistate =
   case Map.lookup varName (current $ tiscopes tistate) of

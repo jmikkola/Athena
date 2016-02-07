@@ -10,7 +10,9 @@ import Test.Framework (defaultMain)
 
 import TestUtil ( asGroup )
 
+import Parse ( LiteralValue (..) )
 import TypeInference
+import InferExpression
 
 main = defaultMain $
        asGroup [ ("getTypeForVar", testGetTypeForVar)
@@ -18,6 +20,7 @@ main = defaultMain $
                , ("equalityPairsFromSet", testEqualityPairsFromSet)
                , ("non-generic inference", testNonGeneric)
                , ("generic inference", testGenericTI)
+               , ("expression inferences", testExprTI)
                ]
 
 emptyResult :: InfResult
@@ -159,3 +162,15 @@ testEqualityPairsFromSet =
            , "multiple elems" ~: equalityPairsFromSet (Set.fromList [1, 2, 3, 4]) ~?=
              [(2, 1), (3, 1), (4, 1)]
            ]
+
+testExprTI =
+  TestList [ "literal" ~: tiLiteralExpr
+           ]
+
+tiLiteralExpr =
+  let te = TELit (Constructor "Int" []) (LiteralInt 123)
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState te
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= Right (Just (Constructor "Int" []))
