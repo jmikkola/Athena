@@ -166,6 +166,7 @@ gatherRules tistate te = case te of
     let tistate2 = specifyType tv tp tistate1
     let tistate3 = register tistate2 te tv
     return (tv, tistate3)
+
   (TEVar name)       -> do
     var <- lookupVar name tistate
     let tvar = scTypeVar var
@@ -177,11 +178,13 @@ gatherRules tistate te = case te of
            in return (gtv, tistate3)
       else let tistate1 = register tistate te tvar
            in return (tvar, tistate1)
+
   (TELit tp _)       ->
     let (tistate1, tv) = nextTV tistate
         tistate2 = register tistate1 te tv
         tistate3 = specifyType tv tp tistate2
     in return (tv, tistate3)
+
   (TEAp fnexp args)  -> do
     let (tistate1, tv) = nextTV tistate
     (fnTV, tistate2) <- gatherRules tistate1 fnexp
@@ -190,18 +193,33 @@ gatherRules tistate te = case te of
     let fnType = TypeNode { constructor=fnName, components=(argTVs ++ [tv]) }
     let tistate4 = addRule tistate3 (specify fnTV fnType)
     return (tv, tistate4)
+
   (TELet binds body) -> do
     let (tistate1, tv) = nextTV tistate
     let (bindNames, bindExprs) = unzip binds
     (bindTVs, tistate2) <- gatherRuleList tistate1 bindExprs
+    let newScope = zipWith (\name tv -> (name, ScopedVar tv True)) bindNames bindTVs
+    let tistate3 = createScope tistate2 newScope
+    (bodyTV, tistate4) <- gatherRules tistate3 body
+    let tistate5 = addRule tistate4 (setEqual bodyTV tv)
+    let tistate6 = endScope tistate5
+    return (tv, tistate6)
+
+  (TELam args body)  -> do
+    let (tistate1, tv) = nextTV tistate
+    let (tistate2, argTVs) = nextTVs tistate (length args)
     -- False because this doesn't support 2nd order polymorphism
-    let newScope = zipWith (\name tv -> (name, ScopedVar tv False)) bindNames bindTVs
-    let tistate3 = createScope tistate1 newScope
-    -- todo: type the body in the scope
-    -- todo: set the type of the body to equal TV
-    -- todo: pop the scope
+    let newScope = zipWith (\name tv -> (name, ScopedVar tv False)) args argTVs
+    let tistate3 = createScope tistate2 newScope
+    (bodyTV, tistate4) <- gatherRules tistate3 body
+    let fnName = makeFnName (length args)
+    let thisType = TypeNode { constructor=fnName, components=(argTVs ++ [bodyTV]) }
+    let tistate5 = addRule tistate4 (specify tv thisType)
+    let tistate' = endScope tistate5
+    return (tv, tistate')
+
+  (TEIf test ifCase elseCase) -> do
     return undefined
-  _ -> undefined
 
 makeFnName :: Int -> String
 makeFnName numArgs = "Fn_" ++ show numArgs
