@@ -51,6 +51,15 @@ emptyScope = Scopes { current = Map.empty, parents = [] }
 pushScope :: Scopes -> Scopes
 pushScope (Scopes cur pts) = Scopes { current = cur, parents = cur:pts }
 
+addToScope :: Scopes -> Scope -> Scopes
+addToScope (Scopes cur pts) scope =
+  let cur' = Map.union scope cur
+  in Scopes cur' pts
+
+popScope :: Scopes -> Scopes
+popScope (Scopes _ [])     = error "Bug: trying to pop scope too many times"
+popScope (Scopes _ (s:ss)) = Scopes s ss
+
 
 -- TE = Typeable Expression
 data TE = TETyped Type TE
@@ -88,10 +97,28 @@ defaultCtors = Map.fromList
 startingState :: TIState
 startingState = TIState emptyRules [1..] emptyScope emptyRegistry defaultCtors
 
+createScope :: TIState -> [(String, ScopedVar)] -> TIState
+createScope tistate scopedVars =
+  let scopes = pushScope (tiscopes tistate)
+      scopes' = addToScope scopes (Map.fromList scopedVars)
+  in tistate { tiscopes=scopes }
+
+endScope :: TIState -> TIState
+endScope tistate =
+  let scopes = popScope (tiscopes tistate)
+  in tistate { tiscopes=scopes }
+
 nextTV :: TIState -> (TIState, TypeVar)
 nextTV tistate =
   let (tvar:vargen) = tivargen tistate
   in (tistate { tivargen=vargen }, tvar)
+
+nextTVs :: TIState -> Int -> (TIState, [TypeVar])
+nextTVs tistate n =
+  let vargen = tivargen tistate
+      vars = take n vargen
+      vargen' = drop n vargen
+  in (tistate { tivargen=vargen' }, vars)
 
 addRule :: TIState -> (Rules -> Rules) -> TIState
 addRule tistate rule =
@@ -150,7 +177,38 @@ gatherRules tistate te = case te of
            in return (gtv, tistate3)
       else let tistate1 = register tistate te tvar
            in return (tvar, tistate1)
+  (TELit tp _)       ->
+    let (tistate1, tv) = nextTV tistate
+        tistate2 = register tistate1 te tv
+        tistate3 = specifyType tv tp tistate2
+    in return (tv, tistate3)
+  (TEAp fnexp args)  -> do
+    let (tistate1, tv) = nextTV tistate
+    (fnTV, tistate2) <- gatherRules tistate1 fnexp
+    (argTVs, tistate3) <- gatherRuleList tistate2 args
+    let fnName = makeFnName (length args)
+    let fnType = TypeNode { constructor=fnName, components=(argTVs ++ [tv]) }
+    let tistate4 = addRule tistate3 (specify fnTV fnType)
+    return (tv, tistate4)
+  (TELet binds body) -> do
+    let (tistate1, tv) = nextTV tistate
+    let (bindNames, bindExprs) = unzip binds
+    (bindTVs, tistate2) <- gatherRuleList tistate1 bindExprs
+    -- False because this doesn't support 2nd order polymorphism
+    let newScope = zipWith (\name tv -> (name, ScopedVar tv False)) bindNames bindTVs
+    let tistate3 = createScope tistate1 newScope
+    -- todo: type the body in the scope
+    -- todo: set the type of the body to equal TV
+    -- todo: pop the scope
+    return undefined
   _ -> undefined
+
+makeFnName :: Int -> String
+makeFnName numArgs = "Fn_" ++ show numArgs
+
+gatherRuleList :: TIState -> [TE] -> ErrorS ([TypeVar], TIState)
+gatherRuleList = undefined
+
 {-
 
 data TypeEntry = LitEntry LiteralValue
