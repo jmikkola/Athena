@@ -207,7 +207,11 @@ makeFnName :: Int -> String
 makeFnName numArgs = "Fn_" ++ show numArgs
 
 gatherRuleList :: TIState -> [TE] -> ErrorS ([TypeVar], TIState)
-gatherRuleList = undefined
+gatherRuleList tistate exprs = grl exprs tistate []
+  where grl []       st vars = return (reverse vars, st)
+        grl (te:tes) st vars = do
+          (tv, tistate) <- gatherRules st te
+          grl tes tistate (tv : vars)
 
 {-
 
