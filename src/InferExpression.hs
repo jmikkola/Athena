@@ -35,6 +35,9 @@ import TypeInference
   , instanceOf
   )
 
+boolTN :: TypeNode
+boolTN = TypeNode { constructor = "Bool", components = [] }
+
 data ScopedVar = ScopedVar { scTypeVar   :: TypeVar
                            , scIsGeneric :: Bool
                            }
@@ -125,6 +128,11 @@ addRule tistate rule =
   let rules' = rule (tirules tistate)
   in tistate { tirules=rules' }
 
+addRules :: TIState -> [Rules -> Rules] -> TIState
+addRules tistate rules =
+  let rules' = foldl (\rs r -> r rs) (tirules tistate) rules
+  in tistate { tirules=rules' }
+
 register :: TIState -> TE -> TypeVar -> TIState
 register tistate te tvar =
   let reg' = Map.insert te tvar (tireg tistate)
@@ -207,19 +215,28 @@ gatherRules tistate te = case te of
 
   (TELam args body)  -> do
     let (tistate1, tv) = nextTV tistate
-    let (tistate2, argTVs) = nextTVs tistate (length args)
+    let tistate2 = register tistate1 te tv
+    let (tistate3, argTVs) = nextTVs tistate2 (length args)
     -- False because this doesn't support 2nd order polymorphism
     let newScope = zipWith (\name tv -> (name, ScopedVar tv False)) args argTVs
-    let tistate3 = createScope tistate2 newScope
-    (bodyTV, tistate4) <- gatherRules tistate3 body
+    let tistate4 = createScope tistate3 newScope
+    (bodyTV, tistate5) <- gatherRules tistate4 body
     let fnName = makeFnName (length args)
     let thisType = TypeNode { constructor=fnName, components=(argTVs ++ [bodyTV]) }
-    let tistate5 = addRule tistate4 (specify tv thisType)
-    let tistate' = endScope tistate5
-    return (tv, tistate')
+    let tistate6 = addRule tistate5 (specify tv thisType)
+    let tistate7 = endScope tistate6
+    return (tv, tistate7)
 
   (TEIf test ifCase elseCase) -> do
-    return undefined
+    let (tistate1, tv) = nextTV tistate
+    let tistate2 = register tistate1 te tv
+    (testTV, tistate3) <- gatherRules tistate2 test
+    (ifTV, tistate4) <- gatherRules tistate3 ifCase
+    (elseTV, tistate5) <- gatherRules tistate4 elseCase
+    let tistate6 = addRules tistate5 [ specify testTV boolTN
+                                     , setEqual tv ifTV
+                                     , setEqual tv elseTV ]
+    return (tv, tistate6)
 
 makeFnName :: Int -> String
 makeFnName numArgs = "Fn_" ++ show numArgs
