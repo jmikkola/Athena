@@ -28,6 +28,7 @@ import TypeInference
   , VarGen
   , TypeNode (..)
   , TypeVar
+  , Type (..)
   , emptyRules
   , setEqual
   , specify
@@ -49,6 +50,108 @@ emptyScope = Scopes { current = Map.empty, parents = [] }
 
 pushScope :: Scopes -> Scopes
 pushScope (Scopes cur pts) = Scopes { current = cur, parents = cur:pts }
+
+
+-- TE = Typeable Expression
+data TE = TETyped Type TE
+        | TEVar String
+        | TELit Type LiteralValue
+          -- function expr, arg exprs
+        | TEAp TE [TE]
+          -- bindings, body
+        | TELet [(String, TE)] TE
+          -- arg names, body
+        | TELam [String] TE
+          -- test, if case, else case
+        | TEIf TE TE TE
+        deriving (Eq, Ord, Show)
+
+type Registry = Map TE TypeVar
+
+emptyRegistry :: Registry
+emptyRegistry = Map.empty
+
+data TIState = TIState { tirules  :: Rules
+                       , tivargen :: VarGen
+                       , tiscopes :: Scopes
+                       , tireg    :: Registry
+                       , tictors  :: Map String String
+                       }
+             deriving (Show)
+
+defaultCtors = Map.fromList
+               [ ("True", "Bool")
+               , ("False", "Bool")
+               , ("List", "List")
+               ]
+
+startingState :: TIState
+startingState = TIState emptyRules [1..] emptyScope emptyRegistry defaultCtors
+
+nextTV :: TIState -> (TIState, TypeVar)
+nextTV tistate =
+  let (tvar:vargen) = tivargen tistate
+  in (tistate { tivargen=vargen }, tvar)
+
+addRule :: TIState -> (Rules -> Rules) -> TIState
+addRule tistate rule =
+  let rules' = rule (tirules tistate)
+  in tistate { tirules=rules' }
+
+register :: TIState -> TE -> TypeVar -> TIState
+register tistate te tvar =
+  let reg' = Map.insert te tvar (tireg tistate)
+  in tistate { tireg=reg' }
+
+lookupVar :: String -> TIState -> ErrorS (ScopedVar)
+lookupVar varName tistate =
+  case Map.lookup varName (current $ tiscopes tistate) of
+    Nothing -> Left $ "Variable " ++ varName ++ " not found in scope " ++ (show $ tiscopes tistate)
+    Just sv -> Right sv
+
+buildTns :: TIState -> [Type] -> (TIState, [TypeVar])
+buildTns tistate subtypes = build_ subtypes tistate []
+  where build_ []     st vars = (st, reverse vars)
+        build_ (t:ts) st vars =
+          let (tistate', tv) = buildTn st t
+          in build_ ts tistate' (tv:vars)
+
+buildTn :: TIState -> Type -> (TIState, TypeVar)
+buildTn tistate (Var tv) = (tistate, tv)
+buildTn tistate (Constructor name subtypes) =
+  let (tistate1, subtypeVars) = buildTns tistate subtypes
+      (tistate2, tv) = nextTV tistate1
+      typeNode = TypeNode { constructor=name, components=subtypeVars }
+      tistate3 = addRule tistate2 (specify tv typeNode)
+  in (tistate3, tv)
+
+specifyType :: TypeVar -> Type -> TIState -> TIState
+specifyType tv tp tistate =
+  let (tistate', tpVar) = buildTn tistate tp
+      rules = tirules tistate'
+      rules' = setEqual tv tpVar rules
+  in tistate' { tirules = rules' }
+
+gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
+gatherRules tistate te = case te of
+  (TETyped tp inner) -> do
+    (tv, tistate1) <- gatherRules tistate inner
+    let tistate2 = specifyType tv tp tistate1
+    let tistate3 = register tistate2 te tv
+    return (tv, tistate3)
+  (TEVar name)       -> do
+    var <- lookupVar name tistate
+    let tvar = scTypeVar var
+    if scIsGeneric var
+      then let (tistate1, gtv) = nextTV tistate
+               tistate2 = register tistate1 te gtv
+               -- here's where generics happen
+               tistate3 = addRule tistate2 (instanceOf gtv tvar)
+           in return (gtv, tistate3)
+      else let tistate1 = register tistate te tvar
+           in return (tvar, tistate1)
+  _ -> undefined
+{-
 
 data TypeEntry = LitEntry LiteralValue
                | ExprEntry Expression
@@ -86,11 +189,6 @@ register a tistate =
   let (tvar:vargen) = tivargen tistate
       registry = Map.insert (asEntry a) tvar (tireg tistate)
   in (tvar, tistate { tivargen=vargen, tireg=registry })
-
-nextTV :: TIState -> (TypeVar, TIState)
-nextTV tistate =
-  let (tvar:vargen) = tivargen tistate
-  in (tvar, tistate { tivargen=vargen })
 
 lookupVar :: String -> TIState -> ErrorS (ScopedVar)
 lookupVar varName tistate =
@@ -232,3 +330,4 @@ tiFnCall tistate fncall fnname args = do
 
 tiLet :: TIState -> String -> Expression -> ErrorS (TIState, TypeVar)
 tiLet = undefined
+-}
