@@ -176,6 +176,17 @@ specifyType tv tp tistate =
       rules' = setEqual tv tpVar rules
   in tistate' { tirules = rules' }
 
+class ToTE a where
+  toTE :: a -> TE
+
+instance ToTE LiteralValue where
+  toTE l = TELit tp l
+    where tp = case l of
+                 (LiteralFloat _)  -> Constructor "Float" []
+                 (LiteralInt _)    -> Constructor "Int" []
+                 (LiteralString _) -> Constructor "String" []
+                 (LiteralChar _)   -> Constructor "Char" []
+
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = case te of
   (TETyped tp inner) -> do

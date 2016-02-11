@@ -165,12 +165,36 @@ testEqualityPairsFromSet =
 
 testExprTI =
   TestList [ "literal" ~: tiLiteralExpr
+           , "typed expr" ~: tiTypedExpr
+           , "typed expr mismatch" ~: tiTypedExprMismatch
            ]
 
+intType = Constructor "Int" []
+floatType = Constructor "Float" []
+boolType = Constructor "Bool" []
+intTE = TELit intType (LiteralInt 123)
+
 tiLiteralExpr =
-  let te = TELit (Constructor "Int" []) (LiteralInt 123)
+  let inferredType = do
+        (tevar, tistate) <- gatherRules startingState intTE
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= Right (Just intType)
+
+tiTypedExpr =
+  let te = TETyped intType intTE
       inferredType = do
         (tevar, tistate) <- gatherRules startingState te
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
-  in inferredType ~?= Right (Just (Constructor "Int" []))
+  in inferredType ~?= Right (Just intType)
+
+tiTypedExprMismatch =
+  let te = TETyped floatType intTE
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState te
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in case inferredType of
+      Left err -> return ()
+      Right x  -> assertFailure (show x)
