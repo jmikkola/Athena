@@ -46,7 +46,7 @@ type Scope = Map String ScopedVar
 data Scopes = Scopes { current :: Scope
                      , parents :: [Scope]
                      }
-            deriving (Show)
+            deriving (Eq, Show)
 
 emptyScope :: Scopes
 emptyScope = Scopes { current = Map.empty, parents = [] }
@@ -89,7 +89,7 @@ data TIState = TIState { tirules  :: Rules
                        , tireg    :: Registry
                        , tictors  :: Map String String
                        }
-             deriving (Show)
+             deriving (Eq, Show)
 
 defaultCtors = Map.fromList
                [ ("True", "Bool")

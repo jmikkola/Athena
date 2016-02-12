@@ -14,6 +14,8 @@ import Parse ( LiteralValue (..) )
 import TypeInference
 import InferExpression
 
+-- import Debug.Trace (trace)
+
 main = defaultMain $
        asGroup [ ("getTypeForVar", testGetTypeForVar)
                , ("getFullTypeForVar", testGetFullTypeForVar)
@@ -167,6 +169,8 @@ testExprTI =
   TestList [ "literal" ~: tiLiteralExpr
            , "typed expr" ~: tiTypedExpr
            , "typed expr mismatch" ~: tiTypedExprMismatch
+           , "creates new scope" ~: testCreateScope
+           , "application" ~: tiApplication
            ]
 
 intType = Constructor "Int" []
@@ -198,3 +202,21 @@ tiTypedExprMismatch =
   in case inferredType of
       Left err -> return ()
       Right x  -> assertFailure (show x)
+
+testCreateScope =
+  let fnInScope = 123
+      newScope = createScope startingState [("times2", ScopedVar fnInScope True)]
+      expectedScopes = Scopes { current=(Map.fromList [("times2", ScopedVar fnInScope True)])
+                              , parents=[] }
+      expected = startingState { tiscopes=expectedScopes }
+  in newScope ~?= expected
+
+tiApplication =
+  let fnInScope = 123
+      tistate = createScope startingState [("times2", ScopedVar fnInScope True)]
+      te = TEAp (TEVar "times2") [intTE]
+      inferredType = do
+        (tevar, tistate') <- gatherRules tistate te
+        inferResult <- infer (tirules tistate')
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= Right Nothing
