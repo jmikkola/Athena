@@ -171,6 +171,7 @@ testExprTI =
            , "lookup var" ~: testLookupVar
            , "creates new scope" ~: testCreateScope
            , "application" ~: tiApplication
+           , "let block" ~: tiLet
            ]
 
 intType = Constructor "Int" []
@@ -233,3 +234,11 @@ tiApplication =
         inferResult <- infer (tirules tistate')
         return $ getFullTypeForVar inferResult tevar
   in inferredType ~?= Right Nothing
+
+tiLet =
+  let letBlock = TELet [("x", intTE)] (TEVar "x")
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState letBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= (Right (Just intType))
