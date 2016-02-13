@@ -172,6 +172,7 @@ testExprTI =
            , "creates new scope" ~: testCreateScope
            , "application" ~: tiApplication
            , "let block" ~: tiLet
+           , "multi-statement let" ~: tiMultiLet
            ]
 
 intType = Constructor "Int" []
@@ -237,6 +238,14 @@ tiApplication =
 
 tiLet =
   let letBlock = TELet [("x", intTE)] (TEVar "x")
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState letBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= (Right (Just intType))
+
+tiMultiLet =
+  let letBlock = TELet [ ("x", TEVar "y"), ("y", intTE) ] (TEVar "x")
       inferredType = do
         (tevar, tistate) <- gatherRules startingState letBlock
         inferResult <- infer (tirules tistate)

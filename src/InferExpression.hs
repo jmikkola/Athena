@@ -225,15 +225,22 @@ gatherRules tistate te = case te of
     return (tv, tistate4)
 
   (TELet binds body) -> do
-    let (tistate1, tv) = nextTV tistate
     let (bindNames, bindExprs) = unzip binds
-    (bindTVs, tistate2) <- gatherRuleList tistate1 bindExprs
+    let (tistate1, tv) = nextTV tistate
+    -- Create a new scope with the bindings added
+    -- (the new bindings are mapped to new type variables)
+    let (tistate2, bindTVs) = nextTVs tistate1 (length binds)
     let newScope = zipWith (\name tv -> (name, ScopedVar tv True)) bindNames bindTVs
     let tistate3 = createScope tistate2 newScope
-    (bodyTV, tistate4) <- gatherRules tistate3 body
-    let tistate5 = addRule tistate4 (setEqual bodyTV tv)
-    let tistate6 = endScope tistate5
-    return (tv, tistate6)
+    -- Gather the rules under that scope
+    (boundTVs, tistate4) <- gatherRuleList tistate3 bindExprs
+    (bodyTV, tistate5) <- gatherRules tistate4 body
+    -- Set those variables equal to the real things
+    let tistate6 = addRule tistate5 (setEqual bodyTV tv)
+    let tistate7 = addRules tistate6 (zipWith setEqual bindTVs boundTVs)
+    -- Close the scope
+    let tistate8 = endScope tistate7
+    return (tv, tistate8)
 
   (TELam args body)  -> do
     let (tistate1, tv) = nextTV tistate
