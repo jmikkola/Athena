@@ -75,7 +75,7 @@ type GenericRules = [(TypeVar, TypeVar)]
 data Rules = Rules { equalPairs :: EqualityRules
                    , specifiedTypes :: [(TypeVar, TypeNode)]
                    , genericRelations :: GenericRules }
-           deriving (Eq, Show)
+           deriving (Show)
 
 emptyRules :: Rules
 emptyRules = Rules [] [] []

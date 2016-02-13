@@ -46,7 +46,7 @@ type Scope = Map String ScopedVar
 data Scopes = Scopes { current :: Scope
                      , parents :: [Scope]
                      }
-            deriving (Eq, Show)
+            deriving (Show)
 
 emptyScope :: Scopes
 emptyScope = Scopes { current = Map.empty, parents = [] }
@@ -63,6 +63,8 @@ popScope :: Scopes -> Scopes
 popScope (Scopes _ [])     = error "Bug: trying to pop scope too many times"
 popScope (Scopes _ (s:ss)) = Scopes s ss
 
+scopeLookup :: String -> Scopes -> Maybe ScopedVar
+scopeLookup name scopes = Map.lookup name (current scopes)
 
 -- TE = Typeable Expression
 data TE = TETyped Type TE
@@ -89,7 +91,7 @@ data TIState = TIState { tirules  :: Rules
                        , tireg    :: Registry
                        , tictors  :: Map String String
                        }
-             deriving (Eq, Show)
+             deriving (Show)
 
 defaultCtors = Map.fromList
                [ ("True", "Bool")
@@ -104,7 +106,7 @@ createScope :: TIState -> [(String, ScopedVar)] -> TIState
 createScope tistate scopedVars =
   let scopes = pushScope (tiscopes tistate)
       scopes' = addToScope scopes (Map.fromList scopedVars)
-  in tistate { tiscopes=scopes }
+  in tistate { tiscopes=scopes' }
 
 endScope :: TIState -> TIState
 endScope tistate =

@@ -14,8 +14,6 @@ import Parse ( LiteralValue (..) )
 import TypeInference
 import InferExpression
 
--- import Debug.Trace (trace)
-
 main = defaultMain $
        asGroup [ ("getTypeForVar", testGetTypeForVar)
                , ("getFullTypeForVar", testGetFullTypeForVar)
@@ -169,6 +167,8 @@ testExprTI =
   TestList [ "literal" ~: tiLiteralExpr
            , "typed expr" ~: tiTypedExpr
            , "typed expr mismatch" ~: tiTypedExprMismatch
+           , "scope lookup" ~: testScopeLookup
+           , "lookup var" ~: testLookupVar
            , "creates new scope" ~: testCreateScope
            , "application" ~: tiApplication
            ]
@@ -203,13 +203,26 @@ tiTypedExprMismatch =
       Left err -> return ()
       Right x  -> assertFailure (show x)
 
+testScopeLookup =
+  let scopeVar = ScopedVar 123 True
+      scope = Map.fromList [("times2", scopeVar)]
+      scopes = Scopes { current=scope, parents=[] }
+      result = scopeLookup "times2" scopes
+  in result ~?= (Just scopeVar)
+
+testLookupVar =
+  let scopeVar = ScopedVar 123 True
+      scope = Map.fromList [("times2", scopeVar)]
+      scopes = Scopes { current=scope, parents=[] }
+      tistate = startingState { tiscopes=scopes }
+      result = lookupVar "times2" tistate
+  in result ~?= (Right scopeVar)
+
 testCreateScope =
-  let fnInScope = 123
-      newScope = createScope startingState [("times2", ScopedVar fnInScope True)]
-      expectedScopes = Scopes { current=(Map.fromList [("times2", ScopedVar fnInScope True)])
-                              , parents=[] }
-      expected = startingState { tiscopes=expectedScopes }
-  in newScope ~?= expected
+  let scopeVar = ScopedVar 123 True
+      tistate = createScope startingState [("times2", scopeVar)]
+      result = lookupVar "times2" tistate
+  in result ~?= (Right scopeVar)
 
 tiApplication =
   let fnInScope = 123
