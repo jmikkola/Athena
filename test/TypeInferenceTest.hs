@@ -26,6 +26,9 @@ main = defaultMain $
 emptyResult :: InfResult
 emptyResult = (Map.empty, Map.empty)
 
+assertFails (Left _)  = return ()
+assertFails (Right x) = assertFailure (show x)
+
 nilTN = TypeNode "()" []
 strTN = TypeNode "String" []
 intTN = TypeNode "Int" []
@@ -176,11 +179,15 @@ testExprTI =
            , "lambda expression" ~: tiLambdaExpr
            , "let with lambda" ~: tiLetWithLambda
            , "let polymorphism" ~: tiLetPolymorphism
+           , "if statement" ~: tiIf
+           , "if statement - mismatch" ~: tiIfMismatch
+           , "if statement - not boolean" ~: tiIfNonBool
            ]
 
 intType = Constructor "Int" []
 floatType = Constructor "Float" []
 boolType = Constructor "Bool" []
+stringType = Constructor "String" []
 intTE = TELit intType (LiteralInt 123)
 
 tiLiteralExpr =
@@ -204,9 +211,7 @@ tiTypedExprMismatch =
         (tevar, tistate) <- gatherRules startingState te
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
-  in case inferredType of
-      Left err -> return ()
-      Right x  -> assertFailure (show x)
+  in assertFails inferredType
 
 testScopeLookup =
   let scopeVar = ScopedVar 123 True
@@ -280,3 +285,36 @@ tiLetPolymorphism =
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
   in inferredType ~?= (Right intType)
+
+tiIf =
+  -- TODO: using a LiteralInt is a bit of a hack because this doesn't properly support
+  -- record types yet.
+  let test = TELit boolType (LiteralInt 1)
+      ifCase = TELit stringType (LiteralString "foo")
+      elseCase = TELit stringType (LiteralString "bar")
+      ifBlock = TEIf test ifCase elseCase
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState ifBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= (Right stringType)
+
+tiIfMismatch =
+  let test = TELit boolType (LiteralInt 1)
+      ifCase = TELit stringType (LiteralString "foo")
+      ifBlock = TEIf test ifCase intTE
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState ifBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in assertFails inferredType
+
+tiIfNonBool =
+  let ifCase = TELit stringType (LiteralString "foo")
+      elseCase = TELit stringType (LiteralString "bar")
+      ifBlock = TEIf intTE ifCase elseCase
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState ifBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in assertFails inferredType
