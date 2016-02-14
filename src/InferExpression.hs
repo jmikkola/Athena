@@ -258,7 +258,40 @@ instance ToTE FunctionDef where
     return $ TELam (fnArgNames f) bodyExpr
 
 instance ToTE Block where
-  toTE blk = undefined
+  toTE (Block stmts) = buildFnBody stmts
+
+buildFnBody :: [Statement] -> ErrorS TE
+buildFnBody []          = return TENil
+buildFnBody (stmt:rest) = case stmt of
+  (StatementReturn expr)     ->
+    if null rest
+    then toTE expr
+    else Left ("Statements after a return: " ++ show rest)
+  (StatementExpr expr)         -> do
+    exprTE <- toTE expr
+    restTE <- buildFnBody rest
+    return $ TESeq exprTE restTE
+  (StatementLet var expr)      -> do
+    exprTE <- toTE expr
+    restTE <- buildFnBody rest
+    return $ TELet [(var, exprTE)] restTE
+  (StatementAssign var expr)   -> do
+    exprTE <- toTE expr
+    restTE <- buildFnBody rest
+    return $ TESeq (TESet var exprTE) restTE
+  (StatementIf test blk ep)   -> do
+    restTE <- buildFnBody rest
+    return undefined -- TODO: what if there is a return inside the block?
+  (StatementWhile test blk)   -> do
+    restTE <- buildFnBody rest
+    return undefined -- TODO: what if there is a return inside the block?
+  (StatementFor var test blk) -> do
+    restTE <- buildFnBody rest
+    return undefined -- TODO: what if there is a return inside the block?
+  (StatementFn funcDef)       -> do
+    funcBodyTE <- toTE funcDef
+    restTE <- buildFnBody rest
+    return $ TELet [(fnName funcDef, funcBodyTE)] restTE
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = case te of
@@ -341,10 +374,10 @@ gatherRules tistate te = case te of
   TENil                       -> do
     let (tistate1, tv) = nextTV tistate
     return (tv, addRule tistate1 (specify tv nilTypeNode))
-  (TESeq start result)       -> do
+  (TESeq start result)        -> do
     (_, tistate1) <- gatherRules tistate start
     gatherRules tistate1 result
-  (TESet name value)         -> do
+  (TESet name value)          -> do
     var <- lookupVar name tistate
     (valueTV, tistate1) <- gatherRules tistate value
     let tistate2 = addRule tistate1 (setEqual valueTV (scTypeVar var))
