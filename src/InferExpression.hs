@@ -1,6 +1,5 @@
 module InferExpression where
 
-import Control.Monad (foldM)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -93,6 +92,7 @@ data TIState = TIState { tirules  :: Rules
                        }
              deriving (Show)
 
+defaultCtors :: Map String String
 defaultCtors = Map.fromList
                [ ("True", "Bool")
                , ("False", "Bool")
@@ -188,6 +188,18 @@ instance ToTE LiteralValue where
                  (LiteralInt _)    -> Constructor "Int" []
                  (LiteralString _) -> Constructor "String" []
                  (LiteralChar _)   -> Constructor "Char" []
+
+instance ToTE Expression where
+  toTE (ExpressionLit l)               = toTE l
+  toTE (ExpressionVar v)               = TEVar v
+  toTE (ExpressionParen e)             = toTE e
+  -- TODO: change ExpressionFnCall to accept an expression as the function
+  toTE (ExpressionFnCall fnname exprs) = TEAp (TEVar fnname) (map toTE exprs)
+  toTE (ExpressionBinary op l r)       = TEAp (TEVar $ display op) (map toTE [l, r])
+  toTE (ExpressionUnary op e)          = TEAp (TEVar $ display op) [toTE e]
+  -- TDDO: This assumes that struct definitions register a function for each constructor
+  toTE (ExpressionStruct name exprs)   = TEAp (TEVar name) (map toTE exprs)
+  toTE (ExpressionIf test ifp elsep)   = TEIf (toTE test) (toTE ifp) (toTE elsep)
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = case te of
