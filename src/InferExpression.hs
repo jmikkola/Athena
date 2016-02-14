@@ -15,7 +15,7 @@ import Parse
   , Statement (..)
   , FunctionDef (..)
   , FnArg
-  , TypeDef
+  , TypeDef (..)
   , Block (..)
   , ElsePart
   , MatchPattern
@@ -179,10 +179,10 @@ specifyType tv tp tistate =
   in tistate' { tirules = rules' }
 
 class ToTE a where
-  toTE :: a -> TE
+  toTE :: a -> ErrorS TE
 
 instance ToTE LiteralValue where
-  toTE l = TELit tp l
+  toTE l = return $ TELit tp l
     where tp = case l of
                  (LiteralFloat _)  -> Constructor "Float" []
                  (LiteralInt _)    -> Constructor "Int" []
@@ -191,15 +191,46 @@ instance ToTE LiteralValue where
 
 instance ToTE Expression where
   toTE (ExpressionLit l)               = toTE l
-  toTE (ExpressionVar v)               = TEVar v
+  toTE (ExpressionVar v)               = return $ TEVar v
   toTE (ExpressionParen e)             = toTE e
   -- TODO: change ExpressionFnCall to accept an expression as the function
-  toTE (ExpressionFnCall fnname exprs) = TEAp (TEVar fnname) (map toTE exprs)
-  toTE (ExpressionBinary op l r)       = TEAp (TEVar $ display op) (map toTE [l, r])
-  toTE (ExpressionUnary op e)          = TEAp (TEVar $ display op) [toTE e]
+  toTE (ExpressionFnCall fnname exprs) = do
+    exprTEs <- mapM toTE exprs
+    return $ TEAp (TEVar fnname) exprTEs
+  toTE (ExpressionBinary op l r)       = do
+    exprTEs <- mapM toTE [l, r]
+    return $ TEAp (TEVar $ display op) exprTEs
+  toTE (ExpressionUnary op e)          = do
+    exprTE <- toTE e
+    return $ TEAp (TEVar $ display op) [exprTE]
   -- TDDO: This assumes that struct definitions register a function for each constructor
-  toTE (ExpressionStruct name exprs)   = TEAp (TEVar name) (map toTE exprs)
-  toTE (ExpressionIf test ifp elsep)   = TEIf (toTE test) (toTE ifp) (toTE elsep)
+  toTE (ExpressionStruct name exprs)   = do
+    exprTEs <- mapM toTE exprs
+    return $ TEAp (TEVar name) exprTEs
+  toTE (ExpressionIf test ifp elsep)   = do
+    testTE <- toTE test
+    ifpTE <- toTE ifp
+    elsepTE <- toTE elsep
+    return $ TEIf testTE ifpTE elsepTE
+
+{-
+instance ToTE Statement where
+  toTE (StatementExpr expr) = toTE expr
+  -- arg, this is where it stops mapping nicely
+  toTE (StatementLet var expr) = undefined
+  toTE _ = undefined
+-}
+
+newtype TopLevelStatement = TopLevelStatement Statement
+
+instance ToTE TopLevelStatement where
+  toTE (TopLevelStatement stmt) = case stmt of
+    (StatementReturn _) -> Left ("Can't use a return statement at the top-level: " ++ show stmt)
+    (StatementExpr   e) -> toTE e
+    _ -> undefined
+
+-- instance ToTE FunctionDef where
+
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = case te of
