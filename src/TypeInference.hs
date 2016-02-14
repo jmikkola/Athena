@@ -23,7 +23,8 @@ data TypeNode = TypeNode { constructor :: String
               deriving (Show, Eq, Ord)
 
 -- External representation of a type
-data Type = Constructor String [Type] | Var TypeVar
+data Type = Constructor String [Type]
+          | Var TypeVar
           deriving (Show, Eq, Ord)
 
 type VarTypes = Map TypeVar TypeNode
@@ -61,13 +62,12 @@ applySubs subs var = case Map.lookup var subs of
 getTypeForVar :: InfResult -> TypeVar -> Maybe TypeNode
 getTypeForVar (types, subs) var = Map.lookup (applySubs subs var) types
 
-getFullTypeForVar :: InfResult -> TypeVar -> Maybe Type
+getFullTypeForVar :: InfResult -> TypeVar -> Type
 getFullTypeForVar ir var =
-  let fullTypeOrVar v = fromMaybe (Var v) (getFullTypeForVar ir v)
-  in do
-    node <- getTypeForVar ir var
-    let subtypes = map fullTypeOrVar (components node)
-    return $ Constructor (constructor node) subtypes
+  case getTypeForVar ir var of
+   (Just node) -> let subtypes = map (getFullTypeForVar ir) (components node)
+                 in Constructor (constructor node) subtypes
+   Nothing     -> Var var
 
 type EqualityRules = [(TypeVar, TypeVar)]
 type GenericRules = [(TypeVar, TypeVar)]

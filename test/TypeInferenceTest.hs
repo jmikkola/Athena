@@ -45,11 +45,11 @@ testGetTypeForVar =
 
 testGetFullTypeForVar =
   TestList [ "simple type" ~: getFullTypeForVar exampleResult1 1 ~?=
-             (Just $ Constructor "String" [])
+             (Constructor "String" [])
            , "complex with var" ~: getFullTypeForVar exampleResult1 102 ~?=
-             (Just $ Constructor "Set" [Var 10])
+             (Constructor "Set" [Var 10])
            , "complex with inner"~: getFullTypeForVar exampleResult1 101 ~?=
-             (Just $ Constructor "List" [Constructor "String" []]) ]
+             (Constructor "List" [Constructor "String" []]) ]
 
 doInfer :: [Rules -> Rules] -> ErrorS InfResult
 doInfer = infer . makeRules
@@ -185,7 +185,7 @@ tiLiteralExpr =
         (tevar, tistate) <- gatherRules startingState intTE
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
-  in inferredType ~?= Right (Just intType)
+  in inferredType ~?= (Right intType)
 
 tiTypedExpr =
   let te = TETyped intType intTE
@@ -193,7 +193,7 @@ tiTypedExpr =
         (tevar, tistate) <- gatherRules startingState te
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
-  in inferredType ~?= Right (Just intType)
+  in inferredType ~?= (Right intType)
 
 tiTypedExprMismatch =
   let te = TETyped floatType intTE
@@ -234,7 +234,7 @@ tiApplication =
         (tevar, tistate') <- gatherRules tistate te
         inferResult <- infer (tirules tistate')
         return $ getFullTypeForVar inferResult tevar
-  in inferredType ~?= Right Nothing
+  in inferredType ~?= Right (Var 1)
 
 tiLet =
   let letBlock = TELet [("x", intTE)] (TEVar "x")
@@ -242,7 +242,7 @@ tiLet =
         (tevar, tistate) <- gatherRules startingState letBlock
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
-  in inferredType ~?= (Right (Just intType))
+  in inferredType ~?= (Right intType)
 
 tiMultiLet =
   let letBlock = TELet [ ("x", TEVar "y"), ("y", intTE) ] (TEVar "x")
@@ -250,4 +250,4 @@ tiMultiLet =
         (tevar, tistate) <- gatherRules startingState letBlock
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
-  in inferredType ~?= (Right (Just intType))
+  in inferredType ~?= (Right intType)
