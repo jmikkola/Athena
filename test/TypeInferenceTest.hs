@@ -182,6 +182,8 @@ testExprTI =
            , "if statement" ~: tiIf
            , "if statement - mismatch" ~: tiIfMismatch
            , "if statement - not boolean" ~: tiIfNonBool
+           , "mutual recursion" ~: tiMutualRecursion
+           , "generic mutual recursion" ~: tiGenMutualRecursion
            ]
 
 intType = Constructor "Int" []
@@ -318,3 +320,31 @@ tiIfNonBool =
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
   in assertFails inferredType
+
+tiMutualRecursion =
+  let test = TELit boolType (LiteralInt 1)
+      ifCase = intTE
+      elseCase = TEAp (TEVar "g") []
+      fLambda = TELam [] (TEIf test ifCase elseCase)
+      gLambda = TELam [] (TEAp  (TEVar "f") [])
+      letBlock = TELet [("f", fLambda), ("g", gLambda)] (TEVar "f")
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState letBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= (Right $ Constructor "Fn_0" [intType])
+
+
+tiGenMutualRecursion =
+  let test = TELit boolType (LiteralInt 1)
+      ifCase = TEVar "x"
+      elseCase = TEAp (TEVar "g") [TEVar "x"]
+      fLambda = TELam ["x"] (TEIf test ifCase elseCase)
+      gLambda = TELam ["y"] (TEAp  (TEVar "f") [TEVar "y"])
+      letBlock = TELet [("f", fLambda), ("g", gLambda)] (TEVar "g")
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState letBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  -- TODO: find a better way of testing the type variables in the returned function
+  in inferredType ~?= (Right $ Constructor "Fn_1" [Var 13, Var 13])
