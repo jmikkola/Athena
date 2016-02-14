@@ -173,6 +173,7 @@ testExprTI =
            , "application" ~: tiApplication
            , "let block" ~: tiLet
            , "multi-statement let" ~: tiMultiLet
+           , "lambda expression" ~: tiLambdaExpr
            ]
 
 intType = Constructor "Int" []
@@ -251,3 +252,11 @@ tiMultiLet =
         inferResult <- infer (tirules tistate)
         return $ getFullTypeForVar inferResult tevar
   in inferredType ~?= (Right intType)
+
+tiLambdaExpr =
+  let lambdaExpr = TELam ["x"] (TEVar "x")
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState lambdaExpr
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= (Right $ Constructor "Fn_1" [Var 2, Var 2])
