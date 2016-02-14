@@ -1,5 +1,6 @@
 module InferExpression where
 
+import Control.Monad (foldM)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -20,6 +21,8 @@ import Parse
   , ElsePart
   , MatchPattern
   , display
+  , fnArgNames
+  , fnName
   )
 import TypeInference
   ( Rules
@@ -73,6 +76,12 @@ data TE = TETyped Type TE
         | TEAp TE [TE]
           -- bindings, body
         | TELet [(String, TE)] TE
+          -- var name (existing), value
+        | TESet String TE
+          -- sequence two expressions, evalutate to the last
+        | TESeq TE TE
+          -- doesn't evaluate to anything:
+        | TENil
           -- arg names, body
         | TELam [String] TE
           -- test, if case, else case
@@ -98,6 +107,9 @@ defaultCtors = Map.fromList
                , ("False", "Bool")
                , ("List", "List")
                ]
+
+nilTypeNode :: TypeNode
+nilTypeNode = TypeNode "()" []
 
 startingState :: TIState
 startingState = TIState emptyRules [1..] emptyScope emptyRegistry defaultCtors
@@ -213,24 +225,40 @@ instance ToTE Expression where
     elsepTE <- toTE elsep
     return $ TEIf testTE ifpTE elsepTE
 
-{-
-instance ToTE Statement where
-  toTE (StatementExpr expr) = toTE expr
-  -- arg, this is where it stops mapping nicely
-  toTE (StatementLet var expr) = undefined
-  toTE _ = undefined
--}
+data TopLevel = TopLevel [Statement]
 
-newtype TopLevelStatement = TopLevelStatement Statement
+instance ToTE TopLevel where
+  toTE (TopLevel stmts) = do
+    letBindings <- foldM gatherBindings Map.empty stmts
+    let body = undefined -- well fuck, what is the body?
+    return $ TELet (Map.toList letBindings) body
 
-instance ToTE TopLevelStatement where
-  toTE (TopLevelStatement stmt) = case stmt of
-    (StatementReturn _) -> Left ("Can't use a return statement at the top-level: " ++ show stmt)
-    (StatementExpr   e) -> toTE e
-    _ -> undefined
+gatherBindings :: Map String TE -> Statement -> ErrorS (Map String TE)
+gatherBindings existing stmt = case stmt of
+  (StatementLet varName expr) -> do
+    te <- toTE expr
+    addBinding existing varName te
+  (StatementFn funcDef)      -> do
+    let name = fnName funcDef
+    te <- toTE funcDef
+    addBinding existing name te
+  _                          -> Left ("Statement not allowed at top level: " ++ show stmt)
 
--- instance ToTE FunctionDef where
+addBinding :: Map String TE -> String -> TE -> ErrorS (Map String TE)
+addBinding existing name te = case Map.lookup name existing of
+  Nothing  -> return $ Map.insert name te existing
+  (Just x) -> Left ("Duplicate binding for " ++ name ++ ": " ++ show x ++ " and " ++ show te)
 
+instance ToTE FunctionDef where
+  -- TODO: read type expressions
+  toTE f = do
+    bodyExpr <- case f of
+      (FunctionDef _ _ _ blk) -> toTE blk
+      (ShortFn _ _ _ expr)    -> toTE expr
+    return $ TELam (fnArgNames f) bodyExpr
+
+instance ToTE Block where
+  toTE blk = undefined
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = case te of
@@ -309,6 +337,19 @@ gatherRules tistate te = case te of
                                      , setEqual tv ifTV
                                      , setEqual tv elseTV ]
     return (tv, tistate6)
+
+  TENil                       -> do
+    let (tistate1, tv) = nextTV tistate
+    return (tv, addRule tistate1 (specify tv nilTypeNode))
+  (TESeq start result)       -> do
+    (_, tistate1) <- gatherRules tistate start
+    gatherRules tistate1 result
+  (TESet name value)         -> do
+    var <- lookupVar name tistate
+    (valueTV, tistate1) <- gatherRules tistate value
+    let tistate2 = addRule tistate1 (setEqual valueTV (scTypeVar var))
+    -- Assume that the parser will never allow an assignment to be used in an expression:
+    return (valueTV, tistate2)
 
 makeFnName :: Int -> String
 makeFnName numArgs = "Fn_" ++ show numArgs
