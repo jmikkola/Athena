@@ -175,6 +175,7 @@ testExprTI =
            , "multi-statement let" ~: tiMultiLet
            , "lambda expression" ~: tiLambdaExpr
            , "let with lambda" ~: tiLetWithLambda
+           , "let polymorphism" ~: tiLetPolymorphism
            ]
 
 intType = Constructor "Int" []
@@ -265,6 +266,15 @@ tiLambdaExpr =
 tiLetWithLambda =
   let lambdaExpr = TELam ["x"] (TEVar "x")
       letBlock = TELet [("id", lambdaExpr)]  (TEAp (TEVar "id") [intTE])
+      inferredType = do
+        (tevar, tistate) <- gatherRules startingState letBlock
+        inferResult <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in inferredType ~?= (Right intType)
+
+tiLetPolymorphism =
+  let lambdaExpr = TELam ["x"] (TEVar "x")
+      letBlock = TELet [("id", lambdaExpr)]  (TEAp (TEAp (TEVar "id") [TEVar "id"]) [intTE])
       inferredType = do
         (tevar, tistate) <- gatherRules startingState letBlock
         inferResult <- infer (tirules tistate)
