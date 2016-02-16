@@ -86,6 +86,8 @@ data TE = TETyped Type TE
         | TELam [String] TE
           -- test, if case, else case
         | TEIf TE TE TE
+        | TEDefBlk TE TE
+        | TERefBlk Int
         deriving (Eq, Ord, Show)
 
 type Registry = Map TE TypeVar
@@ -288,15 +290,24 @@ buildFnBody (stmt:rest) = case stmt of
   (StatementFor var test blk) -> do
     restTE <- buildFnBody rest
     return undefined -- TODO: what if there is a return inside the block?
+  (StatementMatch expr cases) -> do
+    restTE <- buildFnBody rest
+    return undefined
   (StatementFn funcDef)       -> do
     funcBodyTE <- toTE funcDef
     restTE <- buildFnBody rest
     return $ TELet [(fnName funcDef, funcBodyTE)] restTE
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
-gatherRules tistate te = case te of
+gatherRules tistate te = gatherWithBlocks tistate te []
+
+-- Type vars
+type Blocks = [Int]
+
+gatherWithBlocks :: TIState -> TE -> Blocks -> ErrorS (TypeVar, TIState)
+gatherWithBlocks tistate te blocks = case te of
   (TETyped tp inner) -> do
-    (tv, tistate1) <- gatherRules tistate inner
+    (tv, tistate1) <- gatherWithBlocks tistate inner blocks
     let tistate2 = specifyType tv tp tistate1
     let tistate3 = register tistate2 te tv
     return (tv, tistate3)
@@ -321,8 +332,8 @@ gatherRules tistate te = case te of
 
   (TEAp fnexp args)  -> do
     let (tistate1, tv) = nextTV tistate
-    (fnTV, tistate2) <- gatherRules tistate1 fnexp
-    (argTVs, tistate3) <- gatherRuleList tistate2 args
+    (fnTV, tistate2) <- gatherWithBlocks tistate1 fnexp blocks
+    (argTVs, tistate3) <- gatherRuleList tistate2 args blocks
     let fnName = makeFnName (length args)
     let fnType = TypeNode { constructor=fnName, components=(argTVs ++ [tv]) }
     let tistate4 = addRule tistate3 (specify fnTV fnType)
@@ -337,8 +348,8 @@ gatherRules tistate te = case te of
     let newScope = zipWith (\name tv -> (name, ScopedVar tv True)) bindNames bindTVs
     let tistate3 = createScope tistate2 newScope
     -- Gather the rules under that scope
-    (boundTVs, tistate4) <- gatherRuleList tistate3 bindExprs
-    (bodyTV, tistate5) <- gatherRules tistate4 body
+    (boundTVs, tistate4) <- gatherRuleList tistate3 bindExprs blocks
+    (bodyTV, tistate5) <- gatherWithBlocks tistate4 body blocks
     -- Set those variables equal to the real things
     let tistate6 = addRule tistate5 (setEqual bodyTV tv)
     let tistate7 = addRules tistate6 (zipWith setEqual bindTVs boundTVs)
@@ -353,7 +364,7 @@ gatherRules tistate te = case te of
     -- False because this doesn't support 2nd order polymorphism
     let newScope = zipWith (\name tv -> (name, ScopedVar tv False)) args argTVs
     let tistate4 = createScope tistate3 newScope
-    (bodyTV, tistate5) <- gatherRules tistate4 body
+    (bodyTV, tistate5) <- gatherWithBlocks tistate4 body blocks
     let fnName = makeFnName (length args)
     let thisType = TypeNode { constructor=fnName, components=(argTVs ++ [bodyTV]) }
     let tistate6 = addRule tistate5 (specify tv thisType)
@@ -363,9 +374,9 @@ gatherRules tistate te = case te of
   (TEIf test ifCase elseCase) -> do
     let (tistate1, tv) = nextTV tistate
     let tistate2 = register tistate1 te tv
-    (testTV, tistate3) <- gatherRules tistate2 test
-    (ifTV, tistate4) <- gatherRules tistate3 ifCase
-    (elseTV, tistate5) <- gatherRules tistate4 elseCase
+    (testTV, tistate3) <- gatherWithBlocks tistate2 test blocks
+    (ifTV, tistate4) <- gatherWithBlocks tistate3 ifCase blocks
+    (elseTV, tistate5) <- gatherWithBlocks tistate4 elseCase blocks
     let tistate6 = addRules tistate5 [ specify testTV boolTN
                                      , setEqual tv ifTV
                                      , setEqual tv elseTV ]
@@ -374,22 +385,39 @@ gatherRules tistate te = case te of
   TENil                       -> do
     let (tistate1, tv) = nextTV tistate
     return (tv, addRule tistate1 (specify tv nilTypeNode))
+
   (TESeq start result)        -> do
-    (_, tistate1) <- gatherRules tistate start
-    gatherRules tistate1 result
+    (_, tistate1) <- gatherWithBlocks tistate start blocks
+    gatherWithBlocks tistate1 result blocks
+
   (TESet name value)          -> do
     var <- lookupVar name tistate
-    (valueTV, tistate1) <- gatherRules tistate value
+    (valueTV, tistate1) <- gatherWithBlocks tistate value blocks
     let tistate2 = addRule tistate1 (setEqual valueTV (scTypeVar var))
     -- Assume that the parser will never allow an assignment to be used in an expression:
     return (valueTV, tistate2)
 
+  (TEDefBlk blk expr)         -> do
+    (blkTV, tistate1) <- gatherWithBlocks tistate blk blocks
+    let blocks' = blkTV : blocks
+    gatherWithBlocks tistate1 expr blocks'
+
+  (TERefBlk id)               -> return (getBlock blocks id, tistate)
+
+getBlock :: [a] -> Int -> a
+getBlock items negIdx =
+  let size = length items
+      idx = negIdx + size
+  in if idx < 0 || idx > (size - 1)
+     then error "Compiler error: block index out of bounds"
+     else items !! idx
+
 makeFnName :: Int -> String
 makeFnName numArgs = "Fn_" ++ show numArgs
 
-gatherRuleList :: TIState -> [TE] -> ErrorS ([TypeVar], TIState)
-gatherRuleList tistate exprs = grl exprs tistate []
+gatherRuleList :: TIState -> [TE] -> Blocks -> ErrorS ([TypeVar], TIState)
+gatherRuleList tistate exprs blocks = grl exprs tistate []
   where grl []       st vars = return (reverse vars, st)
         grl (te:tes) st vars = do
-          (tv, tistate) <- gatherRules st te
+          (tv, tistate) <- gatherWithBlocks st te blocks
           grl tes tistate (tv : vars)
