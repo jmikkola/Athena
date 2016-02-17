@@ -18,7 +18,7 @@ import Parse
   , FnArg
   , TypeDef (..)
   , Block (..)
-  , ElsePart
+  , ElsePart (..)
   , MatchPattern
   , display
   , fnArgNames
@@ -297,6 +297,25 @@ buildFnBody (stmt:rest) = case stmt of
     funcBodyTE <- toTE funcDef
     restTE <- buildFnBody rest
     return $ TELet [(fnName funcDef, funcBodyTE)] restTE
+
+buildElsePart :: ElsePart -> ErrorS TE
+buildElsePart NoElse = return $ TERefBlk (-1)
+buildElsePart (Else (Block stmts)) = do
+  blkTE <- buildFnBody stmts
+  -- todo: what if there is a return in blkTE?
+  let hasReturn = True
+  return $ case hasReturn of
+    False -> TESeq blkTE (TERefBlk (-1))
+    True -> blkTE
+buildElsePart (ElseIf expr blk elspart) =
+  let ifStmt = StatementIf expr blk elspart
+  in do
+    elifTE <- buildFnBody [ifStmt]
+    -- todo: what if there is a return in blkTE?
+    let hasReturn = True
+    return $ case hasReturn of
+      False -> TESeq elifTE (TERefBlk (-1))
+      True -> elifTE
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = gatherWithBlocks tistate te []
