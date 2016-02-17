@@ -263,59 +263,70 @@ instance ToTE Block where
   toTE (Block stmts) = buildFnBody stmts
 
 buildFnBody :: [Statement] -> ErrorS TE
-buildFnBody []          = return TENil
-buildFnBody (stmt:rest) = case stmt of
+buildFnBody stmts = buildBlock stmts 0
+
+inc = (+) 1
+
+buildBlock :: [Statement] -> Int -> ErrorS TE
+buildBlock []          nouter =
+  return $ if nouter == 0 then TENil else TERefBlk (-1)
+buildBlock (stmt:rest) nouter = case stmt of
   (StatementReturn expr)     ->
     if null rest
     then toTE expr
     else Left ("Statements after a return: " ++ show rest)
   (StatementExpr expr)         -> do
     exprTE <- toTE expr
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return $ TESeq exprTE restTE
   (StatementLet var expr)      -> do
     exprTE <- toTE expr
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return $ TELet [(var, exprTE)] restTE
   (StatementAssign var expr)   -> do
     exprTE <- toTE expr
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return $ TESeq (TESet var exprTE) restTE
   (StatementIf test blk ep)   -> do
-    restTE <- buildFnBody rest
-    return undefined -- TODO: what if there is a return inside the block?
+    let (Block stmts) = blk
+    testTE <- toTE test
+    let nouter' = if null rest then nouter else inc nouter
+    blkTE <- buildBlock stmts nouter'
+    epTE <- buildElsePart ep nouter'
+    let ifTE = TEIf testTE blkTE epTE
+    if null rest
+       -- the `if` statement is the last statement within its block
+      then return ifTE
+      else do
+        -- there are statements in the block after the `if` statement
+        restTE <- buildBlock rest nouter
+        return $ TEDefBlk restTE ifTE
   (StatementWhile test blk)   -> do
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return undefined -- TODO: what if there is a return inside the block?
   (StatementFor var test blk) -> do
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return undefined -- TODO: what if there is a return inside the block?
   (StatementMatch expr cases) -> do
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return undefined
   (StatementFn funcDef)       -> do
     funcBodyTE <- toTE funcDef
-    restTE <- buildFnBody rest
+    restTE <- buildBlock rest nouter
     return $ TELet [(fnName funcDef, funcBodyTE)] restTE
 
-buildElsePart :: ElsePart -> ErrorS TE
-buildElsePart NoElse = return $ TERefBlk (-1)
-buildElsePart (Else (Block stmts)) = do
-  blkTE <- buildFnBody stmts
-  -- todo: what if there is a return in blkTE?
-  let hasReturn = True
-  return $ case hasReturn of
-    False -> TESeq blkTE (TERefBlk (-1))
-    True -> blkTE
-buildElsePart (ElseIf expr blk elspart) =
-  let ifStmt = StatementIf expr blk elspart
-  in do
-    elifTE <- buildFnBody [ifStmt]
-    -- todo: what if there is a return in blkTE?
-    let hasReturn = True
-    return $ case hasReturn of
-      False -> TESeq elifTE (TERefBlk (-1))
-      True -> elifTE
+buildElsePart :: ElsePart -> Int -> ErrorS TE
+buildElsePart ep nouter = case ep of
+  NoElse                ->
+    buildBlock [] nouter
+  (Else blk)            ->
+    let (Block stmts) = blk
+    in buildBlock stmts nouter
+  (ElseIf expr blk ep') ->
+    -- an "else if" is equivalent to a single-statement "else"
+    -- block with an "if" statement in it
+    let ifStmt = StatementIf expr blk ep'
+    in buildBlock [ifStmt] nouter
 
 gatherRules :: TIState -> TE -> ErrorS (TypeVar, TIState)
 gatherRules tistate te = gatherWithBlocks tistate te []
