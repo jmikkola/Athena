@@ -10,7 +10,10 @@ import Test.Framework (defaultMain)
 
 import TestUtil ( asGroup )
 
-import Parse ( LiteralValue (..) )
+import Parse ( LiteralValue (..)
+             , Expression (..)
+             , Statement (..)
+             )
 import TypeInference
 import InferExpression
 
@@ -21,6 +24,7 @@ main = defaultMain $
                , ("non-generic inference", testNonGeneric)
                , ("generic inference", testGenericTI)
                , ("expression inferences", testExprTI)
+               , ("build fn body", testBuildFnBody)
                ]
 
 emptyResult :: InfResult
@@ -348,3 +352,35 @@ tiGenMutualRecursion =
         return $ getFullTypeForVar inferResult tevar
   -- TODO: find a better way of testing the type variables in the returned function
   in inferredType ~?= (Right $ Constructor "Fn_1" [Var 13, Var 13])
+
+testBuildFnBody =
+  TestList [ "build return stmt" ~: buildReturnBlock
+           , "no return" ~: blockWithoutReturn
+           , "misplaced return" ~: misplacedReturn
+           , "expr statement" ~: exprStatement
+           , "let statement" ~: letStatement
+           ]
+
+buildReturnBlock =
+  let statements = [StatementReturn $ ExpressionLit $ LiteralInt 99]
+      result = buildFnBody statements
+  in result ~?= Right (TELit intType (LiteralInt 99))
+
+blockWithoutReturn = (buildFnBody []) ~?= (Right TENil)
+
+misplacedReturn =
+  let statements = [ StatementReturn $ ExpressionLit $ LiteralInt 99
+                   , StatementExpr $ ExpressionLit $ LiteralInt 99 ]
+      result = buildFnBody statements
+  in assertFails result
+
+exprStatement =
+  let statements = [StatementExpr $ ExpressionLit $ LiteralInt 99]
+      result = buildFnBody statements
+  in result ~?= Right (TESeq (TELit intType (LiteralInt 99)) TENil)
+
+letStatement =
+  let statements = [ StatementLet "x" (ExpressionLit (LiteralInt 123))
+                   , StatementExpr $ ExpressionVar "x" ]
+      result = buildFnBody statements
+  in result ~?= Right (TELet [("x", intTE)] (TESeq (TEVar "x") TENil))
