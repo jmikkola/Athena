@@ -13,6 +13,8 @@ import TestUtil ( asGroup )
 import Parse ( LiteralValue (..)
              , Expression (..)
              , Statement (..)
+             , ElsePart (..)
+             , Block (..)
              )
 import TypeInference
 import InferExpression
@@ -359,6 +361,9 @@ testBuildFnBody =
            , "misplaced return" ~: misplacedReturn
            , "expr statement" ~: exprStatement
            , "let statement" ~: letStatement
+           , "simple if, no return" ~: simpleIf
+           , "simple if, with return" ~: returnIf
+           , "else if, no return" ~: simpleElseIf
            ]
 
 buildReturnBlock =
@@ -384,3 +389,71 @@ letStatement =
                    , StatementExpr $ ExpressionVar "x" ]
       result = buildFnBody statements
   in result ~?= Right (TELet [("x", intTE)] (TESeq (TEVar "x") TENil))
+
+trueExpr = ExpressionStruct "True" []
+trueTE = TEAp (TEVar "True") []
+
+intExpr n = ExpressionLit $ LiteralInt n
+teInt n = TELit intType $ LiteralInt n
+
+callStmt name = StatementExpr $ ExpressionFnCall name []
+callTE name = TEAp (TEVar name) []
+
+simpleIf =
+  let statements = [ StatementIf trueExpr (Block []) NoElse
+                   , StatementReturn $ intExpr 123 ]
+      result = buildFnBody statements
+      expectedIf = TEIf trueTE (TERefBlk (-1)) (TERefBlk (-1))
+      expected = TEDefBlk intTE expectedIf
+  in result ~?= Right expected
+
+returnIf =
+  let ifBlock = [StatementReturn $ intExpr 99]
+      statements = [ StatementIf trueExpr (Block ifBlock) NoElse
+                   , StatementReturn $ intExpr 123 ]
+      result = buildFnBody statements
+      expectedIf = TEIf trueTE (teInt 99) (TERefBlk (-1))
+      expected = TEDefBlk intTE expectedIf
+  in result ~?= Right expected
+
+simpleElseIf =
+  let ifBlock = [StatementExpr $ intExpr 1]
+      elIfBlock = [StatementExpr $ intExpr 2]
+      elseBlock = [StatementExpr $ intExpr 3]
+      elsePart = Else (Block elseBlock)
+      elseIfPart = ElseIf trueExpr (Block elIfBlock) elsePart
+      statements = [ StatementIf trueExpr (Block ifBlock) elseIfPart
+                   , StatementReturn $ intExpr 123 ]
+      result = buildFnBody statements
+
+      lastBlk = TERefBlk (-1)
+      elseTE = TESeq (teInt 3) lastBlk
+      elifTE = TESeq (teInt 2) lastBlk
+      ifTE = TESeq (teInt 1) lastBlk
+      innerIf = TEIf trueTE elifTE elseTE
+      expectedIf = TEIf trueTE ifTE innerIf
+      expected = TEDefBlk intTE expectedIf
+  in result ~?= Right expected
+
+nestedIfWithReturn =
+  let innerIfBlk  = [ callStmt "b"
+                   , StatementReturn $ intExpr 1 ]
+      innerIfStmt = StatementIf trueExpr (Block innerIfBlk) NoElse
+      outerIfBlk  = [ callStmt "a"
+                   , innerIfStmt
+                   , callStmt "c" ]
+      outerIfStmt = StatementIf trueExpr (Block outerIfBlk) NoElse
+      statements  = [ outerIfStmt
+                   , callStmt "d"
+                   , StatementReturn $ intExpr 2 ]
+      result      = buildFnBody statements
+
+      outerBlkTE  = TESeq (callTE "d") (teInt 2)
+      -- the inner block references the outer block
+      innerBlkTE  = TESeq (callTE "c") (TERefBlk (-1))
+      innerIfBody = TESeq (callTE "b") (teInt 1)
+      innerIfTE   = TEIf trueTE innerIfBody (TERefBlk (-1))
+      outerIfBody = TESeq (callTE "a") (TEDefBlk innerBlkTE innerIfTE)
+      outerIfTE   = TEIf trueTE outerIfBody (TERefBlk (-1))
+      expected    = TEDefBlk outerBlkTE outerIfTE
+  in result ~?= Right expected
