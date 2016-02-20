@@ -3,6 +3,7 @@ module Main where
 import Control.Applicative ( (<*) )
 import Control.Monad ( foldM )
 import Data.Char ( isSpace )
+import Data.List ( isPrefixOf )
 import System.Environment ( getArgs )
 
 import System.Console.Haskeline ( InputT, getInputLine, runInputT, defaultSettings, outputStrLn )
@@ -54,26 +55,41 @@ loop ctx = do
    Nothing     -> return ()
    Just "end"  -> return ()
    Just "exit" -> return ()
-   Just line   -> do
-      ctx' <- tryParsing (trim line) ctx
+   Just "quit" -> return ()
+   Just line   ->
+     let (fn, text) = if isPrefixOf ":t " line
+                      then (showType, trim $ drop 2 line)
+                      else (eval,     trim line)
+     in do
+      ctx' <- tryParsing fn text ctx
       loop ctx'
 
 trim :: String -> String
 trim = let revTrim = reverse . dropWhile isSpace
        in revTrim . revTrim
 
-tryParsing :: String -> EvalContext -> InputT IO EvalContext
-tryParsing line ctx = case parse (statement <* eof) "user input" line of
-  Right parsed -> handleParsed parsed ctx
+type Handler = Statement -> EvalContext -> InputT IO EvalContext
+
+tryParsing :: Handler -> String -> EvalContext -> InputT IO EvalContext
+tryParsing handler line ctx = case parse (statement <* eof) "user input" line of
+  Right parsed -> handler parsed ctx
   Left err -> do
     outputStrLn $ show err
     return ctx
 
-handleParsed :: Statement -> EvalContext -> InputT IO EvalContext
-handleParsed stmt ctx = case evalStatement ctx stmt of
+eval :: Handler
+eval stmt ctx = case evalStatement ctx stmt of
   Left err -> do
     outputStrLn err
     return ctx
   Right (ctx', result) -> do
     outputStrLn $ display result
     return ctx'
+
+showType :: Handler
+showType stmt ctx = do
+  -- TODO: re-work eval context so that it can be used in inference
+  case inferStatement stmt of
+   Left err -> outputStrLn err
+   Right tp -> outputStrLn $ show tp
+  return ctx

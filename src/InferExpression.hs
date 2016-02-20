@@ -35,7 +35,16 @@ import TypeInference
   , setEqual
   , specify
   , instanceOf
+  , infer
+  , getFullTypeForVar
   )
+
+inferStatement :: Statement -> ErrorS Type
+inferStatement stmt = do
+  te <- toTE stmt
+  (tevar, tistate) <- gatherRules startingState te
+  inferResult <- infer (tirules tistate)
+  return $ getFullTypeForVar inferResult tevar
 
 boolTN :: TypeNode
 boolTN = TypeNode { constructor = "Bool", components = [] }
@@ -194,6 +203,19 @@ specifyType tv tp tistate =
 
 class ToTE a where
   toTE :: a -> ErrorS TE
+
+-- for repl / pesudo-top level
+instance ToTE Statement where
+  toTE stmt = case stmt of
+    (StatementReturn expr)       -> Left ("Can't have a return at top level: " ++ show stmt)
+    (StatementExpr expr)         -> toTE expr
+    (StatementLet var expr)      -> Left ("TODO at top level: " ++ show stmt)
+    (StatementAssign var expr)   -> Left ("TODO at top level: " ++ show stmt)
+    (StatementIf test blk ep)    -> Left ("TODO at top level: " ++ show stmt)
+    (StatementWhile test blk)    -> Left ("TODO at top level: " ++ show stmt)
+    (StatementFor var test blk)  -> Left ("TODO at top level: " ++ show stmt)
+    (StatementMatch expr cases)  -> Left ("TODO at top level: " ++ show stmt)
+    (StatementFn funcDef)        -> toTE funcDef
 
 instance ToTE LiteralValue where
   toTE l = return $ TELit tp l
