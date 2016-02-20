@@ -2,6 +2,7 @@ module Main where
 
 import Control.Monad (liftM)
 import Data.Either (isLeft)
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -15,6 +16,7 @@ import Parse ( LiteralValue (..)
              , Statement (..)
              , ElsePart (..)
              , Block (..)
+             , FunctionDef (..)
              )
 import TypeInference
 import InferExpression
@@ -364,6 +366,7 @@ testBuildFnBody =
            , "simple if, no return" ~: simpleIf
            , "simple if, with return" ~: returnIf
            , "else if, no return" ~: simpleElseIf
+           , "infer if function" ~: inferIfFunction
            ]
 
 buildReturnBlock =
@@ -457,3 +460,26 @@ nestedIfWithReturn =
       outerIfTE   = TEIf trueTE outerIfBody (TERefBlk (-1))
       expected    = TEDefBlk outerBlkTE outerIfTE
   in result ~?= Right expected
+
+require :: (Ord a) => a -> Map a v -> ErrorS v
+require key map = case Map.lookup key map of
+  Nothing -> Left "missing key"
+  Just x -> Right x
+
+inferIfFunction =
+  let innerRetStmt = StatementReturn $ intExpr 3
+      innerIfStmt  = StatementIf trueExpr (Block [innerRetStmt]) NoElse
+      ifStmt       = StatementIf trueExpr (Block [innerIfStmt]) NoElse
+      returnStmt   = StatementReturn $ intExpr 2
+      fnBody       = [ ifStmt, returnStmt ]
+      functionDef  = StatementFn (FunctionDef "testFn" [] Nothing (Block fnBody))
+      tistate0     = let (st1, tv) = nextTV startingState
+                         st2       = specifyType tv (Constructor "Fn_0" [boolType]) st1
+                     in createScope st2 [("True", ScopedVar tv True)]
+      tiResult     = do
+        bindings         <- gatherBindings Map.empty functionDef
+        fnTE             <- require "testFn" bindings
+        (tevar, tistate) <- gatherRules tistate0 fnTE
+        inferResult      <- infer (tirules tistate)
+        return $ getFullTypeForVar inferResult tevar
+  in tiResult ~?= Right (Constructor "Fn_0" [intType])
