@@ -2,10 +2,10 @@ module Main where
 
 import System.Environment ( getArgs )
 
-import Parser ( parse )
+import Parser ( parseFile )
 
 main :: IO ()
 main = do
   args <- getArgs
   content <- readFile (args !! 0)
-  putStrLn $ show $ parse content
+  putStrLn $ show $ parseFile content

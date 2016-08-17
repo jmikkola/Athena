@@ -3,7 +3,8 @@ module Parser where
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
-import AST.Declaration (File)
+import AST.Declaration (Declaraction, File)
+import qualified AST.Declaration as Declaraction
 import AST.Expression (Expression, Op, Value)
 import qualified AST.Expression as Expression
 import AST.Statement (Statement)
@@ -11,9 +12,69 @@ import qualified AST.Statement as Statement
 import AST.Type (Type)
 import qualified AST.Type as Type
 
-parse :: String -> File
-parse _ = []
+parseFile :: String -> Either String File
+parseFile content = applyLeft show $ parse fileParser "<input>" content
 
+---- AST.Declaration parsers ----
+
+fileParser :: Parser File
+fileParser = sepBy declarationParser statementSep
+
+declarationParser :: Parser Declaraction
+declarationParser = choice [letDeclaration]
+
+letDeclaration :: Parser Declaraction
+letDeclaration = do
+  _ <- string "let"
+  _ <- any1Whitespace
+  name <- valueName
+  _ <- any1Whitespace
+  typ <- typeParser
+  _ <- any1Whitespace
+  _ <- char '='
+  _ <- any1Whitespace
+  val <- expressionParser
+  return $ Declaraction.Let name typ val
+
+funcDeclaration :: Parser Declaraction
+funcDeclaration = do
+  _ <- string "fn"
+  _ <- any1Whitespace
+  name <- valueName
+  _ <- char '('
+  _ <- anyWhitespace
+  args <- funcArgDecl
+  _ <- char '('
+  _ <- any1Whitespace
+  retType <- optionMaybe $ try $ do
+    typ <- typeParser
+    _ <- any1Whitespace
+    return typ
+  body <- blockStatement
+  return $ Declaraction.Function name args (unwrapOr retType Type.Nil) body
+
+funcArgDecl :: Parser [(String, Type)]
+funcArgDecl = argDeclEnd <|> argDecl
+
+argDeclEnd :: Parser [(String, Type)]
+argDeclEnd = do
+  _ <- char ')'
+  return []
+
+argDecl :: Parser [(String, Type)]
+argDecl = do
+  name <- valueName
+  _ <- any1Whitespace
+  typ <- typeParser
+  _ <- anyWhitespace
+  rest <- argDeclEnd <|> nextArgDecl
+  return $ (name, typ) : rest
+
+nextArgDecl :: Parser [(String, Type)]
+nextArgDecl = do
+  _ <- char ','
+  _ <- anyWhitespace
+  argDecl
 
 ---- AST.Statement parsers ----
 
@@ -63,7 +124,7 @@ statementSep :: Parser ()
 statementSep = do
   _ <- anyWhitespace
   _ <- char '\n'
-  _ <- anyWhitespace
+  _ <- many (anyWhitespace <|> string "\n")
   return ()
 
 exprStatement :: Parser Statement
@@ -411,3 +472,7 @@ unwrapOr Nothing  b = b
 
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
+
+applyLeft :: (a -> b) -> (Either a r) -> (Either b r)
+applyLeft fn (Left  a) = Left (fn a)
+applyLeft _  (Right r) = Right r

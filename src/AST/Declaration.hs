@@ -5,8 +5,8 @@ import AST.Statement (Statement)
 import AST.Type (Type)
 
 data Declaraction
-  = Let String Expression
-  | Function [(String, Type)] Type [Statement]
+  = Let String Type Expression
+  | Function String [(String, Type)] Type Statement
   deriving (Eq, Show)
 
 type File = [Declaraction]
