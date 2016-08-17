@@ -4,6 +4,6 @@ athena: Makefile athena.cabal stack.yaml src/*.hs test/*.hs
 
 run:
 	stack build
-	stack exec athena
+	stack exec athena -- examples/mvp.at
 
 .PHONY: run athena
