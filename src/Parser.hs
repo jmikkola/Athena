@@ -3,7 +3,7 @@ module Parser where
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
-import AST.Declaration (Declaraction, File)
+import AST.Declaration (File)
 import AST.Expression (Expression, Op, Value)
 import qualified AST.Expression as Expression
 import AST.Type (Type)
@@ -14,10 +14,12 @@ parse _ = []
 
 ---- AST.Expression parsers ----
 
+
+
 --- parse expressions
 
 expressionParser :: Parser Expression
-expressionParser = choice [parenExpr, valueExpr]
+expressionParser = choice [parenExpr, valueExpr, unaryExpr]
 
 parenExpr :: Parser Expression
 parenExpr = do
@@ -32,6 +34,13 @@ valueExpr :: Parser Expression
 valueExpr = do
   val <- valueParser
   return $ Expression.EValue val
+
+unaryExpr :: Parser Expression
+unaryExpr = do
+  op <- opParser
+  _ <- anyWhitespace
+  ex <- expressionParser
+  return $ Expression.EUnary op ex
 
 --- parse values
 
@@ -130,8 +139,10 @@ types = [ ("String", Type.String)
 
 ---- Helper functions ----
 
+choices :: [(String, a)] -> Parser a
 choices = choice . map pair2parser
 
+pair2parser :: (String, a) -> Parser a
 pair2parser (str, result) = do
   _ <- string str
   return result
@@ -164,6 +175,16 @@ valueName = do
 anyWhitespaceS :: Parser String
 -- `try` is needed here so that it can back out of parsing a division operator
 anyWhitespaceS = many1 anyWhitespaceCh <|> try parseComment
+
+anyWhitespace :: Parser String
+anyWhitespace = do
+  whitespaces <- many $ anyWhitespaceS
+  return $ concat whitespaces
+
+any1Whitespace :: Parser String
+any1Whitespace = do
+  whitespaces <- many1 $ anyWhitespaceS
+  return $ concat whitespaces
 
 whitespaceChs :: String
 whitespaceChs = " \t\r\n"
