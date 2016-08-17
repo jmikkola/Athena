@@ -1,0 +1,55 @@
+// MVP features in Athena
+
+fn main() {
+    // All variables are currently mutable
+    let a Int = 123
+    // Only one size of integer and floating types
+    let b Float = 345.234
+    // Strings are also allowed
+    let c String = "a quoted string \"escaped quote\" \\ \n"
+    // As are booleans.
+    let d Bool = False
+
+    // Print is a temporary function to be replaced by standard library
+    // functions later.
+    print(c)
+
+    // Numbers can be cast to strings
+    print(String(b) + " " + String(a))
+
+    print(do_stuff())
+}
+
+fn do_stuff() string {
+   // basic math operations are supported
+   let int Int = 5 + (2 * 10) / 3 % 4
+   int = int ** 3 // power
+
+   let fl Float = 99.0e-3 ** 2
+
+   // Comparison operators
+   let x Bool = fl < Float(int)
+
+   // Bitwise operators (on Ints)
+   let y Int = (~1024) & (15 << 2)
+
+   // Boolean operators also exist
+   if 1 == 1 && 2 < 3 {
+      print(recursive(10, 4))
+   } else if False {
+   }
+
+   let i Int = 0
+   while i < 10 {
+         print(String(i))
+         i = i + 1
+   }
+}
+
+// recursive functions are of course allowed
+fn recursive(a Int, b Int) String {
+   if b == 0 {
+      return String(a)
+   }
+   return recursive(b, a % b)
+}
