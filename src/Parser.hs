@@ -6,6 +6,8 @@ import Text.Parsec.String (Parser)
 import AST.Declaration (File)
 import AST.Expression (Expression, Op, Value)
 import qualified AST.Expression as Expression
+import AST.Statement (Statement)
+import qualified AST.Statement as Statement
 import AST.Type (Type)
 import qualified AST.Type as Type
 
@@ -13,6 +15,23 @@ parse :: String -> File
 parse _ = []
 
 
+---- AST.Statement parsers ----
+
+statementParser :: Parser Statement
+statementParser = choice [returnStatement, exprStatement]
+
+returnStatement :: Parser Statement
+returnStatement = do
+  _ <- string "return"
+  e <- optionMaybe $ do
+    _ <- any1Whitespace
+    expressionParser
+  return $ Statement.Return e
+
+exprStatement :: Parser Statement
+exprStatement = do
+  e <- expressionParser
+  return $ Statement.Expr e
 
 ---- AST.Expression parsers ----
 
@@ -186,10 +205,11 @@ integer start = return $ Expression.EInt (read start)
 --- parse operators
 
 opParser :: Parser Op
-opParser = choices ops
+opParser = choices opChoices
 
-ops :: [(String, Op)]
-ops = [ ("+",  Expression.Plus)
+opChoices :: [(String, Op)]
+opChoices =
+      [ ("+",  Expression.Plus)
       , ("-",  Expression.Minus)
       , ("*",  Expression.Times)
       , ("/",  Expression.Divide)
