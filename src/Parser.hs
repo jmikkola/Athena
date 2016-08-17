@@ -18,7 +18,9 @@ parse _ = []
 ---- AST.Statement parsers ----
 
 statementParser :: Parser Statement
-statementParser = choice [returnStatement, exprStatement]
+statementParser = choice [
+  returnStatement, letStatement, assignStatement,
+  blockStatement, exprStatement, ifStatement, whileStatement]
 
 returnStatement :: Parser Statement
 returnStatement = do
@@ -28,10 +30,45 @@ returnStatement = do
     expressionParser
   return $ Statement.Return e
 
+letStatement :: Parser Statement
+letStatement = do
+  _ <- string "let"
+  _ <- any1Whitespace
+  name <- valueName
+  _ <- any1Whitespace
+  typ <- typeParser
+  _ <- any1Whitespace
+  _ <- char '='
+  _ <- any1Whitespace
+  val <- expressionParser
+  return $ Statement.Let name typ val
+
+assignStatement :: Parser Statement
+assignStatement = do
+  name <- valueName
+  _ <- any1Whitespace
+  _ <- char '='
+  _ <- any1Whitespace
+  val <- expressionParser
+  return $ Statement.Assign name val
+
+blockStatement :: Parser Statement
+blockStatement = do
+  _ <- char '{'
+  stmts <- sepBy statementParser (string "\n")
+  _ <- char '}'
+  return $ Statement.Block stmts
+
 exprStatement :: Parser Statement
 exprStatement = do
   e <- expressionParser
   return $ Statement.Expr e
+
+ifStatement :: Parser Statement
+ifStatement = undefined
+
+whileStatement :: Parser Statement
+whileStatement = undefined
 
 ---- AST.Expression parsers ----
 
