@@ -4,7 +4,7 @@ import AST.Expression (Expression)
 import AST.Type (Type)
 
 data Statement
-  = Return Expression
+  = Return (Maybe Expression)
   | Let String Type Expression
   | Assign String Expression
   | Block [Statement]

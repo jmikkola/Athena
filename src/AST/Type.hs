@@ -6,6 +6,4 @@ data Type
   | Int
   | Bool
   | Nil
-  | Function [Type] Type
   deriving (Eq, Show)
-
