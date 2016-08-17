@@ -14,6 +14,27 @@ parse _ = []
 
 ---- AST.Expression parsers ----
 
+--- parse expressions
+
+expressionParser :: Parser Expression
+expressionParser = choice [parenExpr, valueExpr]
+
+parenExpr :: Parser Expression
+parenExpr = do
+  _ <- char '('
+  _ <- anyWhitespaceS
+  ex <- expressionParser
+  _ <- anyWhitespaceS
+  _ <- char ')'
+  return $ Expression.EParen ex
+
+valueExpr :: Parser Expression
+valueExpr = do
+  val <- valueParser
+  return $ Expression.EValue val
+
+--- parse values
+
 valueParser :: Parser Value
 valueParser = choice [stringParser, boolParser, numberParser]
 
@@ -26,6 +47,8 @@ boolParser :: Parser Value
 boolParser = do
   b <- choices [("False", False), ("True", True)]
   return $ Expression.EBool b
+
+--- parse floating and integer numbers
 
 numberParser :: Parser Value
 numberParser = do
@@ -65,6 +88,8 @@ _digit = do
 integer :: String -> Parser Value
 integer start = return $ Expression.EInt (read start)
 
+--- parse operators
+
 opParser :: Parser Op
 opParser = choices ops
 
@@ -103,7 +128,6 @@ types = [ ("String", Type.String)
         , ("()", Type.Nil)
         ]
 
-
 ---- Helper functions ----
 
 choices = choice . map pair2parser
@@ -136,6 +160,16 @@ valueName = do
   first <- lower
   rest <- many $ choice [alphaNum, underscore, char '?']
   return $ first : rest
+
+anyWhitespaceS :: Parser String
+-- `try` is needed here so that it can back out of parsing a division operator
+anyWhitespaceS = many1 anyWhitespaceCh <|> try parseComment
+
+whitespaceChs :: String
+whitespaceChs = " \t\r\n"
+
+anyWhitespaceCh :: Parser Char
+anyWhitespaceCh = oneOf whitespaceChs
 
 parseComment :: Parser String
 parseComment = try parseLineComment <|> parseBlockComment <?> "Comment"
