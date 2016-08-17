@@ -55,9 +55,16 @@ assignStatement = do
 blockStatement :: Parser Statement
 blockStatement = do
   _ <- char '{'
-  stmts <- sepBy statementParser (string "\n")
+  stmts <- sepBy statementParser statementSep
   _ <- char '}'
   return $ Statement.Block stmts
+
+statementSep :: Parser ()
+statementSep = do
+  _ <- anyWhitespace
+  _ <- char '\n'
+  _ <- anyWhitespace
+  return ()
 
 exprStatement :: Parser Statement
 exprStatement = do
@@ -65,10 +72,32 @@ exprStatement = do
   return $ Statement.Expr e
 
 ifStatement :: Parser Statement
-ifStatement = undefined
+ifStatement = do
+  _ <- string "if"
+  _ <- any1Whitespace
+  test <- expressionParser
+  _ <- any1Whitespace
+  body <- blockStatement
+  elsePart <- optionMaybe $ try elseBlock
+  return $ let (Statement.Block stmts) = body
+           in Statement.If test stmts elsePart
+
+elseBlock :: Parser Statement
+elseBlock = do
+  _ <- any1Whitespace
+  _ <- string "else"
+  _ <- any1Whitespace
+  ifStatement <|> blockStatement
 
 whileStatement :: Parser Statement
-whileStatement = undefined
+whileStatement = do
+  _ <- string "while"
+  _ <- any1Whitespace
+  test <- expressionParser
+  _ <- any1Whitespace
+  body <- blockStatement
+  return $ let (Statement.Block stmts) = body
+           in Statement.While test stmts
 
 ---- AST.Expression parsers ----
 
