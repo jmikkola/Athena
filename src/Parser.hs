@@ -12,14 +12,59 @@ import qualified AST.Type as Type
 parse :: String -> File
 parse _ = []
 
+
+
 ---- AST.Expression parsers ----
-
-
 
 --- parse expressions
 
+-- Binary expressions are handled at this level
 expressionParser :: Parser Expression
-expressionParser = choice [parenExpr, valueExpr, unaryExpr]
+expressionParser = do
+  bin <- readBinExprParts
+  return $ unfoldParts bin
+
+readBinExprParts :: Parser (Expression, [(Op, Expression)])
+readBinExprParts = do
+  e <- expr
+  _ <- anyWhitespace
+  parts <- many $ do
+    op <- opParser
+    _ <- anyWhitespace
+    e' <- expr
+    return (op, e')
+  return (e, parts)
+
+unfoldParts :: (Expression, [(Op, Expression)]) -> Expression
+unfoldParts bin =
+  let (e, rest) = foldl unfoldOps bin precOrder
+  in if rest /= [] then error "Unexpected operator"
+     else e
+
+unfoldOps :: (Expression, [(Op, Expression)]) -> [Op] -> (Expression, [(Op, Expression)])
+unfoldOps (left, parts) ops = case parts of
+  []              -> (left, [])
+  ((op, right):pts) ->
+    let (applied, rest) = unfoldOps (right, pts) ops
+    in if elem op ops
+       then (Expression.EBinary op left applied, rest)
+       else (left, (op, applied) : rest)
+
+precOrder :: [[Op]]
+precOrder =
+  [ [Expression.Times, Expression.Divide, Expression.Mod]
+  , [Expression.Plus, Expression.Minus]
+  , [Expression.Less, Expression.LessEq, Expression.Greater, Expression.GreaterEq]
+  , [Expression.Eq, Expression.NotEq]
+  , [Expression.BitAnd]
+  , [Expression.BitXor]
+  , [Expression.BitOr]
+  , [Expression.BoolAnd]
+  , [Expression.BoolOr]
+  ]
+
+expr :: Parser Expression
+expr = choice [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
 
 parenExpr :: Parser Expression
 parenExpr = do
@@ -41,6 +86,47 @@ unaryExpr = do
   _ <- anyWhitespace
   ex <- expressionParser
   return $ Expression.EUnary op ex
+
+callExpr :: Parser Expression
+callExpr = do
+  fn <- varExpr
+  _ <- char '('
+  _ <- anyWhitespace
+  args <- choice [fnCallArg, argsEnd]
+  return $ Expression.ECall fn args
+
+fnCallArg :: Parser [Expression]
+fnCallArg = do
+  arg <- expressionParser
+  _ <- anyWhitespace
+  rest <- choice [fnCallNextArg, argsEnd]
+  return $ arg : rest
+
+fnCallNextArg :: Parser [Expression]
+fnCallNextArg = do
+  _ <- char ','
+  _ <- anyWhitespace
+  fnCallArg
+
+argsEnd :: Parser [Expression]
+argsEnd = do
+  _ <- char '('
+  return []
+
+castExpr :: Parser Expression
+castExpr = do
+  typ <- typeParser
+  _ <- char '('
+  _ <- anyWhitespace
+  ex <- expressionParser
+  _ <- anyWhitespace
+  _ <- char ')'
+  return $ Expression.ECast typ ex
+
+varExpr :: Parser Expression
+varExpr = do
+  name <- valueName
+  return $ Expression.EVariable name
 
 --- parse values
 

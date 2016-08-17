@@ -16,6 +16,7 @@ data Expression
   | EBinary Op Expression Expression
   | ECall Expression [Expression]
   | ECast Type Expression
+  | EVariable String
   deriving (Eq, Show)
 
 data Op
@@ -39,3 +40,5 @@ data Op
   | Greater
   | GreaterEq
   deriving (Eq, Show)
+
+-- TODO: lshift and rshift, negate
