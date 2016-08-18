@@ -20,10 +20,15 @@ testMain = do
 
 tests :: [IO Bool]
 tests =
+  -- expressions
   [ expectParses numberParser "123.345" (E.EFloat 123.345)
   , expectParses valueParser "123.345" (E.EFloat 123.345)
   , expectParses expressionParser "123.345" (E.EValue (E.EFloat 123.345))
   , expectParses expressionParser "a123" (E.EVariable "a123")
+  , expectParses expressionParser "f(a)" (E.ECall (E.EVariable "f") [E.EVariable "a"])
+  , expectParses expressionParser "Bool(a)" (E.ECast T.Bool (E.EVariable "a"))
+  , expectParses expressionParser "(2 + 3)"
+    (E.EParen (E.EBinary E.Plus (E.EValue (E.EInt 2)) (E.EValue (E.EInt 3))))
   , expectParses expressionParser "\"a quoted \\\"string\\\" \""
     (E.EValue (E.EString "a quoted \"string\" "))
   , expectParses expressionParser "!False"
@@ -34,6 +39,11 @@ tests =
       (E.EBinary E.Plus
         (E.EBinary E.Times (E.EValue $ E.EInt 2) (E.EValue $ E.EInt 3))
         (E.EValue $ E.EInt 4)))
+  , expectParses expressionParser "1 == 1 && 2 < 3"
+    (E.EBinary E.BoolAnd
+     (E.EBinary E.Eq (E.EValue (E.EInt 1)) (E.EValue (E.EInt 1)))
+     (E.EBinary E.Less (E.EValue (E.EInt 2)) (E.EValue (E.EInt 3))))
+  -- statements
   , expectParses statementParser "return \"foo\""
     (S.Return $ Just $ E.EValue $ E.EString "foo")
   , expectParses statementSep "\n" ()
@@ -52,8 +62,19 @@ tests =
     (S.Block [S.Block [], S.Block []])
   , expectParses statementParser "let a123 Bool = True"
     (S.Let "a123" T.Bool (E.EValue $ E.EBool True))
-  , expectParses (statementParser <* statementSep) "let a123 Bool = True\n"
-    (S.Let "a123" T.Bool (E.EValue $ E.EBool True))
+  , expectParses statementParser "print(c)"
+    (S.Expr $ E.ECall (E.EVariable "print") [(E.EVariable "c")])
+  , expectParses letStatement "let int Int = 5 + (2 * 10) / 3 % 4"
+    (S.Let "int" T.Int (E.EBinary E.Plus
+                        (E.EValue (E.EInt 5))
+                        (E.EBinary E.Divide (E.EParen
+                                             (E.EBinary E.Times
+                                              (E.EValue (E.EInt 2))
+                                              (E.EValue (E.EInt 10))))
+                         (E.EBinary E.Mod
+                          (E.EValue (E.EInt 3))
+                           (E.EValue (E.EInt 4))))))
+  -- blocks and larger
   , testParsingBlock
   , testParsingFunc
   , testParsingFunc2
@@ -75,7 +96,7 @@ testParsingFunc =
 
 testParsingFunc2 :: IO Bool
 testParsingFunc2 =
-  let text = "fn main(a Int, b Bool) Bool {\n}"
+  let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
       expected = D.Function "main" [("a", T.Int), ("b", T.Bool)] T.Bool (S.Block [])
   in expectParses declarationParser text expected
 

@@ -20,7 +20,7 @@ fn main() {
     print(do_stuff())
 }
 
-fn do_stuff() string {
+fn do_stuff() String {
    // basic math operations are supported
    let int Int = 5 + (2 * 10) / 3 % 4
    int = int ** 3 // power

@@ -84,7 +84,7 @@ nextArgDecl = do
 ---- AST.Statement parsers ----
 
 statementParser :: Parser Statement
-statementParser = choice [
+statementParser = choice $ map try [
   returnStatement, letStatement, assignStatement,
   blockStatement, exprStatement, ifStatement, whileStatement]
 
@@ -235,9 +235,9 @@ expr = choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, va
 parenExpr :: Parser Expression
 parenExpr = do
   _ <- char '('
-  _ <- anyWhitespaceS
+  _ <- anyWhitespace
   ex <- expressionParser
-  _ <- anyWhitespaceS
+  _ <- anyWhitespace
   _ <- char ')'
   return $ Expression.EParen ex
 
@@ -276,7 +276,7 @@ fnCallNextArg = do
 
 argsEnd :: Parser [Expression]
 argsEnd = do
-  _ <- char '('
+  _ <- char ')'
   return []
 
 castExpr :: Parser Expression
@@ -362,19 +362,19 @@ opChoices =
       , ("/",  Expression.Divide)
       , ("%",  Expression.Mod)
       , ("**", Expression.Power)
-      , ("&",  Expression.BitAnd)
       , ("|",  Expression.BitOr)
       , ("~",  Expression.BitInvert)
       , ("^",  Expression.BitXor)
       , ("&&", Expression.BoolAnd)
+      , ("&",  Expression.BitAnd)
       , ("||", Expression.BoolOr)
-      , ("!",  Expression.BoolNot)
       , ("==", Expression.Eq)
       , ("!=", Expression.NotEq)
-      , ("<",  Expression.Less)
+      , ("!",  Expression.BoolNot)
       , ("<=", Expression.LessEq)
-      , (">",  Expression.Greater)
+      , ("<",  Expression.Less)
       , (">=", Expression.GreaterEq)
+      , (">",  Expression.Greater)
       ]
 
 ---- AST.Type parsers ----
@@ -393,7 +393,7 @@ types = [ ("String", Type.String)
 ---- Helper functions ----
 
 choices :: [(String, a)] -> Parser a
-choices = choice . map pair2parser
+choices = choice . map try . map pair2parser
 
 pair2parser :: (String, a) -> Parser a
 pair2parser (str, result) = do
