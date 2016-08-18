@@ -22,6 +22,9 @@ tests =
   [ expectParses numberParser "123.345" (E.EFloat 123.345)
   , expectParses valueParser "123.345" (E.EFloat 123.345)
   , expectParses expressionParser "123.345" (E.EValue (E.EFloat 123.345))
+  , expectParses expressionParser "a123" (E.EVariable "a123")
+  , expectParses expressionParser "\"a quoted \\\"string\\\" \""
+    (E.EValue (E.EString "a quoted \"string\" "))
   , expectParses expressionParser "!False"
     (E.EUnary E.BoolNot (E.EValue (E.EBool False)))
   , expectParses expressionParser "1 + 2 * 3 + 4"
@@ -35,16 +38,21 @@ tests =
   , expectParses statementSep "\n" ()
   , expectParses statementSep "  \n  " ()
   , expectParses statementSep "  \n\n  \n  " ()
-  , expectParses blockStatements "}" []
-  , expectParses blockStatement "{\n}" (S.Block [])
-  , expectParses blockStatement "{\nreturn 1\n}"
+  , expectParses statementParser "{\n}" (S.Block [])
+  , expectParses statementParser "{\nreturn 1\n}"
     (S.Block [(S.Return $ Just $ E.EValue $ E.EInt 1)])
-  , expectParses blockStatement "{\n  return 1\n}"
+  , expectParses statementParser "{\n  return 1\n}"
     (S.Block [(S.Return $ Just $ E.EValue $ E.EInt 1)])
-  , expectParses blockStatement "{\nreturn 1  \n}"
+  , expectParses statementParser "{\nreturn 1  \n}"
     (S.Block [(S.Return $ Just $ E.EValue $ E.EInt 1)])
-  , expectParses blockStatement "{  \n  return 1  \n  \n }"
+  , expectParses statementParser "{  \n  return 1  \n  \n }"
     (S.Block [(S.Return $ Just $ E.EValue $ E.EInt 1)])
+  , expectParses statementParser "{\n{\n}\n{\n}\n}"
+    (S.Block [S.Block [], S.Block []])
+  , expectParses statementParser "let a123 Bool = True"
+    (S.Let "a123" T.Bool (E.EValue $ E.EBool True))
+  , expectParses (statementParser <* statementSep) "let a123 Bool = True\n"
+    (S.Let "a123" T.Bool (E.EValue $ E.EBool True))
   , testParsingBlock
   ]
 

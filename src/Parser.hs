@@ -231,7 +231,7 @@ precOrder =
   ]
 
 expr :: Parser Expression
-expr = choice [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
+expr = choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
 
 parenExpr :: Parser Expression
 parenExpr = do
@@ -423,7 +423,7 @@ typeName = do
 valueName :: Parser String
 valueName = do
   first <- lower
-  rest <- many $ choice [alphaNum, underscore, char '?']
+  rest <- many $ choice [letter, digit, underscore]
   return $ first : rest
 
 anyWhitespaceS :: Parser String
