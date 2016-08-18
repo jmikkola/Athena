@@ -5,6 +5,7 @@ import Control.Applicative ( (<*) )
 import Text.Parsec (eof, parse)
 import Text.Parsec.String (Parser)
 
+import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Type as T
@@ -54,6 +55,8 @@ tests =
   , expectParses (statementParser <* statementSep) "let a123 Bool = True\n"
     (S.Let "a123" T.Bool (E.EValue $ E.EBool True))
   , testParsingBlock
+  , testParsingFunc
+  , testParsingFunc2
   ]
 
 testParsingBlock :: IO Bool
@@ -63,6 +66,18 @@ testParsingBlock =
                          , S.Return (Just $ E.EVariable "a1")
                          ]
   in expectParses statementParser text expected
+
+testParsingFunc :: IO Bool
+testParsingFunc =
+  let text = "fn main() {\n}"
+      expected = D.Function "main" [] T.Nil (S.Block [])
+  in expectParses declarationParser text expected
+
+testParsingFunc2 :: IO Bool
+testParsingFunc2 =
+  let text = "fn main(a Int, b Bool) Bool {\n}"
+      expected = D.Function "main" [("a", T.Int), ("b", T.Bool)] T.Bool (S.Block [])
+  in expectParses declarationParser text expected
 
 ---- Utilities ----
 

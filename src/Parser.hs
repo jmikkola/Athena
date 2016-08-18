@@ -48,9 +48,8 @@ funcDeclaration = do
   _ <- any1LinearWhitespace
   name <- valueName
   _ <- char '('
-  _ <- any1LinearWhitespace
+  _ <- anyLinearWhitespace
   args <- funcArgDecl
-  _ <- char '('
   _ <- any1LinearWhitespace
   retType <- optionMaybe $ try $ do
     typ <- typeParser
@@ -70,16 +69,16 @@ argDeclEnd = do
 argDecl :: Parser [(String, Type)]
 argDecl = do
   name <- valueName
-  _ <- any1Whitespace
+  _ <- any1LinearWhitespace
   typ <- typeParser
-  _ <- anyWhitespace
+  _ <- anyLinearWhitespace
   rest <- argDeclEnd <|> nextArgDecl
   return $ (name, typ) : rest
 
 nextArgDecl :: Parser [(String, Type)]
 nextArgDecl = do
   _ <- char ','
-  _ <- anyWhitespace
+  _ <- anyLinearWhitespace
   argDecl
 
 ---- AST.Statement parsers ----
@@ -412,7 +411,12 @@ escapedChar :: Parser String
 escapedChar = do
   _ <- char '\\'
   c <- anyChar
-  return $ '\\' : c : ""
+  case c of
+   'n'  -> return "\n"
+   't'  -> return "\t"
+   '\\' -> return "\\"
+   '"'  -> return "\""
+   _    -> return $ '\\' : c : ""
 
 typeName :: Parser String
 typeName = do
