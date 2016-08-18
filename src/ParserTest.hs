@@ -26,6 +26,8 @@ tests =
   , expectParses expressionParser "123.345" (E.EValue (E.EFloat 123.345))
   , expectParses expressionParser "a123" (E.EVariable "a123")
   , expectParses expressionParser "f(a)" (E.ECall (E.EVariable "f") [E.EVariable "a"])
+  , expectParses expressionParser "f(a, b , c )"
+    (E.ECall (E.EVariable "f") [E.EVariable "a", E.EVariable "b", E.EVariable "c"])
   , expectParses expressionParser "Bool(a)" (E.ECast T.Bool (E.EVariable "a"))
   , expectParses expressionParser "(2 + 3)"
     (E.EParen (E.EBinary E.Plus (E.EValue (E.EInt 2)) (E.EValue (E.EInt 3))))
@@ -76,6 +78,7 @@ tests =
                            (E.EValue (E.EInt 4))))))
   -- blocks and larger
   , testParsingBlock
+  , testParsingIf
   , testParsingFunc
   , testParsingFunc2
   ]
@@ -87,6 +90,14 @@ testParsingBlock =
                          , S.Return (Just $ E.EVariable "a1")
                          ]
   in expectParses statementParser text expected
+
+testParsingIf :: IO Bool
+testParsingIf =
+  let text = "if a == 1 {\nreturn a\n}"
+      test = E.EBinary E.Eq (E.EVariable "a") (E.EValue $ E.EInt 1)
+      body = [S.Return $ Just $ E.EVariable "a"]
+      expected = S.If test body Nothing
+  in expectParses ifStatement text expected
 
 testParsingFunc :: IO Bool
 testParsingFunc =

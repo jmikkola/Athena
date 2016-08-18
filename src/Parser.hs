@@ -21,7 +21,7 @@ parseFile content = applyLeft show $ parse fileParser "<input>" content
 fileParser :: Parser File
 fileParser = do
   _ <- anyWhitespace
-  decls <- sepBy declarationParser statementSep
+  decls <- sepEndBy declarationParser statementSep
   _ <- anyWhitespace
   _ <- eof
   return decls
@@ -85,8 +85,8 @@ nextArgDecl = do
 
 statementParser :: Parser Statement
 statementParser = choice $ map try [
-  returnStatement, letStatement, assignStatement,
-  blockStatement, exprStatement, ifStatement, whileStatement]
+  returnStatement, letStatement, ifStatement, whileStatement, blockStatement,
+  assignStatement, exprStatement]
 
 returnStatement :: Parser Statement
 returnStatement = do
@@ -156,7 +156,7 @@ ifStatement = do
   _ <- string "if"
   _ <- any1Whitespace
   test <- expressionParser
-  _ <- any1Whitespace
+  _ <- anyWhitespace
   body <- blockStatement
   elsePart <- optionMaybe $ try elseBlock
   return $ let (Statement.Block stmts) = body
@@ -174,7 +174,7 @@ whileStatement = do
   _ <- string "while"
   _ <- any1Whitespace
   test <- expressionParser
-  _ <- any1Whitespace
+  _ <- anyWhitespace
   body <- blockStatement
   return $ let (Statement.Block stmts) = body
            in Statement.While test stmts
