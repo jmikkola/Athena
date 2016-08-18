@@ -1,5 +1,6 @@
 module Parser where
 
+import Control.Monad ( liftM )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
@@ -18,10 +19,15 @@ parseFile content = applyLeft show $ parse fileParser "<input>" content
 ---- AST.Declaration parsers ----
 
 fileParser :: Parser File
-fileParser = sepBy declarationParser statementSep
+fileParser = do
+  _ <- anyWhitespace
+  decls <- sepBy declarationParser statementSep
+  _ <- anyWhitespace
+  _ <- eof
+  return decls
 
 declarationParser :: Parser Declaraction
-declarationParser = choice [letDeclaration]
+declarationParser = choice [letDeclaration, funcDeclaration]
 
 letDeclaration :: Parser Declaraction
 letDeclaration = do
@@ -39,16 +45,16 @@ letDeclaration = do
 funcDeclaration :: Parser Declaraction
 funcDeclaration = do
   _ <- string "fn"
-  _ <- any1Whitespace
+  _ <- any1LinearWhitespace
   name <- valueName
   _ <- char '('
-  _ <- anyWhitespace
+  _ <- any1LinearWhitespace
   args <- funcArgDecl
   _ <- char '('
-  _ <- any1Whitespace
+  _ <- any1LinearWhitespace
   retType <- optionMaybe $ try $ do
     typ <- typeParser
-    _ <- any1Whitespace
+    _ <- any1LinearWhitespace
     return typ
   body <- blockStatement
   return $ Declaraction.Function name args (unwrapOr retType Type.Nil) body
@@ -116,15 +122,29 @@ assignStatement = do
 blockStatement :: Parser Statement
 blockStatement = do
   _ <- char '{'
-  stmts <- sepBy statementParser statementSep
+  _ <- statementSep
+  liftM Statement.Block $ blockStatements
+
+blockStatements :: Parser [Statement]
+blockStatements = endBlock <|> nextStatement
+
+nextStatement :: Parser [Statement]
+nextStatement = do
+  stmt <- statementParser
+  _ <- statementSep
+  rest <- blockStatements
+  return $ stmt : rest
+
+endBlock :: Parser [Statement]
+endBlock = do
   _ <- char '}'
-  return $ Statement.Block stmts
+  return []
 
 statementSep :: Parser ()
 statementSep = do
-  _ <- anyWhitespace
+  _ <- anyLinearWhitespace
   _ <- char '\n'
-  _ <- many (anyWhitespace <|> string "\n")
+  _ <- anyWhitespace
   return ()
 
 exprStatement :: Parser Statement
@@ -173,11 +193,12 @@ expressionParser = do
 readBinExprParts :: Parser (Expression, [(Op, Expression)])
 readBinExprParts = do
   e <- expr
-  _ <- anyWhitespace
+  _ <- anyLinearWhitespace
   parts <- many $ do
     op <- opParser
-    _ <- anyWhitespace
+    _ <- anyLinearWhitespace
     e' <- expr
+    _ <- anyLinearWhitespace
     return (op, e')
   return (e, parts)
 
@@ -424,6 +445,15 @@ whitespaceChs = " \t\r\n"
 
 anyWhitespaceCh :: Parser Char
 anyWhitespaceCh = oneOf whitespaceChs
+
+linearWhitespaceCh :: Parser Char
+linearWhitespaceCh = oneOf " \t"
+
+anyLinearWhitespace :: Parser String
+anyLinearWhitespace = many linearWhitespaceCh
+
+any1LinearWhitespace :: Parser String
+any1LinearWhitespace = many1 linearWhitespaceCh
 
 parseComment :: Parser String
 parseComment = try parseLineComment <|> parseBlockComment <?> "Comment"
