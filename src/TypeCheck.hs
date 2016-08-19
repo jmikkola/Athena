@@ -1,8 +1,6 @@
 module TypeCheck where
 
 import Control.Monad (foldM)
-import Data.Either (lefts)
-import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -11,7 +9,7 @@ import qualified AST.Declaration as D
 import AST.Expression (Expression, Value)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
-import qualified AST.Statement as Statement
+import qualified AST.Statement as S
 import AST.Type (Type)
 import qualified AST.Type as T
 
@@ -22,6 +20,7 @@ type TypeScope = Map String Type
 checkFile :: File -> Result ()
 checkFile file = do
   fs <- buildFileScope file
+  _ <- mapM (checkDeclaration fs) file
   return ()
 
 buildFileScope :: File -> Result TypeScope
@@ -49,11 +48,27 @@ checkDeclaration ts d =
        (T.Function ats rt) -> return (ats, rt)
        _                   -> Left $ "function with non-function type: " ++ show t
      if length argTypes /= length args
-        then Left "arg length mismatch"
-        else return ()
+        then Left "arg length mismatch in declaration"
+        else let funcScope = Map.union (Map.fromList $ zip args argTypes) ts
+             in requireReturnType funcScope body retType
    (D.Let _ t expr) -> do
      _ <- requireExprType ts expr t
      return ()
+
+requireReturnType :: TypeScope -> Statement -> Type -> Result ()
+requireReturnType ts s t =
+  case s of
+   (S.Return mExpr) -> case mExpr of
+     Nothing  -> requireEqual' t T.Nil
+     (Just e) -> do
+       _ <- requireExprType ts e t
+       return ()
+   (S.Let name t e) -> Left "TODO let"
+   (S.Assign name e) -> Left "TODO assign"
+   (S.Block stmts) -> Left "TODO block"
+   (S.Expr e) -> Left "TODO expr"
+   (S.If test body mElse) -> Left "TODO if"
+   (S.While test body) -> Left "TODO while"
 
 requireExprType :: TypeScope -> Expression -> Type -> Result Type
 requireExprType ts e t =
@@ -119,3 +134,8 @@ requireEqual :: Type -> Type -> Result Type
 requireEqual t1 t2 =
   if t1 == t2 then return t1
   else Left $ "Type mismatch between " ++ show t1 ++ " and " ++ show t2
+
+requireEqual' :: Type -> Type -> Result ()
+requireEqual' t1 t2 = do
+  _ <- requireEqual t1 t2
+  return ()
