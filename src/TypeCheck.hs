@@ -1,12 +1,13 @@
 module TypeCheck where
 
+import Control.Monad (foldM)
 import Data.Either (lefts)
 import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 import AST.Declaration (Declaraction, File)
-import qualified AST.Declaration as Declaraction
+import qualified AST.Declaration as D
 import AST.Expression (Expression, Op, Value)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
@@ -16,11 +17,32 @@ import qualified AST.Type as T
 
 type Result = Either String
 
-checkFile :: File -> Result ()
-checkFile = undefined
+type TypeScope = Map String Type
 
-checkDeclaration :: Declaraction -> Result ()
-checkDeclaration _ = return ()
+checkFile :: File -> Result ()
+checkFile file = do
+  fs <- buildFileScope file
+  return ()
+
+buildFileScope :: File -> Result TypeScope
+buildFileScope = foldM addDecl Map.empty
+  where addDecl ts decl =
+          let t = declType decl
+              n = declName decl
+          in case Map.lookup n ts of
+              (Just _) -> Left $ "duplicate definition of " ++ n
+              Nothing  -> return $ Map.insert n t ts
+
+declName :: Declaraction -> String
+declName (D.Let n _ _) = n
+declName (D.Function n _ _ _) = n
+
+declType :: Declaraction -> Type
+declType (D.Let _ t _) = t
+declType (D.Function _ t _ _) = t
+
+checkDeclaration :: Declaraction -> TypeScope -> Result ()
+checkDeclaration _ _ = return ()
 
 requireExprType :: Expression -> Type -> Result Type
 requireExprType e t =

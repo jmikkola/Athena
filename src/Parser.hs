@@ -56,7 +56,8 @@ funcDeclaration = do
     _ <- any1LinearWhitespace
     return typ
   body <- blockStatement
-  return $ Declaraction.Function name args (unwrapOr retType Type.Nil) body
+  let typ = Type.Function (map snd args) (unwrapOr retType Type.Nil)
+  return $ Declaraction.Function name typ (map fst args) body
 
 funcArgDecl :: Parser [(String, Type)]
 funcArgDecl = argDeclEnd <|> argDecl

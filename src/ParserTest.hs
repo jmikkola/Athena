@@ -102,13 +102,14 @@ testParsingIf =
 testParsingFunc :: IO Bool
 testParsingFunc =
   let text = "fn main() {\n}"
-      expected = D.Function "main" [] T.Nil (S.Block [])
+      expected = D.Function "main" (T.Function [] T.Nil) [] (S.Block [])
   in expectParses declarationParser text expected
 
 testParsingFunc2 :: IO Bool
 testParsingFunc2 =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
-      expected = D.Function "main" [("a", T.Int), ("b", T.Bool)] T.Bool (S.Block [])
+      fnType = T.Function [T.Int, T.Bool] T.Bool
+      expected = D.Function "main" fnType ["a", "b"] (S.Block [])
   in expectParses declarationParser text expected
 
 ---- Utilities ----
