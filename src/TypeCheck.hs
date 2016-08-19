@@ -42,7 +42,18 @@ declType (D.Let _ t _) = t
 declType (D.Function _ t _ _) = t
 
 checkDeclaration :: TypeScope -> Declaraction -> Result ()
-checkDeclaration _ _ = return ()
+checkDeclaration ts d =
+  case d of
+   (D.Function _ t args body) -> do
+     (argTypes, retType) <- case t of
+       (T.Function ats rt) -> return (ats, rt)
+       _                   -> Left $ "function with non-function type: " ++ show t
+     if length argTypes /= length args
+        then Left "arg length mismatch"
+        else return ()
+   (D.Let _ t expr) -> do
+     _ <- requireExprType ts expr t
+     return ()
 
 requireExprType :: TypeScope -> Expression -> Type -> Result Type
 requireExprType ts e t =
@@ -53,11 +64,13 @@ requireExprType ts e t =
    (E.EBinary _ l r) -> do
      _ <- requireExprType ts l t
      requireExprType ts r t
-   (E.ECall f args)  -> undefined -- need info about the function's type
+   (E.ECall f args)  -> do
+     retType <- checkExpression ts e
+     requireEqual t retType
    (E.ECast t' e')   -> do
      _ <- requireEqual t t'
      checkExpression ts e'
-   (E.EVariable var) -> undefined -- need info about the variable's type
+   (E.EVariable var) -> requireVarType ts var t
 
 checkExpression :: TypeScope -> Expression -> Result Type
 checkExpression ts e =
@@ -68,11 +81,33 @@ checkExpression ts e =
    (E.EBinary o l r) -> do
      t <- checkExpression ts l
      requireExprType ts r t
-   (E.ECall f args)  -> undefined -- need info about the function's type
+   (E.ECall f args)  -> do
+     fType <- checkExpression ts f
+     case fType of
+      (T.Function argTypes retType) ->
+        if length argTypes /= length args
+        then Left $ "arg length mismatch"
+        else do
+          _ <- mapM (\(t, arg) -> requireExprType ts arg t) (zip argTypes args)
+          return retType
+      _                   -> Left $ "trying to call a non-function type: " ++ show fType
    (E.ECast t' e')   -> do
      _ <- checkExpression ts e'
      return t'
-   (E.EVariable var) -> undefined -- need info about the variable's type
+   (E.EVariable var) -> getVarType ts var
+
+getVarType :: TypeScope -> String -> Result Type
+getVarType ts var =
+  case Map.lookup var ts of
+   Nothing  -> Left $ "not defined: " ++ var
+   (Just t) -> return t
+
+requireVarType :: TypeScope -> String -> Type -> Result Type
+requireVarType ts var t = do
+  t' <- getVarType ts var
+  if t == t'
+    then return t
+    else Left $ "type mismatch " ++ show t' ++ " and " ++ show t
 
 valueType :: Value -> Type
 valueType (E.EString _) = T.String

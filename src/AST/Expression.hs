@@ -46,5 +46,3 @@ data BinOp
   | RShift
   | RRShift
   deriving (Eq, Show)
-
--- TODO: lshift and rshift, negate
