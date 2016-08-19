@@ -12,14 +12,19 @@ data Value
 data Expression
   = EParen Expression
   | EValue Value
-  | EUnary Op Expression
-  | EBinary Op Expression Expression
+  | EUnary UnaryOp Expression
+  | EBinary BinOp Expression Expression
   | ECall Expression [Expression]
   | ECast Type Expression
   | EVariable String
   deriving (Eq, Show)
 
-data Op
+data UnaryOp
+  = BitInvert
+  | BoolNot
+  deriving (Eq, Show)
+
+data BinOp
   = Plus
   | Minus
   | Times
@@ -28,17 +33,18 @@ data Op
   | Power
   | BitAnd
   | BitOr
-  | BitInvert -- unary only
   | BitXor
   | BoolAnd
   | BoolOr
-  | BoolNot -- unary only
   | Eq
   | NotEq
   | Less
   | LessEq
   | Greater
   | GreaterEq
+  | LShift
+  | RShift
+  | RRShift
   deriving (Eq, Show)
 
 -- TODO: lshift and rshift, negate

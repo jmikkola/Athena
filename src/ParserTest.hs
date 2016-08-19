@@ -31,6 +31,8 @@ tests =
   , expectParses expressionParser "Bool(a)" (E.ECast T.Bool (E.EVariable "a"))
   , expectParses expressionParser "(2 + 3)"
     (E.EParen (E.EBinary E.Plus (E.EValue (E.EInt 2)) (E.EValue (E.EInt 3))))
+  , expectParses expressionParser "int ** 3"
+    (E.EBinary E.Power (E.EVariable "int") (E.EValue (E.EInt 3)))
   , expectParses expressionParser "\"a quoted \\\"string\\\" \""
     (E.EValue (E.EString "a quoted \"string\" "))
   , expectParses expressionParser "!False"
@@ -76,6 +78,10 @@ tests =
                          (E.EBinary E.Mod
                           (E.EValue (E.EInt 3))
                            (E.EValue (E.EInt 4))))))
+  , expectParses assignStatement "int = 3"
+    (S.Assign "int" $ E.EValue $ E.EInt 3)
+  , expectParses assignStatement "int = int ** 3"
+    (S.Assign "int" $ E.EBinary E.Power (E.EVariable "int") (E.EValue $ E.EInt 3))
   -- blocks and larger
   , testParsingBlock
   , testParsingIf

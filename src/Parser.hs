@@ -6,7 +6,7 @@ import Text.Parsec.String (Parser)
 
 import AST.Declaration (Declaraction, File)
 import qualified AST.Declaration as Declaraction
-import AST.Expression (Expression, Op, Value)
+import AST.Expression (Expression, BinOp, UnaryOp, Value)
 import qualified AST.Expression as Expression
 import AST.Statement (Statement)
 import qualified AST.Statement as Statement
@@ -190,11 +190,11 @@ expressionParser = do
   bin <- readBinExprParts
   return $ unfoldParts bin
 
-readBinExprParts :: Parser (Expression, [(Op, Expression)])
+readBinExprParts :: Parser (Expression, [(BinOp, Expression)])
 readBinExprParts = do
   e <- expr
   _ <- anyLinearWhitespace
-  parts <- many $ do
+  parts <- many $ try $ do
     op <- opParser
     _ <- anyLinearWhitespace
     e' <- expr
@@ -202,13 +202,14 @@ readBinExprParts = do
     return (op, e')
   return (e, parts)
 
-unfoldParts :: (Expression, [(Op, Expression)]) -> Expression
+unfoldParts :: (Expression, [(BinOp, Expression)]) -> Expression
 unfoldParts bin =
   let (e, rest) = foldl unfoldOps bin precOrder
   in if rest /= [] then error "Unexpected operator"
      else e
 
-unfoldOps :: (Expression, [(Op, Expression)]) -> [Op] -> (Expression, [(Op, Expression)])
+unfoldOps :: (Expression, [(BinOp, Expression)]) -> [BinOp] ->
+            (Expression, [(BinOp, Expression)])
 unfoldOps (left, parts) ops = case parts of
   []              -> (left, [])
   ((op, right):pts) ->
@@ -217,10 +218,12 @@ unfoldOps (left, parts) ops = case parts of
        then (Expression.EBinary op left applied, rest)
        else (left, (op, applied) : rest)
 
-precOrder :: [[Op]]
+precOrder :: [[BinOp]]
 precOrder =
   [ [Expression.Times, Expression.Divide, Expression.Mod]
   , [Expression.Plus, Expression.Minus]
+  , [Expression.LShift, Expression.RShift, Expression.RRShift]
+  , [Expression.Power]
   , [Expression.Less, Expression.LessEq, Expression.Greater, Expression.GreaterEq]
   , [Expression.Eq, Expression.NotEq]
   , [Expression.BitAnd]
@@ -249,7 +252,7 @@ valueExpr = do
 
 unaryExpr :: Parser Expression
 unaryExpr = do
-  op <- opParser
+  op <- unaryOpParser
   _ <- anyWhitespace
   ex <- expressionParser
   return $ Expression.EUnary op ex
@@ -352,31 +355,37 @@ integer start = return $ Expression.EInt (read start)
 
 --- parse operators
 
-opParser :: Parser Op
+opParser :: Parser BinOp
 opParser = choices opChoices
 
-opChoices :: [(String, Op)]
+opChoices :: [(String, BinOp)]
 opChoices =
       [ ("+",  Expression.Plus)
       , ("-",  Expression.Minus)
+      , ("**", Expression.Power)
       , ("*",  Expression.Times)
       , ("/",  Expression.Divide)
       , ("%",  Expression.Mod)
-      , ("**", Expression.Power)
       , ("|",  Expression.BitOr)
-      , ("~",  Expression.BitInvert)
       , ("^",  Expression.BitXor)
       , ("&&", Expression.BoolAnd)
       , ("&",  Expression.BitAnd)
       , ("||", Expression.BoolOr)
+      , ("<<",  Expression.LShift)
+      , (">>>", Expression.RRShift)
+      , (">>",  Expression.RShift)
       , ("==", Expression.Eq)
       , ("!=", Expression.NotEq)
-      , ("!",  Expression.BoolNot)
       , ("<=", Expression.LessEq)
       , ("<",  Expression.Less)
       , (">=", Expression.GreaterEq)
       , (">",  Expression.Greater)
       ]
+
+unaryOpParser :: Parser UnaryOp
+unaryOpParser =
+  choices [ ("~", Expression.BitInvert)
+          , ("!", Expression.BoolNot) ]
 
 ---- AST.Type parsers ----
 
