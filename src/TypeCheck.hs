@@ -1,7 +1,5 @@
 module TypeCheck where
 
-{-# LANGUAGE ExistentialQuantification #-}
-
 import Control.Applicative ( (<|>) )
 import Control.Monad.State
 import Data.Map (Map)
@@ -238,7 +236,6 @@ requireEqual' :: Type -> Type -> Result ()
 requireEqual' t1 t2 = do
   _ <- requireEqual t1 t2
   return ()
-
 
 note :: a -> Maybe b -> Either a b
 note msg = maybe (Left msg) Right
