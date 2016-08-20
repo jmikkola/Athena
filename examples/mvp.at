@@ -17,15 +17,15 @@ fn main() {
     // Numbers can be cast to strings
     print(String(b) + " " + String(a))
 
-    print(do_stuff())
+    //print(do_stuff())
 }
-
 fn do_stuff() String {
    // basic math operations are supported
    let int Int = 5 + (2 * 10) / 3 % 4
    int = int ** 3
 
-   let fl Float = 99.0e-3 ** 2
+   //let fl Float = 99.0e-3 ** 2
+    let fl Float = 1.23
 
    // Comparison operators
    let x Bool = fl < Float(int)

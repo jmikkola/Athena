@@ -63,9 +63,14 @@ setInScope name typ = do
 buildFileScope :: File -> TSState ()
 buildFileScope file = do
   startScope
+  defineDefaultFunctions
   _ <- mapM addDecl file
   return ()
   where addDecl decl = setInScope (declName decl) (declType decl)
+
+defineDefaultFunctions :: TSState ()
+defineDefaultFunctions = do
+  setInScope "print" $ T.Function [T.String] T.Nil
 
 declName :: Declaraction -> String
 declName (D.Let n _ _) = n
@@ -179,6 +184,8 @@ requireExprType e t =
    (E.EValue v)      -> lift $ requireEqual t (valueType v)
    (E.EUnary _ e')   -> requireExprType e' t
    (E.EBinary _ l r) -> do
+     -- TODO: the output type of binary operations (e.g. >, ==) isn't
+     -- always the same as the input type.
      _ <- requireExprType l t
      requireExprType r t
    (E.ECall f args)  -> do
