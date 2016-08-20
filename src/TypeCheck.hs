@@ -56,19 +56,44 @@ checkDeclaration ts d =
      return ()
 
 requireReturnType :: TypeScope -> Statement -> Type -> Result ()
-requireReturnType ts s t =
+requireReturnType ts s t = do
+  retType <- checkStatement ts s
+  case retType of
+   Nothing   -> requireEqual' t T.Nil
+   (Just rt) -> requireEqual' t rt
+
+-- Returns a return type, if the statement returns
+checkStatement :: TypeScope -> Statement -> Result (Maybe Type)
+checkStatement ts s =
   case s of
    (S.Return mExpr) -> case mExpr of
-     Nothing  -> requireEqual' t T.Nil
+     Nothing  -> return Nothing
      (Just e) -> do
-       _ <- requireExprType ts e t
-       return ()
-   (S.Let name t e) -> Left "TODO let"
-   (S.Assign name e) -> Left "TODO assign"
-   (S.Block stmts) -> Left "TODO block"
-   (S.Expr e) -> Left "TODO expr"
-   (S.If test body mElse) -> Left "TODO if"
-   (S.While test body) -> Left "TODO while"
+       retType <- checkExpression ts e
+       return $ Just retType
+   (S.Let name t e) -> do
+     -- TODO: check local scope, add this to it
+     _ <- requireExprType ts e t
+     return Nothing
+   (S.Assign name e) -> do
+     -- TODO: require that name is bound, then check its type
+     _ <- checkExpression ts e
+     return Nothing
+   (S.Block stmts) -> do
+     -- TODO: walk over statements
+     return Nothing
+   (S.Expr e) -> do
+     _ <- checkExpression ts e
+     return Nothing
+   (S.If test body mElse) -> do
+     _ <- requireExprType ts test T.Bool
+     -- todo: figure out how to handle this
+     return Nothing
+   (S.While test body) -> do
+     _ <- requireExprType ts test T.Bool
+     -- todo: figure out how to handle this
+     return Nothing
+
 
 requireExprType :: TypeScope -> Expression -> Type -> Result Type
 requireExprType ts e t =
