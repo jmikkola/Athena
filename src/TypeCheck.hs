@@ -46,7 +46,7 @@ endScope = do
   scopes <- get
   case scopes of
    (_:ss) -> put ss
-   []     -> lift $ Left "No scope to end??"
+   []     -> err "No scope to end??"
 
 getFromScope :: String -> TSState Type
 getFromScope name = do
@@ -86,9 +86,9 @@ checkDeclaration d =
    (D.Function _ t args body) -> do
      (argTypes, retType) <- case t of
        (T.Function ats rt) -> return (ats, rt)
-       _                   -> lift $ Left $ "function with non-function type: " ++ show t
+       _                   -> err $ "function with non-function type: " ++ show t
      if length argTypes /= length args
-        then lift $ Left "arg length mismatch in declaration"
+        then err "arg length mismatch in declaration"
         else do
            startScope
            addFuncScope args argTypes
@@ -107,7 +107,7 @@ getReturnType :: Statement -> Type -> TSState Type
 getReturnType stmt expectedRetType =
   case stmt of
    (S.Block stmts) -> checkBlock stmts expectedRetType
-   _               -> lift $ Left "function body must be a block"
+   _               -> err "function body must be a block"
 
 err :: String -> StateT TypeScope (Either String) a
 err = lift . Left
@@ -204,11 +204,11 @@ checkExpression e =
      case fType of
       (T.Function argTypes retType) ->
         if length argTypes /= length args
-        then lift $ Left $ "arg length mismatch"
+        then err "arg length mismatch"
         else do
           _ <- mapM (\(t, arg) -> requireExprType arg t) (zip argTypes args)
           return retType
-      _                   -> lift $ Left $ "trying to call a non-function type: " ++ show fType
+      _  -> err $ "trying to call a non-function type: " ++ show fType
    (E.ECast t' e')   -> do
      _ <- checkExpression e'
      return t'
@@ -219,7 +219,7 @@ requireVarType var t = do
   t' <- getFromScope var
   if t == t'
     then return t
-    else lift $ Left $ "type mismatch " ++ show t' ++ " and " ++ show t
+    else err $ "type mismatch " ++ show t' ++ " and " ++ show t
 
 valueType :: Value -> Type
 valueType (E.EString _) = T.String
