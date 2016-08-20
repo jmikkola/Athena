@@ -1,9 +1,9 @@
 module TypeCheck where
 
+{-# LANGUAGE ExistentialQuantification #-}
+
 import Control.Applicative ( (<|>) )
-import Control.Monad (foldM)
 import Control.Monad.State
-import Control.Monad.Except
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -37,7 +37,7 @@ scopeAdd :: String -> Type -> TypeScope -> Result TypeScope
 scopeAdd name typ (m:ms) =
   case Map.lookup name m of
    Nothing  -> return (Map.insert name typ m : ms)
-   (Just x) -> Left ("Duplicate definition for: " ++ name)
+   (Just _) -> Left ("Duplicate definition for: " ++ name)
 scopeAdd _    _   []     = Left "Empty scope stack??"
 
 startScope :: TSState ()
@@ -79,7 +79,6 @@ declType (D.Function _ t _ _) = t
 
 addFuncScope :: [String] -> [Type] -> TSState ()
 addFuncScope names types = do
-  startScope
   _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
   return ()
 
@@ -93,60 +92,87 @@ checkDeclaration d =
      if length argTypes /= length args
         then lift $ Left "arg length mismatch in declaration"
         else do
+           startScope
            addFuncScope args argTypes
            requireReturnType body retType
+           endScope
    (D.Let _ t expr) -> do
      _ <- requireExprType expr t
      return ()
 
 requireReturnType :: Statement -> Type -> TSState ()
 requireReturnType stmt t = do
-  (lastRet, rets) <- getReturnType stmt
-  _ <- mapM (lift . requireEqual t) rets
+  lastRet <- getReturnType stmt t
   lift $ requireEqual' t lastRet
 
-getReturnType :: Statement -> TSState (Type, [Type])
-getReturnType stmt =
+getReturnType :: Statement -> Type -> TSState Type
+getReturnType stmt expectedRetType =
   case stmt of
-   (S.Block stmts) -> checkBlock stmts
+   (S.Block stmts) -> checkBlock stmts expectedRetType
    _               -> lift $ Left "function body must be a block"
 
-checkBlock :: [Statement] -> TSState (Type, [Type])
-checkBlock stmts =
-  let localDeclarations = Map.empty
-  in undefined
+err :: String -> StateT TypeScope (Either String) a
+err = lift . Left
+
+checkBlock :: [Statement] -> Type -> TSState Type
+checkBlock stmts expectedRetType =
+  case stmts of
+   []               -> return T.Nil
+   [S.Return me] -> returnExpr me expectedRetType
+   (S.Return _:_)   -> err $ "Statements after a return: " ++ show stmts
+   (s:ss)           -> do
+     _ <- checkStatement s expectedRetType
+     checkBlock ss expectedRetType
+
+returnExpr :: Maybe Expression -> Type -> TSState Type
+returnExpr Nothing  expectedRetType = do
+  lift $ requireEqual expectedRetType T.Nil
+returnExpr (Just e) expectedRetType = do
+  retType <- checkExpression e
+  lift $ requireEqual expectedRetType retType
 
 -- Returns a return type, if the statement returns
-checkStatement :: TypeScope -> Statement -> TSState (Maybe Type)
-checkStatement localScope s =
+checkStatement :: Statement -> Type -> TSState ()
+checkStatement s expectedRetType =
   case s of
-   (S.Return mExpr) -> case mExpr of
-     Nothing  -> return $ Just T.Nil
-     (Just e) -> do
-       retType <- checkExpression e
-       return $ Just retType
+   (S.Return mExpr) -> do
+     _ <- returnExpr mExpr expectedRetType
+     return ()
    (S.Let name t e) -> do
-     -- TODO: check local scope, add this to it
+     setInScope name t
      _ <- requireExprType e t
-     return Nothing
+     return ()
    (S.Assign name e) -> do
-     -- TODO: require that name is bound, then check its type
-     _ <- checkExpression e
-     return Nothing
+     t <- getFromScope name
+     _ <- requireExprType e t
+     return ()
    (S.Block stmts) -> do
-     -- TODO: walk over statements
-     return Nothing
+     startScope
+     _ <- checkBlock stmts expectedRetType
+     endScope
    (S.Expr e) -> do
      _ <- checkExpression e
-     return Nothing
+     return ()
    (S.If test body mElse) -> do
      _ <- requireExprType test T.Bool
-     -- todo: figure out how to handle this
-     return Nothing
+
+     startScope
+     _ <- checkBlock body expectedRetType
+     endScope
+
+     _ <- case mElse of
+       Nothing    -> return ()
+       (Just els) -> checkStatement els expectedRetType
+
+     return ()
    (S.While test body) -> do
      _ <- requireExprType test T.Bool
-     -- todo: figure out how to handle this
-     return Nothing
+
+     startScope
+     _ <- checkBlock body expectedRetType
+     endScope
+
+     return ()
 
 requireExprType :: Expression -> Type -> TSState Type
 requireExprType e t =
@@ -158,8 +184,9 @@ requireExprType e t =
      _ <- requireExprType l t
      requireExprType r t
    (E.ECall f args)  -> do
-     retType <- checkExpression e
-     lift $ requireEqual t retType
+     fnType <- checkExpression f
+     argTypes <- mapM checkExpression args
+     lift $ requireEqual fnType (T.Function argTypes t)
    (E.ECast t' e')   -> do
      _ <- lift $ requireEqual t t'
      checkExpression e'
@@ -170,8 +197,8 @@ checkExpression e =
   case e of
    (E.EParen e')     -> checkExpression e'
    (E.EValue v)      -> return $ valueType v
-   (E.EUnary o e')   -> checkExpression e'
-   (E.EBinary o l r) -> do
+   (E.EUnary _ e')   -> checkExpression e'
+   (E.EBinary _ l r) -> do
      t <- checkExpression l
      requireExprType r t
    (E.ECall f args)  -> do
