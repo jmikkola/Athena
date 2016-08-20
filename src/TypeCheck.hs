@@ -1,6 +1,9 @@
 module TypeCheck where
 
+import Control.Applicative ( (<|>) )
 import Control.Monad (foldM)
+import Control.Monad.State
+import Control.Monad.Except
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -14,140 +17,184 @@ import AST.Type (Type)
 import qualified AST.Type as T
 
 type Result = Either String
-
-type TypeScope = Map String Type
+type TypeScope = [Map String Type]
+type TSState = StateT TypeScope Result
 
 checkFile :: File -> Result ()
-checkFile file = do
-  fs <- buildFileScope file
-  _ <- mapM (checkDeclaration fs) file
+checkFile file = evalStateT (checkFileM file) []
+
+checkFileM :: File -> TSState ()
+checkFileM file = do
+  buildFileScope file
+  _ <- mapM checkDeclaration file
   return ()
 
-buildFileScope :: File -> Result TypeScope
-buildFileScope = foldM addDecl Map.empty
-  where addDecl ts decl =
-          let t = declType decl
-              n = declName decl
-          in case Map.lookup n ts of
-              (Just _) -> Left $ "duplicate definition of " ++ n
-              Nothing  -> return $ Map.insert n t ts
+scopeLookup :: String -> TypeScope -> Maybe Type
+scopeLookup name (m:ms) = Map.lookup name m <|> scopeLookup name ms
+scopeLookup _    []     = Nothing
+
+scopeAdd :: String -> Type -> TypeScope -> Result TypeScope
+scopeAdd name typ (m:ms) =
+  case Map.lookup name m of
+   Nothing  -> return (Map.insert name typ m : ms)
+   (Just x) -> Left ("Duplicate definition for: " ++ name)
+scopeAdd _    _   []     = Left "Empty scope stack??"
+
+startScope :: TSState ()
+startScope = modify (Map.empty :)
+
+endScope :: TSState ()
+endScope = do
+  scopes <- get
+  case scopes of
+   (_:ss) -> put ss
+   []     -> lift $ Left "No scope to end??"
+
+getFromScope :: String -> TSState Type
+getFromScope name = do
+  scopes <- get
+  lift $ note ("Not defined: " ++ name) (scopeLookup name scopes)
+
+setInScope :: String -> Type -> TSState ()
+setInScope name typ = do
+  scopes <- get
+  newScopes <- lift $ scopeAdd name typ scopes
+  put newScopes
+  return ()
+
+buildFileScope :: File -> TSState ()
+buildFileScope file = do
+  startScope
+  _ <- mapM addDecl file
+  return ()
+  where addDecl decl = setInScope (declName decl) (declType decl)
 
 declName :: Declaraction -> String
 declName (D.Let n _ _) = n
 declName (D.Function n _ _ _) = n
 
-declType :: Declaraction -> Type
+declType :: Declaraction  -> Type
 declType (D.Let _ t _) = t
 declType (D.Function _ t _ _) = t
 
-checkDeclaration :: TypeScope -> Declaraction -> Result ()
-checkDeclaration ts d =
+addFuncScope :: [String] -> [Type] -> TSState ()
+addFuncScope names types = do
+  startScope
+  _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
+  return ()
+
+checkDeclaration :: Declaraction -> TSState ()
+checkDeclaration d =
   case d of
    (D.Function _ t args body) -> do
      (argTypes, retType) <- case t of
        (T.Function ats rt) -> return (ats, rt)
-       _                   -> Left $ "function with non-function type: " ++ show t
+       _                   -> lift $ Left $ "function with non-function type: " ++ show t
      if length argTypes /= length args
-        then Left "arg length mismatch in declaration"
-        else let funcScope = Map.union (Map.fromList $ zip args argTypes) ts
-             in requireReturnType funcScope body retType
+        then lift $ Left "arg length mismatch in declaration"
+        else do
+           addFuncScope args argTypes
+           requireReturnType body retType
    (D.Let _ t expr) -> do
-     _ <- requireExprType ts expr t
+     _ <- requireExprType expr t
      return ()
 
-requireReturnType :: TypeScope -> Statement -> Type -> Result ()
-requireReturnType ts s t = do
-  retType <- checkStatement ts s
-  case retType of
-   Nothing   -> requireEqual' t T.Nil
-   (Just rt) -> requireEqual' t rt
+requireReturnType :: Statement -> Type -> TSState ()
+requireReturnType stmt t = do
+  (lastRet, rets) <- getReturnType stmt
+  _ <- mapM (lift . requireEqual t) rets
+  lift $ requireEqual' t lastRet
+
+getReturnType :: Statement -> TSState (Type, [Type])
+getReturnType stmt =
+  case stmt of
+   (S.Block stmts) -> checkBlock stmts
+   _               -> lift $ Left "function body must be a block"
+
+checkBlock :: [Statement] -> TSState (Type, [Type])
+checkBlock stmts =
+  let localDeclarations = Map.empty
+  in undefined
 
 -- Returns a return type, if the statement returns
-checkStatement :: TypeScope -> Statement -> Result (Maybe Type)
-checkStatement ts s =
+checkStatement :: TypeScope -> Statement -> TSState (Maybe Type)
+checkStatement localScope s =
   case s of
    (S.Return mExpr) -> case mExpr of
-     Nothing  -> return Nothing
+     Nothing  -> return $ Just T.Nil
      (Just e) -> do
-       retType <- checkExpression ts e
+       retType <- checkExpression e
        return $ Just retType
    (S.Let name t e) -> do
      -- TODO: check local scope, add this to it
-     _ <- requireExprType ts e t
+     _ <- requireExprType e t
      return Nothing
    (S.Assign name e) -> do
      -- TODO: require that name is bound, then check its type
-     _ <- checkExpression ts e
+     _ <- checkExpression e
      return Nothing
    (S.Block stmts) -> do
      -- TODO: walk over statements
      return Nothing
    (S.Expr e) -> do
-     _ <- checkExpression ts e
+     _ <- checkExpression e
      return Nothing
    (S.If test body mElse) -> do
-     _ <- requireExprType ts test T.Bool
+     _ <- requireExprType test T.Bool
      -- todo: figure out how to handle this
      return Nothing
    (S.While test body) -> do
-     _ <- requireExprType ts test T.Bool
+     _ <- requireExprType test T.Bool
      -- todo: figure out how to handle this
      return Nothing
 
-
-requireExprType :: TypeScope -> Expression -> Type -> Result Type
-requireExprType ts e t =
+requireExprType :: Expression -> Type -> TSState Type
+requireExprType e t =
   case e of
-   (E.EParen e')     -> requireExprType ts e' t
-   (E.EValue v)      -> requireEqual t (valueType v)
-   (E.EUnary _ e')   -> requireExprType ts e' t
+   (E.EParen e')     -> requireExprType e' t
+   (E.EValue v)      -> lift $ requireEqual t (valueType v)
+   (E.EUnary _ e')   -> requireExprType e' t
    (E.EBinary _ l r) -> do
-     _ <- requireExprType ts l t
-     requireExprType ts r t
+     _ <- requireExprType l t
+     requireExprType r t
    (E.ECall f args)  -> do
-     retType <- checkExpression ts e
-     requireEqual t retType
+     retType <- checkExpression e
+     lift $ requireEqual t retType
    (E.ECast t' e')   -> do
-     _ <- requireEqual t t'
-     checkExpression ts e'
-   (E.EVariable var) -> requireVarType ts var t
+     _ <- lift $ requireEqual t t'
+     checkExpression e'
+   (E.EVariable var) -> requireVarType var t
 
-checkExpression :: TypeScope -> Expression -> Result Type
-checkExpression ts e =
+checkExpression :: Expression -> TSState Type
+checkExpression e =
   case e of
-   (E.EParen e')     -> checkExpression ts e'
+   (E.EParen e')     -> checkExpression e'
    (E.EValue v)      -> return $ valueType v
-   (E.EUnary o e')   -> checkExpression ts e'
+   (E.EUnary o e')   -> checkExpression e'
    (E.EBinary o l r) -> do
-     t <- checkExpression ts l
-     requireExprType ts r t
+     t <- checkExpression l
+     requireExprType r t
    (E.ECall f args)  -> do
-     fType <- checkExpression ts f
+     fType <- checkExpression f
      case fType of
       (T.Function argTypes retType) ->
         if length argTypes /= length args
-        then Left $ "arg length mismatch"
+        then lift $ Left $ "arg length mismatch"
         else do
-          _ <- mapM (\(t, arg) -> requireExprType ts arg t) (zip argTypes args)
+          _ <- mapM (\(t, arg) -> requireExprType arg t) (zip argTypes args)
           return retType
-      _                   -> Left $ "trying to call a non-function type: " ++ show fType
+      _                   -> lift $ Left $ "trying to call a non-function type: " ++ show fType
    (E.ECast t' e')   -> do
-     _ <- checkExpression ts e'
+     _ <- checkExpression e'
      return t'
-   (E.EVariable var) -> getVarType ts var
+   (E.EVariable var) -> getFromScope var
 
-getVarType :: TypeScope -> String -> Result Type
-getVarType ts var =
-  case Map.lookup var ts of
-   Nothing  -> Left $ "not defined: " ++ var
-   (Just t) -> return t
-
-requireVarType :: TypeScope -> String -> Type -> Result Type
-requireVarType ts var t = do
-  t' <- getVarType ts var
+requireVarType :: String -> Type -> TSState Type
+requireVarType var t = do
+  t' <- getFromScope var
   if t == t'
     then return t
-    else Left $ "type mismatch " ++ show t' ++ " and " ++ show t
+    else lift $ Left $ "type mismatch " ++ show t' ++ " and " ++ show t
 
 valueType :: Value -> Type
 valueType (E.EString _) = T.String
@@ -164,3 +211,7 @@ requireEqual' :: Type -> Type -> Result ()
 requireEqual' t1 t2 = do
   _ <- requireEqual t1 t2
   return ()
+
+
+note :: a -> Maybe b -> Either a b
+note msg = maybe (Left msg) Right

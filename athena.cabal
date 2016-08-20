@@ -63,12 +63,11 @@ executable athena
   -- other-extensions:
 
   -- Other library packages from which modules are imported.
-  build-depends:
-    base >=4.6,
-    array >=0.4,
-    containers >= 0.5,
-    parsec >=3.1.8,
-    haskeline >=0.7
+  build-depends: base >=4.6,
+                 array >=0.4,
+                 containers >= 0.5,
+                 parsec >=3.1.8,
+                 mtl >=2.2
 
   -- Directories containing source files.
   hs-source-dirs:      src
