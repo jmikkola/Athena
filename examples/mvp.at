@@ -23,10 +23,9 @@ fn main() {
 fn do_stuff() String {
    // basic math operations are supported
    let int Int = 5 + (2 * 10) / 3 % 4
-   int = int ** 3
 
    //let fl Float = 99.0e-3 ** 2
-   let fl Float = 1.23
+   let fl Float = 1.23 ** 2.73
 
    // Comparison operators
    let x Bool = fl < Float(int)

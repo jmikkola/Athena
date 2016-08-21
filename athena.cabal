@@ -69,7 +69,9 @@ executable athena
                  array >=0.4,
                  containers >= 0.5,
                  parsec >=3.1.8,
-                 mtl >=2.2
+                 mtl >=2.2,
+                 process >=1.2,
+                 filepath >=1.4
 
   -- Directories containing source files.
   hs-source-dirs:      src

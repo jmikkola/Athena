@@ -1,9 +1,11 @@
 module Main where
 
 import System.Environment ( getArgs )
+import System.Process ( rawSystem )
+import System.Exit ( exitWith ) -- ExitCode (..)
 
 import Parser ( parseFile )
-import ParserTest ( testMain )
+--import ParserTest ( testMain )
 import TypeCheck ( checkFile )
 import Emit ( showFile )
 
@@ -20,3 +22,5 @@ main = do
       Right _  -> do
         let output = showFile file
         writeFile "out.go" output
+        code <- rawSystem "go" ["build", "-o", "a.out", "out.go"]
+        exitWith code

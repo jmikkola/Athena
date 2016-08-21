@@ -1,6 +1,7 @@
 module Emit where
 
 import Control.Monad.Writer
+import System.FilePath.Posix (takeFileName)
 
 import AST.Declaration (Declaraction, File)
 import qualified AST.Declaration as D
@@ -38,21 +39,37 @@ instance Emitter Expression where
     emit op
     emit e
   emit (E.EBinary op l r)  = do
-    emit l
-    tell " "
-    emit op
-    tell " "
-    emit r
+    case op of
+     E.Power -> do
+       tell "math.Pow("
+       emit l
+       tell ", "
+       emit r
+       tell ")"
+     _       -> do
+       emit l
+       tell " "
+       emit op
+       tell " "
+       emit r
   emit (E.ECall fex argex) = do
     emit fex
     tell "("
     tellList argex emit
     tell ")"
-  emit (E.ECast t e)       = do
-    emit t
-    tell "("
-    emit e
-    tell ")"
+  emit (E.ECast t e)       =
+    case t of
+     T.String -> do
+       tell "fmt.Sprintf(\"%v\", "
+       emit e
+       tell ")"
+     T.Nil    ->
+       fail "compiler bug: Can't cast to nil"
+     _        -> do
+       emit t
+       tell "("
+       emit e
+       tell ")"
   emit (E.EVariable v)     =
     if v == "print"
     then tell "fmt.Println"
@@ -119,6 +136,9 @@ instance Emitter Statement where
     emit t
     tell " = "
     emit e
+    -- get around "declared and not used" issues
+    tell "\nvar _ = "
+    tell name
   emit (S.Assign name e) = do
     tell name
     tell " = "
@@ -174,8 +194,17 @@ instance Emitter Declaraction where
 emitFile :: File -> Writer String ()
 emitFile decls = do
   tell "package main\n\n"
-  tell "import (\n\"fmt\"\n)\n\n"
+  emitImports [("fmt", "fmt.Println"), ("math", "math.Pow")]
   intersperse (tell "\n\n") (map emit decls)
+
+emitImports :: [(String, String)] -> Writer String ()
+emitImports imps = do
+  tell "import ("
+  _ <- mapM (\i -> tell $ "\n\t\"" ++ i ++ "\"") $ map fst imps
+  tell "\n)\n"
+  _ <- mapM (\fn -> tell $ "\nvar _ = " ++ fn) $ map snd imps
+  tell "\n\n"
+  return ()
 
 showFile :: File -> String
 showFile = execWriter . emitFile

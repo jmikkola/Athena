@@ -1,0 +1,10 @@
+fn main() {
+    let a Int = 1
+    let b Int = 0
+    while a < 200 {
+        print(String(a))
+        let temp Int = a
+        a = a + b
+        b = temp
+    }
+}
