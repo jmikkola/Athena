@@ -182,12 +182,16 @@ requireExprType e t =
   case e of
    (E.EParen e')     -> requireExprType e' t
    (E.EValue v)      -> lift $ requireEqual t (valueType v)
-   (E.EUnary _ e')   -> requireExprType e' t
-   (E.EBinary _ l r) -> do
-     -- TODO: the output type of binary operations (e.g. >, ==) isn't
-     -- always the same as the input type.
-     _ <- requireExprType l t
-     requireExprType r t
+   (E.EUnary op e')  -> do
+     et <- checkExpression e'
+     resultT <- unaryReturnType op et
+     lift $ requireEqual t resultT
+   (E.EBinary o l r) -> do
+     lt <- checkExpression l
+     _ <- requireExprType r lt
+     resultT <- binReturnType o lt
+     _ <- lift $ requireEqual t resultT
+     return resultT
    (E.ECall f args)  -> do
      fnType <- checkExpression f
      argTypes <- mapM checkExpression args
@@ -202,10 +206,13 @@ checkExpression e =
   case e of
    (E.EParen e')     -> checkExpression e'
    (E.EValue v)      -> return $ valueType v
-   (E.EUnary _ e')   -> checkExpression e'
-   (E.EBinary _ l r) -> do
+   (E.EUnary o e')   -> do
+     t <- checkExpression e'
+     unaryReturnType o t
+   (E.EBinary o l r) -> do
      t <- checkExpression l
-     requireExprType r t
+     _ <- requireExprType r t
+     binReturnType o t
    (E.ECall f args)  -> do
      fType <- checkExpression f
      case fType of
@@ -220,6 +227,40 @@ checkExpression e =
      _ <- checkExpression e'
      return t'
    (E.EVariable var) -> getFromScope var
+
+unaryReturnType :: E.UnaryOp -> Type -> TSState Type
+unaryReturnType op t =
+  case op of
+   E.BitInvert -> lift $ requireEqual t T.Int
+   E.BoolNot   -> lift $ requireEqual t T.Bool
+
+numericOps = [E.Minus, E.Times, E.Divide, E.Power]
+integerOps = [E.Mod, E.BitAnd, E.BitOr, E.BitXor, E.LShift, E.RShift, E.RRShift]
+booleanOps = [E.BoolAnd, E.BoolOr]
+compOps    = [E.Eq, E.NotEq]
+numCompOps = [E.Less, E.LessEq, E.Greater, E.GreaterEq]
+
+binReturnType :: E.BinOp -> Type -> TSState Type
+binReturnType op t
+  | op == E.Plus          =
+    if t `elem` [T.Int, T.Float, T.String]
+    then return t
+    else err $ "Can't add values of type: " ++ show t
+  | op `elem` numericOps = requireNumeric t
+  | op `elem` integerOps = lift $ requireEqual t T.Int
+  | op `elem` booleanOps = lift $ requireEqual t T.Bool
+  | op `elem` compOps    = return T.Bool
+  | op `elem` numCompOps = do
+      _ <- requireNumeric t
+      return T.Bool
+  | otherwise            = err $ "op missing from list: " ++ show op
+
+requireNumeric :: Type -> TSState Type
+requireNumeric t =
+  case t of
+   T.Int   -> return t
+   T.Float -> return t
+   _       -> err $ "Expected a numeric value: " ++ show t
 
 requireVarType :: String -> Type -> TSState Type
 requireVarType var t = do

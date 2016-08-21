@@ -17,15 +17,16 @@ fn main() {
     // Numbers can be cast to strings
     print(String(b) + " " + String(a))
 
-    //print(do_stuff())
+    print(do_stuff())
 }
+
 fn do_stuff() String {
    // basic math operations are supported
    let int Int = 5 + (2 * 10) / 3 % 4
    int = int ** 3
 
    //let fl Float = 99.0e-3 ** 2
-    let fl Float = 1.23
+   let fl Float = 1.23
 
    // Comparison operators
    let x Bool = fl < Float(int)
@@ -37,6 +38,7 @@ fn do_stuff() String {
    if 1 == 1 && 2 < 3 {
       print(recursive(10, 4))
    } else if False {
+     x = !!False
    }
 
    let i Int = 0
@@ -44,6 +46,7 @@ fn do_stuff() String {
          print(String(i))
          i = i + 1
    }
+   return "foo"
 }
 
 // recursive functions are of course allowed
