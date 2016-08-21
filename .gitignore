@@ -9,3 +9,4 @@ TAGS
 athena
 dist
 .stack-work
+*.go

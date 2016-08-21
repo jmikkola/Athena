@@ -2,6 +2,8 @@ module Emit where
 
 import Control.Monad.Writer
 
+import AST.Declaration (Declaraction, File)
+import qualified AST.Declaration as D
 import AST.Expression (Expression, Value, UnaryOp, BinOp)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
@@ -44,7 +46,7 @@ instance Emitter Expression where
   emit (E.ECall fex argex) = do
     emit fex
     tell "("
-    emitArgs argex
+    tellList argex emit
     tell ")"
   emit (E.ECast t e)       = do
     emit t
@@ -52,18 +54,12 @@ instance Emitter Expression where
     emit e
     tell ")"
   emit (E.EVariable v)     =
-    tell v
-
-emitArgs :: (Emitter a) => [a] -> Writer String ()
-emitArgs (a1:a2:rest) = do
-  emit a1
-  tell ", "
-  emitArgs (a2:rest)
-emitArgs [a] = emit a
-emitArgs [] = return ()
+    if v == "print"
+    then tell "fmt.Println"
+    else tell v
 
 instance Render UnaryOp where
-  render E.BitInvert = "~"
+  render E.BitInvert = "^"
   render E.BoolNot   = "!"
 
 instance Emitter UnaryOp where
@@ -78,7 +74,7 @@ instance Render BinOp where
   render E.Power     = "**"
   render E.BitAnd    = "&"
   render E.BitOr     = "|"
-  render E.BitXor    = "^"
+  render E.BitXor    = "/* TODO: no direct xor in go */"
   render E.BoolAnd   = "&&"
   render E.BoolOr    = "||"
   render E.Eq        = "=="
@@ -102,7 +98,7 @@ instance Emitter Type where
   emit T.String = tell "string"
   emit (T.Function args ret) = do
     tell "func ("
-    emitArgs args
+    tellList args emit
     tell ")"
     if ret /= T.Nil then tell " " else return ()
     emit ret
@@ -112,7 +108,9 @@ instance Emitter Statement where
     tell "return"
     case me of
      Nothing  -> return ()
-     (Just e) -> emit e
+     (Just e) -> do
+       tell " "
+       emit e
   emit (S.Let name t e) = do
     -- conveniently, both languages require a "let"-like statment
     tell "var "
@@ -143,7 +141,54 @@ instance Emitter Statement where
        tell " else "
        emit els
   emit (S.While test body) = do
-    tell "while "
+    tell "for "
     emit test
     tell " "
     emit (S.Block body)
+
+instance Emitter Declaraction where
+  emit (D.Let name t e) = do
+    tell "var "
+    tell name
+    tell " "
+    emit t
+    tell " = "
+    emit e
+  emit (D.Function name t args body) = do
+    tell "func "
+    tell name
+    tell "("
+    case t of
+     (T.Function argTypes retType) -> do
+       tellList (zip args argTypes) (\(a,t) -> do {tell a; tell " "; emit t})
+       tell ")"
+       case retType of
+        T.Nil -> return ()
+        _     -> do
+          tell " "
+          emit retType
+     _ -> error "compiler bug, function is wrong type"
+    tell " "
+    emit body
+
+emitFile :: File -> Writer String ()
+emitFile decls = do
+  tell "package main\n\n"
+  tell "import (\n\"fmt\"\n)\n\n"
+  intersperse (tell "\n\n") (map emit decls)
+
+showFile :: File -> String
+showFile = execWriter . emitFile
+
+intersperse :: Writer String () -> [Writer String ()] -> Writer String ()
+intersperse sep lst =
+  case lst of
+   (a1:a2:rest) -> do
+     a1
+     sep
+     intersperse sep (a2:rest)
+   [a]          -> a
+   []           -> return ()
+
+tellList :: [a] -> (a -> Writer String ()) -> Writer String ()
+tellList lst f = intersperse (tell ", ") (map f lst)

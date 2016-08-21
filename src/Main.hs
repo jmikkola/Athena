@@ -5,7 +5,7 @@ import System.Environment ( getArgs )
 import Parser ( parseFile )
 import ParserTest ( testMain )
 import TypeCheck ( checkFile )
-import Emit
+import Emit ( showFile )
 
 main :: IO ()
 main = do
@@ -17,3 +17,4 @@ main = do
    Right file -> do
      --putStrLn $ show $ file
      putStrLn $ show $ checkFile file
+     putStrLn $ showFile file
