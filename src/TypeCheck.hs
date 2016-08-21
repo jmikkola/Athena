@@ -106,7 +106,8 @@ checkDeclaration d =
 requireReturnType :: Statement -> Type -> TSState ()
 requireReturnType stmt t = do
   lastRet <- getReturnType stmt t
-  lift $ requireEqual' t lastRet
+  _ <- requireEqual t lastRet
+  return ()
 
 getReturnType :: Statement -> Type -> TSState Type
 getReturnType stmt expectedRetType =
@@ -129,10 +130,10 @@ checkBlock stmts expectedRetType =
 
 returnExpr :: Maybe Expression -> Type -> TSState Type
 returnExpr Nothing  expectedRetType = do
-  lift $ requireEqual expectedRetType T.Nil
+  requireEqual expectedRetType T.Nil
 returnExpr (Just e) expectedRetType = do
   retType <- checkExpression e
-  lift $ requireEqual expectedRetType retType
+  requireEqual expectedRetType retType
 
 -- Returns a return type, if the statement returns
 checkStatement :: Statement -> Type -> TSState ()
@@ -181,23 +182,23 @@ requireExprType :: Expression -> Type -> TSState Type
 requireExprType e t =
   case e of
    (E.EParen e')     -> requireExprType e' t
-   (E.EValue v)      -> lift $ requireEqual t (valueType v)
+   (E.EValue v)      -> requireEqual t (valueType v)
    (E.EUnary op e')  -> do
      et <- checkExpression e'
      resultT <- unaryReturnType op et
-     lift $ requireEqual t resultT
+     requireEqual t resultT
    (E.EBinary o l r) -> do
      lt <- checkExpression l
      _ <- requireExprType r lt
      resultT <- binReturnType o lt
-     _ <- lift $ requireEqual t resultT
+     _ <- requireEqual t resultT
      return resultT
    (E.ECall f args)  -> do
      fnType <- checkExpression f
      argTypes <- mapM checkExpression args
-     lift $ requireEqual fnType (T.Function argTypes t)
+     requireEqual fnType (T.Function argTypes t)
    (E.ECast t' e')   -> do
-     _ <- lift $ requireEqual t t'
+     _ <- requireEqual t t'
      checkExpression e'
    (E.EVariable var) -> requireVarType var t
 
@@ -231,13 +232,22 @@ checkExpression e =
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t =
   case op of
-   E.BitInvert -> lift $ requireEqual t T.Int
-   E.BoolNot   -> lift $ requireEqual t T.Bool
+   E.BitInvert -> requireEqual t T.Int
+   E.BoolNot   -> requireEqual t T.Bool
 
+numericOps :: [E.BinOp]
 numericOps = [E.Minus, E.Times, E.Divide, E.Power]
+
+integerOps :: [E.BinOp]
 integerOps = [E.Mod, E.BitAnd, E.BitOr, E.BitXor, E.LShift, E.RShift, E.RRShift]
+
+booleanOps :: [E.BinOp]
 booleanOps = [E.BoolAnd, E.BoolOr]
+
+compOps    :: [E.BinOp]
 compOps    = [E.Eq, E.NotEq]
+
+numCompOps :: [E.BinOp]
 numCompOps = [E.Less, E.LessEq, E.Greater, E.GreaterEq]
 
 binReturnType :: E.BinOp -> Type -> TSState Type
@@ -247,8 +257,8 @@ binReturnType op t
     then return t
     else err $ "Can't add values of type: " ++ show t
   | op `elem` numericOps = requireNumeric t
-  | op `elem` integerOps = lift $ requireEqual t T.Int
-  | op `elem` booleanOps = lift $ requireEqual t T.Bool
+  | op `elem` integerOps = requireEqual t T.Int
+  | op `elem` booleanOps = requireEqual t T.Bool
   | op `elem` compOps    = return T.Bool
   | op `elem` numCompOps = do
       _ <- requireNumeric t
@@ -275,15 +285,10 @@ valueType (E.EBool _)   = T.Bool
 valueType (E.EInt _)    = T.Int
 valueType (E.EFloat _)  = T.Float
 
-requireEqual :: Type -> Type -> Result Type
+requireEqual :: Type -> Type -> TSState Type
 requireEqual t1 t2 =
   if t1 == t2 then return t1
-  else Left $ "Type mismatch between " ++ show t1 ++ " and " ++ show t2
-
-requireEqual' :: Type -> Type -> Result ()
-requireEqual' t1 t2 = do
-  _ <- requireEqual t1 t2
-  return ()
+  else err ("Type mismatch between " ++ show t1 ++ " and " ++ show t2)
 
 note :: a -> Maybe b -> Either a b
 note msg = maybe (Left msg) Right
