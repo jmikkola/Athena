@@ -13,8 +13,10 @@ main = do
   args <- getArgs
   content <- readFile (args !! 0)
   case parseFile content of
-   Left err   -> putStrLn $ "error: " ++ err
+   Left err   -> putStrLn $ "parse error: " ++ err
    Right file -> do
-     --putStrLn $ show $ file
-     putStrLn $ show $ checkFile file
-     putStrLn $ showFile file
+     case checkFile file of
+      Left err -> putStrLn $ "type error: " ++ err
+      Right _  -> do
+        let output = showFile file
+        writeFile "out.go" output
