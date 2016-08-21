@@ -5,6 +5,7 @@ import System.Environment ( getArgs )
 import Parser ( parseFile )
 import ParserTest ( testMain )
 import TypeCheck ( checkFile )
+import Emit
 
 main :: IO ()
 main = do
