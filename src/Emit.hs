@@ -4,6 +4,8 @@ import Control.Monad.Writer
 
 import AST.Expression (Expression, Value, UnaryOp, BinOp)
 import qualified AST.Expression as E
+import AST.Statement (Statement)
+import qualified AST.Statement as S
 import AST.Type (Type)
 import qualified AST.Type as T
 
@@ -104,3 +106,44 @@ instance Emitter Type where
     tell ")"
     if ret /= T.Nil then tell " " else return ()
     emit ret
+
+instance Emitter Statement where
+  emit (S.Return me) = do
+    tell "return"
+    case me of
+     Nothing  -> return ()
+     (Just e) -> emit e
+  emit (S.Let name t e) = do
+    -- conveniently, both languages require a "let"-like statment
+    tell "var "
+    tell name
+    tell " "
+    emit t
+    tell " = "
+    emit e
+  emit (S.Assign name e) = do
+    tell name
+    tell " = "
+    emit e
+  emit (S.Block stmts) = do
+    -- TODO: indent
+    tell "{\n"
+    _ <- mapM (\stmt -> do {emit stmt; tell "\n"}) stmts
+    tell "}"
+  emit (S.Expr e) =
+    emit e
+  emit (S.If test body melse) = do
+    tell "if "
+    emit test
+    tell " "
+    emit (S.Block body)
+    case melse of
+     Nothing    -> return ()
+     (Just els) -> do
+       tell " else "
+       emit els
+  emit (S.While test body) = do
+    tell "while "
+    emit test
+    tell " "
+    emit (S.Block body)
