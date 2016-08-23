@@ -1,7 +1,6 @@
 module Emit where
 
 import Control.Monad.Writer
-import System.FilePath.Posix (takeFileName)
 
 import AST.Declaration (Declaraction, File)
 import qualified AST.Declaration as D
@@ -119,6 +118,12 @@ instance Emitter Type where
     tell ")"
     if ret /= T.Nil then tell " " else return ()
     emit ret
+  -- TODO: do type resolution before this?
+  emit (T.TypeName name) = tell name
+  emit (T.StructType fields) = do
+    tell "struct {\n"
+    _ <- mapM (\(fname, ftype) -> do { tell fname; tell " "; emit ftype; tell "\n" }) fields
+    tell "}"
 
 instance Emitter Statement where
   emit (S.Return me) = do
@@ -180,7 +185,7 @@ instance Emitter Declaraction where
     tell "("
     case t of
      (T.Function argTypes retType) -> do
-       tellList (zip args argTypes) (\(a,t) -> do {tell a; tell " "; emit t})
+       tellList (zip args argTypes) (\(a,t') -> do {tell a; tell " "; emit t'})
        tell ")"
        case retType of
         T.Nil -> return ()
@@ -190,6 +195,11 @@ instance Emitter Declaraction where
      _ -> error "compiler bug, function is wrong type"
     tell " "
     emit body
+  emit (D.TypeDef name typ) = do
+    tell "type "
+    tell name
+    tell " "
+    emit typ
 
 emitFile :: File -> Writer String ()
 emitFile decls = do

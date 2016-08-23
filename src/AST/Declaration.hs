@@ -7,6 +7,7 @@ import AST.Type (Type)
 data Declaraction
   = Let String Type Expression
   | Function String Type [String] Statement
+  | TypeDef String Type
   deriving (Eq, Show)
 
 type File = [Declaraction]

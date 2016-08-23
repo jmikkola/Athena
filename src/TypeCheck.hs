@@ -75,10 +75,12 @@ defineDefaultFunctions = do
 declName :: Declaraction -> String
 declName (D.Let n _ _) = n
 declName (D.Function n _ _ _) = n
+declName (D.TypeDef n _) = n
 
 declType :: Declaraction  -> Type
 declType (D.Let _ t _) = t
 declType (D.Function _ t _ _) = t
+declType (D.TypeDef _ _) = T.Nil -- no reflection just yet
 
 addFuncScope :: [String] -> [Type] -> TSState ()
 addFuncScope names types = do
@@ -102,6 +104,7 @@ checkDeclaration d =
    (D.Let _ t expr) -> do
      _ <- requireExprType expr t
      return ()
+   (D.TypeDef _ _) -> return () -- TODO: keep some map of known types
 
 requireReturnType :: Statement -> Type -> TSState ()
 requireReturnType stmt t = do

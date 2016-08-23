@@ -7,4 +7,6 @@ data Type
   | Bool
   | Nil
   | Function [Type] Type
+  | TypeName String
+  | StructType [(String, Type)]
   deriving (Eq, Show)

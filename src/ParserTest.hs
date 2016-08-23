@@ -1,6 +1,6 @@
 module ParserTest where
 
-import Control.Applicative ( (<*) )
+--import Control.Applicative ( (<*) )
 
 import Text.Parsec (eof, parse)
 import Text.Parsec.String (Parser)

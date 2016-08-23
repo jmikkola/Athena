@@ -5,13 +5,13 @@ import System.Process ( rawSystem )
 import System.Exit ( exitWith ) -- ExitCode (..)
 
 import Parser ( parseFile )
---import ParserTest ( testMain )
+import ParserTest ( testMain )
 import TypeCheck ( checkFile )
 import Emit ( showFile )
 
 main :: IO ()
 main = do
-  --testMain
+  testMain
   args <- getArgs
   content <- readFile (args !! 0)
   case parseFile content of
