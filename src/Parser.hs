@@ -27,7 +27,7 @@ fileParser = do
   return decls
 
 declarationParser :: Parser Declaraction
-declarationParser = choice [letDeclaration, funcDeclaration]
+declarationParser = choice [letDeclaration, funcDeclaration, typeDeclaration]
 
 letDeclaration :: Parser Declaraction
 letDeclaration = do
@@ -58,6 +58,15 @@ funcDeclaration = do
   body <- blockStatement
   let typ = Type.Function (map snd args) (unwrapOr retType Type.Nil)
   return $ Declaraction.Function name typ (map fst args) body
+
+typeDeclaration :: Parser Declaraction
+typeDeclaration = do
+  _ <- string "type"
+  _ <- any1LinearWhitespace
+  name <- typeName
+  _ <- any1LinearWhitespace
+  typ <- typeParser
+  return $ Declaraction.TypeDef name typ
 
 funcArgDecl :: Parser [(String, Type)]
 funcArgDecl = argDeclEnd <|> argDecl
@@ -390,7 +399,7 @@ unaryOpParser =
 ---- AST.Type parsers ----
 
 typeParser :: Parser Type
-typeParser = choices types
+typeParser = structParser <|> choices types <|> namedType
 
 types :: [(String, Type)]
 types = [ ("String", Type.String)
@@ -399,6 +408,28 @@ types = [ ("String", Type.String)
         , ("Bool", Type.Bool)
         , ("()", Type.Nil)
         ]
+
+structParser :: Parser Type
+structParser = do
+  _ <- string "struct"
+  _ <- any1LinearWhitespace
+  _ <- string "{"
+  _ <- statementSep
+  fields <- sepEndBy structField statementSep
+  _ <- string "}"
+  return $ Type.Struct fields
+
+structField :: Parser (String, Type)
+structField = do
+  name <- valueName
+  _ <- any1LinearWhitespace
+  typ <- typeParser
+  return (name, typ)
+
+namedType :: Parser Type
+namedType = do
+  name <- typeName
+  return $ Type.TypeName name
 
 ---- Helper functions ----
 

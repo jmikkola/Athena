@@ -1,0 +1,8 @@
+type Foo struct {
+    asdf Int
+    xyz Foo
+}
+
+fn main() {
+    print("Hello, world")
+}

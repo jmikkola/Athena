@@ -47,6 +47,9 @@ tests =
     (E.EBinary E.BoolAnd
      (E.EBinary E.Eq (E.EValue (E.EInt 1)) (E.EValue (E.EInt 1)))
      (E.EBinary E.Less (E.EValue (E.EInt 2)) (E.EValue (E.EInt 3))))
+  , expectParses typeParser "Int" T.Int
+  , expectParses typeParser "struct {\n  a  Int\nb String\n}"
+    (T.Struct [("a", T.Int), ("b", T.String)])
   -- statements
   , expectParses statementParser "return \"foo\""
     (S.Return $ Just $ E.EValue $ E.EString "foo")
@@ -87,6 +90,7 @@ tests =
   , testParsingIf
   , testParsingFunc
   , testParsingFunc2
+  , testParsingTypeDecl
   ]
 
 testParsingBlock :: IO Bool
@@ -116,6 +120,13 @@ testParsingFunc2 =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
       fnType = T.Function [T.Int, T.Bool] T.Bool
       expected = D.Function "main" fnType ["a", "b"] (S.Block [])
+  in expectParses declarationParser text expected
+
+testParsingTypeDecl :: IO Bool
+testParsingTypeDecl =
+  let text = "type Foo struct {\n  asdf Int\n  xyz Foo\n}"
+      declaredType = T.Struct [("asdf", T.Int), ("xyz", T.TypeName "Foo")]
+      expected = D.TypeDef "Foo" declaredType
   in expectParses declarationParser text expected
 
 ---- Utilities ----

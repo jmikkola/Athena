@@ -119,8 +119,10 @@ instance Emitter Type where
     if ret /= T.Nil then tell " " else return ()
     emit ret
   -- TODO: do type resolution before this?
-  emit (T.TypeName name) = tell name
-  emit (T.StructType fields) = do
+  emit (T.TypeName name) = do
+    tell "*" -- avoid infinite types
+    tell name
+  emit (T.Struct fields) = do
     tell "struct {\n"
     _ <- mapM (\(fname, ftype) -> do { tell fname; tell " "; emit ftype; tell "\n" }) fields
     tell "}"
