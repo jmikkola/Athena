@@ -16,8 +16,9 @@ fn main() {
             y: 2.333,
         },
     }
+    let b Bar = foo.xyz
     print(String(foo))
     print("Hello, world")
-    print(String(foo.xyz.x + 9))
-    print(String(foo.xyz.y * 0.6))
+    print("an Int: " + String(foo.xyz.x + 9))
+    print("a Float: " + String(foo.xyz.y * 0.6))
 }
