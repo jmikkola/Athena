@@ -197,7 +197,8 @@ requireExprType e t =
    (E.Paren e')     -> do
      requireExprType e' t
    (E.Val v)        -> do
-     requireEqual t (valueType v)
+     vt <- valueType v
+     requireEqual t vt
    (E.Unary op e')  -> do
      et <- checkExpression e'
      resultT <- unaryReturnType op et
@@ -226,7 +227,7 @@ checkExpression :: Expression -> TSState Type
 checkExpression e =
   case e of
    (E.Paren e')     -> checkExpression e'
-   (E.Val v)        -> return $ valueType v
+   (E.Val v)        -> valueType v
    (E.Unary o e')   -> do
      t <- checkExpression e'
      unaryReturnType o t
@@ -320,16 +321,35 @@ requireVarType var t = do
     then return t
     else err $ "type mismatch " ++ show t' ++ " and " ++ show t
 
-valueType :: Value -> Type
-valueType (E.StrVal _)       = T.String
-valueType (E.BoolVal _)      = T.Bool
-valueType (E.IntVal _)       = T.Int
-valueType (E.FloatVal _)     = T.Float
-valueType (E.StructVal tn _) = T.TypeName tn
+valueType :: Value -> TSState Type
+valueType (E.StrVal _)       = return T.String
+valueType (E.BoolVal _)      = return T.Bool
+valueType (E.IntVal _)       = return T.Int
+valueType (E.FloatVal _)     = return T.Float
+valueType (E.StructVal tn f) = do
+  structType <- getFromScope tn
+  _ <- mapM (checkField structType) f
+  return structType
+
+checkField :: Type -> (String, Expression) -> TSState ()
+checkField typ (field, e) = do
+  ftyp <- getFieldType typ field
+  _ <- requireExprType e ftyp
+  return ()
+
+resolveTypeName :: Type -> TSState Type
+resolveTypeName (T.TypeName name) = do
+  t <- getFromScope name
+  resolveTypeName t
+resolveTypeName t                 =
+  return t
 
 requireEqual :: Type -> Type -> TSState Type
-requireEqual t1 t2 =
-  if t1 == t2 then return t1
+requireEqual t1 t2 = do
+  t1' <- resolveTypeName t1
+  t2' <- resolveTypeName t2
+  if t1' == t2'
+  then return t1'
   else err ("Type mismatch between " ++ show t1 ++ " and " ++ show t2)
 
 note :: a -> Maybe b -> Either a b
