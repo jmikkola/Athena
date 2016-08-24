@@ -18,15 +18,15 @@ class Emitter a where
   emit :: a -> Writer String ()
 
 instance Emitter Value where
-  emit (E.EString s)   =
+  emit (E.StrVal s)      =
     tell $ show s
-  emit (E.EBool b)     =
+  emit (E.BoolVal b)     =
     tell $ if b then "true" else "false"
-  emit (E.EInt i)      =
+  emit (E.IntVal i)      =
     tell $ show i
-  emit (E.EFloat f)    =
+  emit (E.FloatVal f)    =
     tell $ show f
-  emit (E.EStruct t f) = do
+  emit (E.StructVal t f) = do
     tell "&"
     tell t
     tell "{\n"
@@ -34,16 +34,16 @@ instance Emitter Value where
     tell "}"
 
 instance Emitter Expression where
-  emit (E.EParen e)        = do
+  emit (E.Paren e)        = do
     tell "("
     emit e
     tell ")"
-  emit (E.EValue v)        =
+  emit (E.Val v)          =
     emit v
-  emit (E.EUnary op e)     = do
+  emit (E.Unary op e)     = do
     emit op
     emit e
-  emit (E.EBinary op l r)  = do
+  emit (E.Binary op l r)  = do
     case op of
      E.Power -> do
        tell "math.Pow("
@@ -57,12 +57,12 @@ instance Emitter Expression where
        emit op
        tell " "
        emit r
-  emit (E.ECall fex argex) = do
+  emit (E.Call fex argex) = do
     emit fex
     tell "("
     tellList argex emit
     tell ")"
-  emit (E.ECast t e)       =
+  emit (E.Cast t e)       =
     case t of
      T.String -> do
        tell "fmt.Sprintf(\"%v\", "
@@ -75,7 +75,7 @@ instance Emitter Expression where
        tell "("
        emit e
        tell ")"
-  emit (E.EVariable v)     =
+  emit (E.Var v)         =
     if v == "print"
     then tell "fmt.Println"
     else tell v
@@ -113,11 +113,11 @@ instance Emitter BinOp where
   emit = tell . render
 
 instance Emitter Type where
-  emit T.Nil    = tell ""
-  emit T.Int    = tell "int64"
-  emit T.Float  = tell "float64"
-  emit T.Bool   = tell "bool"
-  emit T.String = tell "string"
+  emit T.Nil                 = tell ""
+  emit T.Int                 = tell "int64"
+  emit T.Float               = tell "float64"
+  emit T.Bool                = tell "bool"
+  emit T.String              = tell "string"
   emit (T.Function args ret) = do
     tell "func ("
     tellList args emit
@@ -125,23 +125,23 @@ instance Emitter Type where
     if ret /= T.Nil then tell " " else return ()
     emit ret
   -- TODO: do type resolution before this?
-  emit (T.TypeName name) = do
+  emit (T.TypeName name)     = do
     tell "*" -- avoid infinite types
     tell name
-  emit (T.Struct fields) = do
+  emit (T.Struct fields)     = do
     tell "struct {\n"
     _ <- mapM (\(fname, ftype) -> do { tell fname; tell " "; emit ftype; tell "\n" }) fields
     tell "}"
 
 instance Emitter Statement where
-  emit (S.Return me) = do
+  emit (S.Return me)          = do
     tell "return"
     case me of
      Nothing  -> return ()
      (Just e) -> do
        tell " "
        emit e
-  emit (S.Let name t e) = do
+  emit (S.Let name t e)       = do
     -- conveniently, both languages require a "let"-like statment
     tell "var "
     tell name
@@ -152,11 +152,11 @@ instance Emitter Statement where
     -- get around "declared and not used" issues
     tell "\nvar _ = "
     tell name
-  emit (S.Assign name e) = do
+  emit (S.Assign name e)      = do
     tell name
     tell " = "
     emit e
-  emit (S.Block stmts) = do
+  emit (S.Block stmts)        = do
     -- TODO: indent
     tell "{\n"
     _ <- mapM (\stmt -> do {emit stmt; tell "\n"}) stmts
@@ -173,14 +173,14 @@ instance Emitter Statement where
      (Just els) -> do
        tell " else "
        emit els
-  emit (S.While test body) = do
+  emit (S.While test body)    = do
     tell "for "
     emit test
     tell " "
     emit (S.Block body)
 
 instance Emitter Declaraction where
-  emit (D.Let name t e) = do
+  emit (D.Let name t e)              = do
     tell "var "
     tell name
     tell " "
@@ -203,7 +203,7 @@ instance Emitter Declaraction where
      _ -> error "compiler bug, function is wrong type"
     tell " "
     emit body
-  emit (D.TypeDef name typ) = do
+  emit (D.TypeDef name typ)          = do
     tell "type "
     tell name
     tell " "

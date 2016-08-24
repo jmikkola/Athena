@@ -224,7 +224,7 @@ unfoldOps (left, parts) ops = case parts of
   ((op, right):pts) ->
     let (applied, rest) = unfoldOps (right, pts) ops
     in if elem op ops
-       then (Expression.EBinary op left applied, rest)
+       then (Expression.Binary op left applied, rest)
        else (left, (op, applied) : rest)
 
 precOrder :: [[BinOp]]
@@ -252,19 +252,19 @@ parenExpr = do
   ex <- expressionParser
   _ <- anyWhitespace
   _ <- char ')'
-  return $ Expression.EParen ex
+  return $ Expression.Paren ex
 
 valueExpr :: Parser Expression
 valueExpr = do
   val <- valueParser
-  return $ Expression.EValue val
+  return $ Expression.Val val
 
 unaryExpr :: Parser Expression
 unaryExpr = do
   op <- unaryOpParser
   _ <- anyWhitespace
   ex <- expressionParser
-  return $ Expression.EUnary op ex
+  return $ Expression.Unary op ex
 
 callExpr :: Parser Expression
 callExpr = do
@@ -272,7 +272,7 @@ callExpr = do
   _ <- char '('
   _ <- anyWhitespace
   args <- choice [fnCallArg, argsEnd]
-  return $ Expression.ECall fn args
+  return $ Expression.Call fn args
 
 fnCallArg :: Parser [Expression]
 fnCallArg = do
@@ -300,12 +300,12 @@ castExpr = do
   ex <- expressionParser
   _ <- anyWhitespace
   _ <- char ')'
-  return $ Expression.ECast typ ex
+  return $ Expression.Cast typ ex
 
 varExpr :: Parser Expression
 varExpr = do
   name <- valueName
-  return $ Expression.EVariable name
+  return $ Expression.Var name
 
 --- parse values
 
@@ -319,7 +319,7 @@ structValueParser = do
   _ <- statementSep
   fields <- sepEndBy structFieldValue statementSep
   _ <- string "}"
-  return $ Expression.EStruct typ fields
+  return $ Expression.StructVal typ fields
 
 structFieldValue :: Parser (String, Expression)
 structFieldValue = do
@@ -333,12 +333,12 @@ structFieldValue = do
 stringParser :: Parser Value
 stringParser = do
   s <- doubleQuotedString
-  return $ Expression.EString s
+  return $ Expression.StrVal s
 
 boolParser :: Parser Value
 boolParser = do
   b <- choices [("False", False), ("True", True)]
-  return $ Expression.EBool b
+  return $ Expression.BoolVal b
 
 --- parse floating and integer numbers
 
@@ -350,7 +350,7 @@ numberParser = do
 float :: String -> Parser Value
 float start = do
   fp <- floatingPart
-  return $ Expression.EFloat (read (start ++ fp))
+  return $ Expression.FloatVal (read (start ++ fp))
 
 floatingPart :: Parser String
 floatingPart = do
@@ -378,7 +378,7 @@ _digit = do
   digit
 
 integer :: String -> Parser Value
-integer start = return $ Expression.EInt (read start)
+integer start = return $ Expression.IntVal (read start)
 
 --- parse operators
 

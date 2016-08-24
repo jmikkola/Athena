@@ -73,14 +73,14 @@ defineDefaultFunctions = do
   setInScope "print" $ T.Function [T.String] T.Nil
 
 declName :: Declaraction -> String
-declName (D.Let n _ _) = n
+declName (D.Let n _ _)        = n
 declName (D.Function n _ _ _) = n
-declName (D.TypeDef n _) = n
+declName (D.TypeDef n _)      = n
 
 declType :: Declaraction  -> Type
-declType (D.Let _ t _) = t
+declType (D.Let _ t _)        = t
 declType (D.Function _ t _ _) = t
-declType (D.TypeDef _ _) = T.Nil -- no reflection just yet
+declType (D.TypeDef _ _)      = T.Nil -- no reflection just yet
 
 addFuncScope :: [String] -> [Type] -> TSState ()
 addFuncScope names types = do
@@ -184,40 +184,43 @@ checkStatement s expectedRetType =
 requireExprType :: Expression -> Type -> TSState Type
 requireExprType e t =
   case e of
-   (E.EParen e')     -> requireExprType e' t
-   (E.EValue v)      -> requireEqual t (valueType v)
-   (E.EUnary op e')  -> do
+   (E.Paren e')     -> do
+     requireExprType e' t
+   (E.Val v)        -> do
+     requireEqual t (valueType v)
+   (E.Unary op e')  -> do
      et <- checkExpression e'
      resultT <- unaryReturnType op et
      requireEqual t resultT
-   (E.EBinary o l r) -> do
+   (E.Binary o l r) -> do
      lt <- checkExpression l
      _ <- requireExprType r lt
      resultT <- binReturnType o lt
      _ <- requireEqual t resultT
      return resultT
-   (E.ECall f args)  -> do
+   (E.Call f args)  -> do
      fnType <- checkExpression f
      argTypes <- mapM checkExpression args
      requireEqual fnType (T.Function argTypes t)
-   (E.ECast t' e')   -> do
+   (E.Cast t' e')   -> do
      _ <- requireEqual t t'
      checkExpression e'
-   (E.EVariable var) -> requireVarType var t
+   (E.Var var)      -> do
+     requireVarType var t
 
 checkExpression :: Expression -> TSState Type
 checkExpression e =
   case e of
-   (E.EParen e')     -> checkExpression e'
-   (E.EValue v)      -> return $ valueType v
-   (E.EUnary o e')   -> do
+   (E.Paren e')     -> checkExpression e'
+   (E.Val v)        -> return $ valueType v
+   (E.Unary o e')   -> do
      t <- checkExpression e'
      unaryReturnType o t
-   (E.EBinary o l r) -> do
+   (E.Binary o l r) -> do
      t <- checkExpression l
      _ <- requireExprType r t
      binReturnType o t
-   (E.ECall f args)  -> do
+   (E.Call f args)  -> do
      fType <- checkExpression f
      case fType of
       (T.Function argTypes retType) ->
@@ -227,10 +230,11 @@ checkExpression e =
           _ <- mapM (\(t, arg) -> requireExprType arg t) (zip argTypes args)
           return retType
       _  -> err $ "trying to call a non-function type: " ++ show fType
-   (E.ECast t' e')   -> do
+   (E.Cast t' e')   -> do
      _ <- checkExpression e'
      return t'
-   (E.EVariable var) -> getFromScope var
+   (E.Var var)      ->
+     getFromScope var
 
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t =
@@ -283,11 +287,11 @@ requireVarType var t = do
     else err $ "type mismatch " ++ show t' ++ " and " ++ show t
 
 valueType :: Value -> Type
-valueType (E.EString _)    = T.String
-valueType (E.EBool _)      = T.Bool
-valueType (E.EInt _)       = T.Int
-valueType (E.EFloat _)     = T.Float
-valueType (E.EStruct tn _) = T.TypeName tn
+valueType (E.StrVal _)       = T.String
+valueType (E.BoolVal _)      = T.Bool
+valueType (E.IntVal _)       = T.Int
+valueType (E.FloatVal _)     = T.Float
+valueType (E.StructVal tn _) = T.TypeName tn
 
 requireEqual :: Type -> Type -> TSState Type
 requireEqual t1 t2 =

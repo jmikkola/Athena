@@ -3,21 +3,21 @@ module AST.Expression where
 import AST.Type (Type)
 
 data Value
-  = EString String
-  | EBool Bool
-  | EInt Int
-  | EFloat Float
-  | EStruct String [(String, Expression)]
+  = StrVal String
+  | BoolVal Bool
+  | IntVal Int
+  | FloatVal Float
+  | StructVal String [(String, Expression)]
   deriving (Eq, Show)
 
 data Expression
-  = EParen Expression
-  | EValue Value
-  | EUnary UnaryOp Expression
-  | EBinary BinOp Expression Expression
-  | ECall Expression [Expression]
-  | ECast Type Expression
-  | EVariable String
+  = Paren Expression
+  | Val Value
+  | Unary UnaryOp Expression
+  | Binary BinOp Expression Expression
+  | Call Expression [Expression]
+  | Cast Type Expression
+  | Var String
   deriving (Eq, Show)
 
 data UnaryOp
