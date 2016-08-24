@@ -1,6 +1,6 @@
 type Bar struct {
     x Int
-    y Int
+    y Float
 }
 
 type Foo struct {
@@ -13,10 +13,11 @@ fn main() {
         asdf: 123 + 345,
         xyz: Bar{
             x: 1,
-            y: 2,
+            y: 2.333,
         },
     }
     print(String(foo))
     print("Hello, world")
-    print(String(foo.xyz.x))
+    print(String(foo.xyz.x + 9))
+    print(String(foo.xyz.y * 0.6))
 }

@@ -15,7 +15,11 @@ import AST.Type (Type)
 import qualified AST.Type as T
 
 type Result = Either String
-type TypeScope = [Map String Type]
+-- Entries in a Scope have a double-meaning:
+--  - lowercase names map to the type of the value
+--  - uppercae names map to the type bound to that name
+type Scope = Map String Type
+type TypeScope = [Scope]
 type TSState = StateT TypeScope Result
 
 checkFile :: File -> Result ()
@@ -80,7 +84,7 @@ declName (D.TypeDef n _)      = n
 declType :: Declaraction  -> Type
 declType (D.Let _ t _)        = t
 declType (D.Function _ t _ _) = t
-declType (D.TypeDef _ _)      = T.Nil -- no reflection just yet
+declType (D.TypeDef _ t)      = t
 
 addFuncScope :: [String] -> [Type] -> TSState ()
 addFuncScope names types = do
@@ -104,7 +108,7 @@ checkDeclaration d =
    (D.Let _ t expr) -> do
      _ <- requireExprType expr t
      return ()
-   (D.TypeDef _ _) -> return () -- TODO: keep some map of known types
+   (D.TypeDef _ _) -> return () -- already handled in buildFileScope
 
 requireReturnType :: Statement -> Type -> TSState ()
 requireReturnType stmt t = do
@@ -209,7 +213,8 @@ requireExprType e t =
      requireVarType var t
    (E.Access e' f)  -> do
      et <- checkExpression e'
-     return et -- not even remotly correct, but will compile
+     t' <- getFieldType et f
+     requireEqual t t'
 
 checkExpression :: Expression -> TSState Type
 checkExpression e =
@@ -240,7 +245,24 @@ checkExpression e =
      getFromScope var
    (E.Access e' f)  -> do
      et <- checkExpression e'
-     return et -- not even remotly correct, but will compile
+     getFieldType et f
+
+getFieldType :: Type -> String -> TSState Type
+getFieldType typ fieldName = do
+  fieldTypes <- getStructFields typ
+  case lookup fieldName fieldTypes of
+   (Just t) -> return t
+   Nothing  -> err $ "field " ++ fieldName ++ " not found on type " ++ show typ
+
+getStructFields :: Type -> TSState [(String, Type)]
+getStructFields typ =
+  case typ of
+   (T.Struct fields) -> return fields
+   (T.TypeName name) -> do
+     realType <- getFromScope name
+     getStructFields realType
+   _                 ->
+     err $ "Can't access field  on a value of type " ++ show typ
 
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t =
