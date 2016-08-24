@@ -283,10 +283,11 @@ requireVarType var t = do
     else err $ "type mismatch " ++ show t' ++ " and " ++ show t
 
 valueType :: Value -> Type
-valueType (E.EString _) = T.String
-valueType (E.EBool _)   = T.Bool
-valueType (E.EInt _)    = T.Int
-valueType (E.EFloat _)  = T.Float
+valueType (E.EString _)    = T.String
+valueType (E.EBool _)      = T.Bool
+valueType (E.EInt _)       = T.Int
+valueType (E.EFloat _)     = T.Float
+valueType (E.EStruct tn _) = T.TypeName tn
 
 requireEqual :: Type -> Type -> TSState Type
 requireEqual t1 t2 =

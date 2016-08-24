@@ -7,6 +7,7 @@ data Value
   | EBool Bool
   | EInt Int
   | EFloat Float
+  | EStruct String [(String, Expression)]
   deriving (Eq, Show)
 
 data Expression

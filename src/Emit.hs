@@ -17,15 +17,20 @@ class Render a where
 class Emitter a where
   emit :: a -> Writer String ()
 
-instance Render Value where
-  render v = case v of
-    (E.EString s) -> show s
-    (E.EBool b)   -> if b then "true" else "false"
-    (E.EInt i)    -> show i
-    (E.EFloat f)  -> show f
-
 instance Emitter Value where
-  emit = tell . render
+  emit (E.EString s)   =
+    tell $ show s
+  emit (E.EBool b)     =
+    tell $ if b then "true" else "false"
+  emit (E.EInt i)      =
+    tell $ show i
+  emit (E.EFloat f)    =
+    tell $ show f
+  emit (E.EStruct t f) = do
+    tell t
+    tell "{\n"
+    _ <- mapM (\(fname, fexpr) -> do { tell fname; tell ": "; emit fexpr; tell ",\n" }) f
+    tell "}"
 
 instance Emitter Expression where
   emit (E.EParen e)        = do
