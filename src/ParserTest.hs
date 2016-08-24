@@ -31,6 +31,9 @@ tests =
   , expectParses expressionParser "Bool(a)" (E.ECast T.Bool (E.EVariable "a"))
   , expectParses expressionParser "(2 + 3)"
     (E.EParen (E.EBinary E.Plus (E.EValue (E.EInt 2)) (E.EValue (E.EInt 3))))
+  , expectParses expressionParser "Point{\nx: 123,\ny: 45, \n}"
+    (E.EValue $ E.EStruct "Point"
+     [("x", E.EValue $ E.EInt 123), ("y", E.EValue $ E.EInt 45)])
   , expectParses expressionParser "int ** 3"
     (E.EBinary E.Power (E.EVariable "int") (E.EValue (E.EInt 3)))
   , expectParses expressionParser "\"a quoted \\\"string\\\" \""

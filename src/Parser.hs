@@ -310,7 +310,25 @@ varExpr = do
 --- parse values
 
 valueParser :: Parser Value
-valueParser = choice [stringParser, boolParser, numberParser]
+valueParser = choice $ map try [structValueParser, stringParser, boolParser, numberParser]
+
+structValueParser :: Parser Value
+structValueParser = do
+  typ <- typeName
+  _ <- string "{"
+  _ <- statementSep
+  fields <- sepEndBy structFieldValue statementSep
+  _ <- string "}"
+  return $ Expression.EStruct typ fields
+
+structFieldValue :: Parser (String, Expression)
+structFieldValue = do
+  field <- valueName
+  _ <- string ":"
+  _ <- anyLinearWhitespace
+  value <- expressionParser
+  _ <- string ","
+  return (field, value)
 
 stringParser :: Parser Value
 stringParser = do
@@ -399,7 +417,7 @@ unaryOpParser =
 ---- AST.Type parsers ----
 
 typeParser :: Parser Type
-typeParser = structParser <|> choices types <|> namedType
+typeParser = structTypeParser <|> choices types <|> namedType
 
 types :: [(String, Type)]
 types = [ ("String", Type.String)
@@ -409,8 +427,8 @@ types = [ ("String", Type.String)
         , ("()", Type.Nil)
         ]
 
-structParser :: Parser Type
-structParser = do
+structTypeParser :: Parser Type
+structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
   _ <- string "{"
