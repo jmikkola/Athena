@@ -121,12 +121,20 @@ letStatement = do
 
 assignStatement :: Parser Statement
 assignStatement = do
-  name <- valueName -- TODO
+  name <- valueName
+  names <- try (assignFields [name]) <|> return [name]
   _ <- any1Whitespace
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ Statement.Assign [name] val
+  return $ Statement.Assign names val
+
+assignFields :: [String] -> Parser [String]
+assignFields lefts = do
+  _ <- char '.'
+  right <- valueName
+  let names = right : lefts
+  try (assignFields names) <|> return (reverse names)
 
 blockStatement :: Parser Statement
 blockStatement = do

@@ -76,6 +76,8 @@ tests =
     (S.Block [S.Block [], S.Block []])
   , expectParses statementParser "let a123 Bool = True"
     (S.Let "a123" T.Bool (E.Val $ E.BoolVal True))
+  , expectParses statementParser "a.b.c = True"
+    (S.Assign ["a", "b", "c"] (E.Val $ E.BoolVal True))
   , expectParses statementParser "print(c)"
     (S.Expr $ E.Call (E.Var "print") [(E.Var "c")])
   , expectParses letStatement "let int Int = 5 + (2 * 10) / 3 % 4"

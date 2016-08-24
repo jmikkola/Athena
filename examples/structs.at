@@ -19,6 +19,7 @@ fn main() {
     let b Bar = foo.xyz
     print(String(foo))
     print("Hello, world")
+    foo.xyz.x = 10000
     print("an Int: " + String(foo.xyz.x + 9))
     print("a Float: " + String(foo.xyz.y * 0.6))
 }
