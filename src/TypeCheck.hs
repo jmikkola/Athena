@@ -207,6 +207,9 @@ requireExprType e t =
      checkExpression e'
    (E.Var var)      -> do
      requireVarType var t
+   (E.Access e' f)  -> do
+     et <- checkExpression e'
+     return et -- not even remotly correct, but will compile
 
 checkExpression :: Expression -> TSState Type
 checkExpression e =
@@ -233,8 +236,11 @@ checkExpression e =
    (E.Cast t' e')   -> do
      _ <- checkExpression e'
      return t'
-   (E.Var var)      ->
+   (E.Var var)      -> do
      getFromScope var
+   (E.Access e' f)  -> do
+     et <- checkExpression e'
+     return et -- not even remotly correct, but will compile
 
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t =
