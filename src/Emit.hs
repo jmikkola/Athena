@@ -208,6 +208,32 @@ instance Emitter Declaraction where
     tell name
     tell " "
     emit typ
+    case typ of
+     (T.Struct fields) -> emitStructImpls name fields
+     _                 -> return ()
+
+-- Once interface implementations exist, generate these in a separate phase
+-- Example output:
+{-
+func (self *Foo) String() {
+return fmt.Sprintf("Foo{\nbar: %v,\nzap: %v,\n}", self.bar, self.zap)
+}
+-}
+emitStructImpls :: String -> [(String, Type)] -> Writer String ()
+emitStructImpls name fields = do
+  let fieldNames = map fst fields
+  tell "\n\n"
+  tell "func (self *"
+  tell name
+  tell ") String() string {\n"
+  tell "return fmt.Sprintf(\""
+  tell name
+  tell "{\\n"
+  _ <- mapM (\fname -> do {tell fname; tell ": %v,\\n"}) fieldNames
+  tell "}\""
+  _ <- mapM (\fname -> do {tell ", self."; tell fname}) fieldNames
+  tell ")\n"
+  tell "}"
 
 emitFile :: File -> Writer String ()
 emitFile decls = do
