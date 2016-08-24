@@ -79,6 +79,10 @@ instance Emitter Expression where
     if v == "print"
     then tell "fmt.Println"
     else tell v
+  emit (E.Access e f)    = do
+    emit e
+    tell "."
+    tell f
 
 instance Render UnaryOp where
   render E.BitInvert = "^"

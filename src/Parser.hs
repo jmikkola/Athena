@@ -243,7 +243,16 @@ precOrder =
   ]
 
 expr :: Parser Expression
-expr = choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
+expr = do
+  e <- choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
+  try (accessExpr e) <|> return e
+
+accessExpr :: Expression -> Parser Expression
+accessExpr left = do
+  _ <- char '.'
+  right <- valueName
+  let e = Expression.Access left right
+  try (accessExpr e) <|> return e
 
 parenExpr :: Parser Expression
 parenExpr = do

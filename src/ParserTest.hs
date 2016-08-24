@@ -40,6 +40,10 @@ tests =
     (E.Val (E.StrVal "a quoted \"string\" "))
   , expectParses expressionParser "!False"
     (E.Unary E.BoolNot (E.Val (E.BoolVal False)))
+  , expectParses expressionParser "foo.bar"
+    (E.Access (E.Var "foo") "bar")
+  , expectParses expressionParser "foo.bar.baz"
+    (E.Access (E.Access (E.Var "foo") "bar") "baz")
   , expectParses expressionParser "1 + 2 * 3 + 4"
     (E.Binary E.Plus
       (E.Val $ E.IntVal 1)

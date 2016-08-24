@@ -18,6 +18,7 @@ data Expression
   | Call Expression [Expression]
   | Cast Type Expression
   | Var String
+  | Access Expression String
   deriving (Eq, Show)
 
 data UnaryOp
