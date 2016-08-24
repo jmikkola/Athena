@@ -121,12 +121,12 @@ letStatement = do
 
 assignStatement :: Parser Statement
 assignStatement = do
-  name <- valueName
+  name <- valueName -- TODO
   _ <- any1Whitespace
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ Statement.Assign name val
+  return $ Statement.Assign [name] val
 
 blockStatement :: Parser Statement
 blockStatement = do

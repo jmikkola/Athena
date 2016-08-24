@@ -89,9 +89,9 @@ tests =
                           (E.Val (E.IntVal 3))
                            (E.Val (E.IntVal 4))))))
   , expectParses assignStatement "int = 3"
-    (S.Assign "int" $ E.Val $ E.IntVal 3)
+    (S.Assign ["int"] $ E.Val $ E.IntVal 3)
   , expectParses assignStatement "int = int ** 3"
-    (S.Assign "int" $ E.Binary E.Power (E.Var "int") (E.Val $ E.IntVal 3))
+    (S.Assign ["int"] $ E.Binary E.Power (E.Var "int") (E.Val $ E.IntVal 3))
   -- blocks and larger
   , testParsingBlock
   , testParsingIf

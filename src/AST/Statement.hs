@@ -6,7 +6,7 @@ import AST.Type (Type)
 data Statement
   = Return (Maybe Expression)
   | Let String Type Expression
-  | Assign String Expression
+  | Assign [String] Expression
   | Block [Statement]
   | Expr Expression -- e.g. just calling a function
   | If Expression [Statement] (Maybe Statement)

@@ -156,8 +156,8 @@ instance Emitter Statement where
     -- get around "declared and not used" issues
     tell "\nvar _ = "
     tell name
-  emit (S.Assign name e)      = do
-    tell name
+  emit (S.Assign names e)     = do
+    intersperse (tell ".") (map tell names)
     tell " = "
     emit e
   emit (S.Block stmts)        = do

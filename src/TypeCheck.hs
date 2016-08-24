@@ -153,8 +153,8 @@ checkStatement s expectedRetType =
      setInScope name t
      _ <- requireExprType e t
      return ()
-   (S.Assign name e) -> do
-     t <- getFromScope name
+   (S.Assign names e) -> do
+     t <- getAssignType names
      _ <- requireExprType e t
      return ()
    (S.Block stmts) -> do
@@ -184,6 +184,12 @@ checkStatement s expectedRetType =
      endScope
 
      return ()
+
+getAssignType :: [String] -> TSState Type
+getAssignType []           = err "compiler error: assign statement with no names"
+getAssignType (var:fields) = do
+  t <- getFromScope var
+  foldM getFieldType t fields
 
 requireExprType :: Expression -> Type -> TSState Type
 requireExprType e t =
