@@ -1,8 +1,21 @@
+type Bar struct {
+	x Int
+	y Int
+}
+
 type Foo struct {
     asdf Int
-    xyz Foo
+    xyz Bar
 }
 
 fn main() {
+    let foo Foo = Foo{
+		asdf: 123 + 345,
+		xyz: Bar{
+			x: 1,
+			y: 2,
+		},
+	}
+	print(String(foo))
     print("Hello, world")
 }

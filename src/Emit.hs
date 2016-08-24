@@ -27,6 +27,7 @@ instance Emitter Value where
   emit (E.EFloat f)    =
     tell $ show f
   emit (E.EStruct t f) = do
+    tell "&"
     tell t
     tell "{\n"
     _ <- mapM (\(fname, fexpr) -> do { tell fname; tell ": "; emit fexpr; tell ",\n" }) f
