@@ -5,7 +5,7 @@ import Control.Monad.State
 import Data.Map (Map)
 import qualified Data.Map as Map
 
-import AST.Declaration (Declaraction, File)
+import AST.Declaration (Declaration, File)
 import qualified AST.Declaration as D
 import AST.Expression (Expression, Value)
 import qualified AST.Expression as E
@@ -76,12 +76,12 @@ defineDefaultFunctions :: TSState ()
 defineDefaultFunctions = do
   setInScope "print" $ T.Function [T.String] T.Nil
 
-declName :: Declaraction -> String
+declName :: Declaration -> String
 declName (D.Let n _ _)        = n
 declName (D.Function n _ _ _) = n
 declName (D.TypeDef n _)      = n
 
-declType :: Declaraction  -> Type
+declType :: Declaration  -> Type
 declType (D.Let _ t _)        = t
 declType (D.Function _ t _ _) = t
 declType (D.TypeDef _ t)      = t
@@ -91,7 +91,7 @@ addFuncScope names types = do
   _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
   return ()
 
-checkDeclaration :: Declaraction -> TSState ()
+checkDeclaration :: Declaration -> TSState ()
 checkDeclaration d =
   case d of
    (D.Function _ t args body) -> do

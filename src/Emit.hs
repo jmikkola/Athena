@@ -2,7 +2,7 @@ module Emit where
 
 import Control.Monad.Writer
 
-import AST.Declaration (Declaraction, File)
+import AST.Declaration (Declaration, File)
 import qualified AST.Declaration as D
 import AST.Expression (Expression, Value, UnaryOp, BinOp)
 import qualified AST.Expression as E
@@ -183,7 +183,7 @@ instance Emitter Statement where
     tell " "
     emit (S.Block body)
 
-instance Emitter Declaraction where
+instance Emitter Declaration where
   emit (D.Let name t e)              = do
     tell "var "
     tell name
