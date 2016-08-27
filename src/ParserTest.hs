@@ -57,6 +57,7 @@ tests =
   , expectParses typeParser "Int" T.Int
   , expectParses typeParser "struct {\n  a  Int\nb String\n}"
     (T.Struct [("a", T.Int), ("b", T.String)])
+  , testEnumType
   -- statements
   , expectParses statementParser "return \"foo\""
     (S.Return $ Just $ E.Val $ E.StrVal "foo")
@@ -101,6 +102,13 @@ tests =
   , testParsingFunc2
   , testParsingTypeDecl
   ]
+
+testEnumType :: IO Bool
+testEnumType =
+  let text = "enum {\n Cons {\n item Int \n next List \n } \n End \n }"
+      expected = T.Enum [ ("Cons", [("item", T.Int), ("next", T.TypeName "List")])
+                        , ("End", []) ]
+  in expectParses typeParser text expected
 
 testParsingBlock :: IO Bool
 testParsingBlock =

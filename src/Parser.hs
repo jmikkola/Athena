@@ -434,7 +434,7 @@ unaryOpParser =
 ---- AST.Type parsers ----
 
 typeParser :: Parser Type
-typeParser = structTypeParser <|> choices types <|> namedType
+typeParser = enumTypeParser <|> structTypeParser <|> choices types <|> namedType
 
 types :: [(String, Type)]
 types = [ ("String", Type.String)
@@ -444,15 +444,37 @@ types = [ ("String", Type.String)
         , ("()", Type.Nil)
         ]
 
+enumTypeParser :: Parser Type
+enumTypeParser = do
+  _ <- string "enum"
+  _ <- any1LinearWhitespace
+  _ <- string "{"
+  _ <- statementSep
+  options <- sepEndBy enumField statementSep
+  _ <- string "}"
+  return $ Type.Enum options
+
+enumField :: Parser (String, [(String, Type)])
+enumField = do
+  name <- typeName
+  _ <- any1LinearWhitespace
+  fields <- optionMaybe $ try $ structTypeBody
+  return (name, unwrapOr fields [])
+
 structTypeParser :: Parser Type
 structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
+  fields <- structTypeBody
+  return $ Type.Struct fields
+
+structTypeBody :: Parser [(String, Type)]
+structTypeBody = do
   _ <- string "{"
   _ <- statementSep
   fields <- sepEndBy structField statementSep
   _ <- string "}"
-  return $ Type.Struct fields
+  return fields
 
 structField :: Parser (String, Type)
 structField = do

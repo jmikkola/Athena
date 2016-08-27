@@ -9,4 +9,5 @@ data Type
   | Function [Type] Type
   | TypeName String
   | Struct [(String, Type)]
+  | Enum [(String, [(String, Type)])]
   deriving (Eq, Show)
