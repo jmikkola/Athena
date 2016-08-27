@@ -128,14 +128,13 @@ instance Emitter Type where
     tell ")"
     if ret /= T.Nil then tell " " else return ()
     emit ret
-  -- TODO: do type resolution before this?
   emit (T.TypeName name)     = do
-    tell "*" -- avoid infinite types
+    tell "*" -- avoid infinite types in emitted code
     tell name
-  emit (T.Struct fields)     = do
-    tell "struct {\n"
-    _ <- mapM (\(fname, ftype) -> do { tell fname; tell " "; emit ftype; tell "\n" }) fields
-    tell "}"
+  emit (T.Struct _)          = do
+    fail "compiler bug: can't declare struct type inline"
+  emit (T.Enum _)            = do
+    fail "compiler bug: can't declare enum type inline"
 
 instance Emitter Statement where
   emit (S.Return me)          = do
@@ -211,10 +210,21 @@ instance Emitter Declaration where
     tell "type "
     tell name
     tell " "
-    emit typ
     case typ of
-     (T.Struct fields) -> emitStructImpls name fields
-     _                 -> return ()
+     (T.Struct fields) -> do
+       emitStructBody fields
+       emitStructImpls name fields
+     (T.Enum options)  -> do
+       emitEnumBody name
+       emitEnumOptions name options
+     _                 ->
+       emit typ
+
+emitStructBody :: [(String, Type)] -> Writer String ()
+emitStructBody fields = do
+  tell "struct {\n"
+  _ <- mapM (\(fname, ftype) -> do { tell fname; tell " "; emit ftype; tell "\n" }) fields
+  tell "}"
 
 -- Once interface implementations exist, generate these in a separate phase
 -- Example output:
@@ -238,6 +248,39 @@ emitStructImpls name fields = do
   _ <- mapM (\fname -> do {tell ", self."; tell fname}) fieldNames
   tell ")\n"
   tell "}"
+
+emitEnumBody :: String -> Writer String ()
+emitEnumBody name = do
+  tell "interface {\n"
+  tell "Enum"
+  tell name
+  tell "() int\n"
+  tell "}\n"
+
+emitEnumOptions :: String -> [(String, [(String, Type)])] -> Writer String ()
+emitEnumOptions name options = do
+  _ <- mapM (emitEnumOption name) (zip [1..] options)
+  return ()
+
+emitEnumOption :: String -> (Int, (String, [(String, Type)])) -> Writer String ()
+emitEnumOption name (i, (optName, fields)) = do
+  let structName = name ++ optName
+  tell "\n\n"
+  tell "type "
+  tell structName
+  tell " "
+  emitStructBody fields
+  tell "\n\n"
+  tell "func (self *"
+  tell structName
+  tell ") Enum"
+  tell name
+  tell "() int {\n"
+  tell "return "
+  tell $ show i
+  tell "\n}"
+  tell "\n\n"
+  emitStructImpls structName fields
 
 emitFile :: File -> Writer String ()
 emitFile decls = do

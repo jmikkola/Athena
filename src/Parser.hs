@@ -457,8 +457,9 @@ enumTypeParser = do
 enumField :: Parser (String, [(String, Type)])
 enumField = do
   name <- typeName
-  _ <- any1LinearWhitespace
-  fields <- optionMaybe $ try $ structTypeBody
+  fields <- optionMaybe $ try $ do
+    _ <- any1LinearWhitespace
+    structTypeBody
   return (name, unwrapOr fields [])
 
 structTypeParser :: Parser Type

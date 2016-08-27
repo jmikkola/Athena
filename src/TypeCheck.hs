@@ -70,21 +70,24 @@ buildFileScope file = do
   defineDefaultFunctions
   _ <- mapM addDecl file
   return ()
-  where addDecl decl = setInScope (declName decl) (declType decl)
+
+addDecl :: Declaration -> TSState ()
+addDecl (D.Let n t _)        = setInScope n t
+addDecl (D.Function n t _ _) = setInScope n t
+addDecl (D.TypeDef n t)      =
+  case t of
+   (T.Enum options) -> do
+     setInScope n t
+     -- TODO: extend the system to both understand that these are subtypes of t,
+     -- and to know that they are structure types
+     _ <- mapM (\optName -> setInScope optName t) (map fst options)
+     return ()
+   _                -> do
+     setInScope n t
 
 defineDefaultFunctions :: TSState ()
 defineDefaultFunctions = do
   setInScope "print" $ T.Function [T.String] T.Nil
-
-declName :: Declaration -> String
-declName (D.Let n _ _)        = n
-declName (D.Function n _ _ _) = n
-declName (D.TypeDef n _)      = n
-
-declType :: Declaration  -> Type
-declType (D.Let _ t _)        = t
-declType (D.Function _ t _ _) = t
-declType (D.TypeDef _ t)      = t
 
 addFuncScope :: [String] -> [Type] -> TSState ()
 addFuncScope names types = do

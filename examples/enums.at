@@ -1,0 +1,19 @@
+type ASTIsh enum {
+  TInt
+  TFloat
+  TString
+  TNamed {
+    name String
+  }
+  TFunc {
+    arg ASTIsh
+    ret ASTIsh
+  }
+}
+
+fn main() {
+  let a ASTIsh = TNamed{
+    name: "some name",
+  }
+  print(a)
+}
