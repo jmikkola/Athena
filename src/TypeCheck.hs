@@ -4,6 +4,8 @@ import Control.Applicative ( (<|>) )
 import Control.Monad.State
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 import AST.Declaration (Declaration, File)
 import qualified AST.Declaration as D
@@ -20,7 +22,7 @@ type Result = Either String
 --  - uppercae names map to the type bound to that name
 type Scope = Map String Type
 type TypeScope = [Scope]
-type Subtypes = Map String String
+type Subtypes = Map Type (Set Type)
 type TSState = StateT (TypeScope, Subtypes) Result
 
 checkFile :: File -> Result ()
@@ -65,12 +67,14 @@ setInScope name typ = do
   put (newScopes, subtypes)
   return ()
 
-setSubtype :: String -> String -> TSState ()
+setSubtype :: Type -> Type -> TSState ()
 setSubtype sub super = do
   (scopes, subtypes) <- get
-  newSubtypes <- case Map.lookup sub subtypes of
-    Nothing  -> return $ Map.insert sub super subtypes
-    (Just _) -> err $ "compiler bug: duplicate subtype for " ++ show sub
+  let newSupers =
+       case Map.lookup sub subtypes of
+         Nothing       -> Set.singleton super
+         (Just others) -> Set.insert super others
+  let newSubtypes = Map.insert sub newSupers subtypes
   put (scopes, newSubtypes)
   return ()
 
@@ -90,7 +94,7 @@ addDecl (D.TypeDef n t)      =
      setInScope n t
      -- TODO: extend the system to both understand that these are subtypes of t,
      -- and to know that they are structure types
-     _ <- mapM (\optName -> setSubtype optName n) (map fst options)
+     _ <- mapM (\optName -> setSubtype (T.TypeName optName) (T.TypeName n)) (map fst options)
      _ <- mapM (\(name, fields) -> setInScope name (T.Struct fields)) options
      return ()
    _                -> do
@@ -360,36 +364,29 @@ resolveTypeName t                 =
 
 requireEqual :: Type -> Type -> TSState Type
 requireEqual t1 t2 = do
-  t1' <- resolveTypeName t1
-  t2' <- resolveTypeName t2
-  if t1' == t2'
-    then return t1'
+  if t1 == t2
+    then return t1
     else err ("Type mismatch between " ++ show t1 ++ " and " ++ show t2)
 
 requireSubtype :: Type -> Type -> TSState Type
-requireSubtype sub super = do
-  isCh <- isChildOf sub super
-  if isCh
+requireSubtype sub super =
+  if sub == super
     then return sub
-    else err (show sub ++ " is not a subtype of " ++ show super)
-
-isChildOf :: Type -> Type -> TSState Bool
-isChildOf sub sup =
-  case (sub, sup) of
-    (T.TypeName subName, T.TypeName supName) ->
-      isChildByName subName supName
-    _                                        ->
-      err $ "type system needs fixing, can't compare subtypes for " ++ show (sub, sup)
-
-isChildByName :: String -> String -> TSState Bool
-isChildByName sub sup =
-  if sub == sup
-    then return True
     else do
-      (_, subtypes) <- get
-      case Map.lookup sub subtypes of
-        Nothing     -> return False
-        (Just sub') -> isChildByName sub' sup
+      supers <- getSupersOf sub
+      -- TODO: rethink this logic.
+      if Set.member super supers
+        then return sub
+        else err (show sub ++ " is not a subtype of " ++ show super)
+
+
+getSupersOf :: Type -> TSState (Set Type)
+getSupersOf sub = do
+  (_, subtypes) <- get
+  case Map.lookup sub subtypes of
+    Nothing     -> return Set.empty
+    -- TODO: recurse up for more subtypes
+    (Just sups) -> return sups
 
 note :: a -> Maybe b -> Either a b
 note msg = maybe (Left msg) Right

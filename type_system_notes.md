@@ -93,3 +93,16 @@ structures, and only consider names and explicit structures together
 when one is the subtype of another. That is to say, just compare them
 directly with the subtype comparison process and ignore resolving type
 names.
+
+## To consider
+
+What if a type component is a subtype of the components of another, e.g.
+
+    a :: LinkedList<String>
+    f :: (List<Eq>) Int
+
+It should be possible to pass the value `a` to the function `f`
+(assuming `String` implements `Eq` and `LinkedList` implements
+`List`).
+
+TODO: How should this supertype lookup work?

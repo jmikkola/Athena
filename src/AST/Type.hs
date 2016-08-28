@@ -10,4 +10,4 @@ data Type
   | TypeName String
   | Struct [(String, Type)]
   | Enum [(String, [(String, Type)])]
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
