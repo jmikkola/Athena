@@ -20,10 +20,11 @@ type Result = Either String
 --  - uppercae names map to the type bound to that name
 type Scope = Map String Type
 type TypeScope = [Scope]
-type TSState = StateT TypeScope Result
+type Subtypes = Map String String
+type TSState = StateT (TypeScope, Subtypes) Result
 
 checkFile :: File -> Result ()
-checkFile file = evalStateT (checkFileM file) []
+checkFile file = evalStateT (checkFileM file) ([], Map.empty)
 
 checkFileM :: File -> TSState ()
 checkFileM file = do
@@ -43,25 +44,34 @@ scopeAdd name typ (m:ms) =
 scopeAdd _    _   []     = Left "Empty scope stack??"
 
 startScope :: TSState ()
-startScope = modify (Map.empty :)
+startScope = modify (\(scopes, subs) -> (Map.empty : scopes, subs))
 
 endScope :: TSState ()
 endScope = do
-  scopes <- get
+  (scopes, subtypes) <- get
   case scopes of
-   (_:ss) -> put ss
+   (_:ss) -> put (ss, subtypes)
    []     -> err "No scope to end??"
 
 getFromScope :: String -> TSState Type
 getFromScope name = do
-  scopes <- get
+  (scopes, _) <- get
   lift $ note ("Not defined: " ++ name) (scopeLookup name scopes)
 
 setInScope :: String -> Type -> TSState ()
 setInScope name typ = do
-  scopes <- get
+  (scopes, subtypes) <- get
   newScopes <- lift $ scopeAdd name typ scopes
-  put newScopes
+  put (newScopes, subtypes)
+  return ()
+
+setSubtype :: String -> String -> TSState ()
+setSubtype sub super = do
+  (scopes, subtypes) <- get
+  newSubtypes <- case Map.lookup sub subtypes of
+    Nothing  -> return $ Map.insert sub super subtypes
+    (Just _) -> err $ "compiler bug: duplicate subtype for " ++ show sub
+  put (scopes, newSubtypes)
   return ()
 
 buildFileScope :: File -> TSState ()
@@ -80,7 +90,8 @@ addDecl (D.TypeDef n t)      =
      setInScope n t
      -- TODO: extend the system to both understand that these are subtypes of t,
      -- and to know that they are structure types
-     _ <- mapM (\optName -> setInScope optName t) (map fst options)
+     _ <- mapM (\optName -> setSubtype optName n) (map fst options)
+     _ <- mapM (\(name, fields) -> setInScope name (T.Struct fields)) options
      return ()
    _                -> do
      setInScope n t
@@ -116,7 +127,7 @@ checkDeclaration d =
 requireReturnType :: Statement -> Type -> TSState ()
 requireReturnType stmt t = do
   lastRet <- getReturnType stmt t
-  _ <- requireEqual t lastRet
+  _ <- requireSubtype lastRet t
   return ()
 
 getReturnType :: Statement -> Type -> TSState Type
@@ -125,7 +136,7 @@ getReturnType stmt expectedRetType =
    (S.Block stmts) -> checkBlock stmts expectedRetType
    _               -> err "function body must be a block"
 
-err :: String -> StateT TypeScope (Either String) a
+err :: String -> TSState a
 err = lift . Left
 
 checkBlock :: [Statement] -> Type -> TSState Type
@@ -140,10 +151,10 @@ checkBlock stmts expectedRetType =
 
 returnExpr :: Maybe Expression -> Type -> TSState Type
 returnExpr Nothing  expectedRetType = do
-  requireEqual expectedRetType T.Nil
+  requireSubtype expectedRetType T.Nil
 returnExpr (Just e) expectedRetType = do
   retType <- checkExpression e
-  requireEqual expectedRetType retType
+  requireSubtype retType expectedRetType
 
 -- Returns a return type, if the statement returns
 checkStatement :: Statement -> Type -> TSState ()
@@ -201,11 +212,11 @@ requireExprType e t =
      requireExprType e' t
    (E.Val v)        -> do
      vt <- valueType v
-     requireEqual t vt
+     requireSubtype vt t
    (E.Unary op e')  -> do
      et <- checkExpression e'
      resultT <- unaryReturnType op et
-     requireEqual t resultT
+     requireSubtype resultT t
    (E.Binary o l r) -> do
      lt <- checkExpression l
      _ <- requireExprType r lt
@@ -217,14 +228,14 @@ requireExprType e t =
      argTypes <- mapM checkExpression args
      requireEqual fnType (T.Function argTypes t)
    (E.Cast t' e')   -> do
-     _ <- requireEqual t t'
+     _ <- requireSubtype t' t
      checkExpression e'
    (E.Var var)      -> do
      requireVarType var t
    (E.Access e' f)  -> do
      et <- checkExpression e'
      t' <- getFieldType et f
-     requireEqual t t'
+     requireSubtype t' t
 
 checkExpression :: Expression -> TSState Type
 checkExpression e =
@@ -352,8 +363,33 @@ requireEqual t1 t2 = do
   t1' <- resolveTypeName t1
   t2' <- resolveTypeName t2
   if t1' == t2'
-  then return t1'
-  else err ("Type mismatch between " ++ show t1 ++ " and " ++ show t2)
+    then return t1'
+    else err ("Type mismatch between " ++ show t1 ++ " and " ++ show t2)
+
+requireSubtype :: Type -> Type -> TSState Type
+requireSubtype sub super = do
+  isCh <- isChildOf sub super
+  if isCh
+    then return sub
+    else err (show sub ++ " is not a subtype of " ++ show super)
+
+isChildOf :: Type -> Type -> TSState Bool
+isChildOf sub sup =
+  case (sub, sup) of
+    (T.TypeName subName, T.TypeName supName) ->
+      isChildByName subName supName
+    _                                        ->
+      err $ "type system needs fixing, can't compare subtypes for " ++ show (sub, sup)
+
+isChildByName :: String -> String -> TSState Bool
+isChildByName sub sup =
+  if sub == sup
+    then return True
+    else do
+      (_, subtypes) <- get
+      case Map.lookup sub subtypes of
+        Nothing     -> return False
+        (Just sub') -> isChildByName sub' sup
 
 note :: a -> Maybe b -> Either a b
 note msg = maybe (Left msg) Right
