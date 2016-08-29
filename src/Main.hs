@@ -9,7 +9,7 @@ import ParserTest ( testMain )
 import TypeCheck ( checkFile )
 import Emit ( showFile )
 
-import IR
+import TypeCheck2 ( Scope )
 
 main :: IO ()
 main = do
