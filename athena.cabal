@@ -57,8 +57,7 @@ executable athena
                 AST.Statement,
                 AST.Type,
                 Emit,
-                IR.Expression,
-                IR.Type,
+                IR,
                 Parser,
                 ParserTest,
                 TypeCheck

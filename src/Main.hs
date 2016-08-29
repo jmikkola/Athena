@@ -9,7 +9,7 @@ import ParserTest ( testMain )
 import TypeCheck ( checkFile )
 import Emit ( showFile )
 
-import IR.Expression
+import IR
 
 main :: IO ()
 main = do

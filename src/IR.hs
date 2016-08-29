@@ -1,12 +1,20 @@
-module IR.Expression where
-
-import IR.Type (Type)
-import qualified IR.Type as T
+module IR where
 
 import AST.Expression
   ( UnaryOp (..)
   , BinOp (..)
   )
+
+data Statement
+  = Return (Maybe Expression)
+    -- Let handles both variable and function declarations
+  | Let String Type Expression
+  | Assign [String] Expression
+  | Block [Statement]
+  | Expr Expression
+  | If Expression [Statement] (Maybe Statement)
+  | While Expression [Statement]
+  deriving (Eq, Show)
 
 class Typeable a where
   typeOf :: a -> Type
@@ -20,11 +28,11 @@ data Value
   deriving (Eq, Show)
 
 instance Typeable Value where
-  typeOf (StrVal _)      = T.Named "String"
-  typeOf (BoolVal _)     = T.Named "Bool"
-  typeOf (IntVal _)      = T.Named "Int"
-  typeOf (FloatVal _)    = T.Named "Float"
-  typeOf (StructVal n _) = T.Named n
+  typeOf (StrVal _)      = Named "String"
+  typeOf (BoolVal _)     = Named "Bool"
+  typeOf (IntVal _)      = Named "Int"
+  typeOf (FloatVal _)    = Named "Float"
+  typeOf (StructVal n _) = Named n
 
 data Expression
   = Paren Expression Type
@@ -35,6 +43,7 @@ data Expression
   | Cast Type Expression
   | Var Type String
   | Access Type Expression String
+  | Lambda Type [String] Statement
   deriving (Eq, Show)
 
 instance Typeable Expression where
@@ -46,3 +55,14 @@ instance Typeable Expression where
   typeOf (Cast t _)       = t
   typeOf (Var t _)        = t
   typeOf (Access t _ _)   = t
+  typeOf (Lambda t _ _)   = t
+
+type TypeName = String
+
+data Type
+  = Named TypeName
+  | Function [Type] Type
+  | TypeName String
+  | Struct [(String, Type)]
+  | Enum [(TypeName, [(String, Type)])]
+  deriving (Eq, Ord, Show)
