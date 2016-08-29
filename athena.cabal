@@ -56,10 +56,12 @@ executable athena
                 AST.Expression,
                 AST.Statement,
                 AST.Type,
+                Emit,
+                IR.Expression,
+                IR.Type,
                 Parser,
                 ParserTest,
-                TypeCheck,
-                Emit
+                TypeCheck
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
