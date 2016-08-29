@@ -255,7 +255,7 @@ emitEnumBody name = do
   tell "Enum"
   tell name
   tell "() int\n"
-  tell "}\n"
+  tell "}"
 
 emitEnumOptions :: String -> [(String, [(String, Type)])] -> Writer String ()
 emitEnumOptions name options = do
