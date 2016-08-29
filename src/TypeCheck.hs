@@ -346,8 +346,9 @@ valueType (E.IntVal _)       = return T.Int
 valueType (E.FloatVal _)     = return T.Float
 valueType (E.StructVal tn f) = do
   structType <- getFromScope tn
+  -- TODO: require that values for all fields are specified
   _ <- mapM (checkField structType) f
-  return structType
+  return $ T.TypeName tn
 
 checkField :: Type -> (String, Expression) -> TSState ()
 checkField typ (field, e) = do

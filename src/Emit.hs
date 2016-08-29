@@ -264,7 +264,9 @@ emitEnumOptions name options = do
 
 emitEnumOption :: String -> (Int, (String, [(String, Type)])) -> Writer String ()
 emitEnumOption name (i, (optName, fields)) = do
-  let structName = name ++ optName
+   -- TODO: add the enum name to the option name here and in
+   -- constructions to make it more unique.
+  let structName = optName
   tell "\n\n"
   tell "type "
   tell structName
@@ -279,7 +281,6 @@ emitEnumOption name (i, (optName, fields)) = do
   tell "return "
   tell $ show i
   tell "\n}"
-  tell "\n\n"
   emitStructImpls structName fields
 
 emitFile :: File -> Writer String ()

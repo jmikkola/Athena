@@ -15,5 +15,5 @@ fn main() {
   let a ASTIsh = TNamed{
     name: "some name",
   }
-  print(a)
+  print(String(a))
 }
