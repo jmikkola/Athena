@@ -115,22 +115,30 @@ exprToTyped e =
    (E.Val value) -> do
      typedVal <- valToTyped value
      return $ Val typedVal
-   (E.Unary op e) -> undefined -- TODO
+   (E.Unary op e') -> do
+     typedInner <- exprToTyped e'
+     t <- unaryReturnType op (typeOf typedInner)
+     return $ Unary t op typedInner
    (E.Binary op l r) -> undefined -- TODO
    (E.Call fnEx argEs) -> do
      typedFn <- exprToTyped fnEx
      typedArgs <- mapM exprToTyped argEs
      checkFnCall typedFn typedArgs
-   (E.Cast t e) -> do
-     innerExpr <- exprToTyped e
+   (E.Cast t e') -> do
+     innerExpr <- exprToTyped e'
      return $ Cast (convertType t) innerExpr
    (E.Var name) -> do
      t <- getFromScope name
      return $ Var t name
-   (E.Access e name) -> do
-     typedInner <- exprToTyped e
+   (E.Access e' name) -> do
+     typedInner <- exprToTyped e'
      t <- getFieldType (typeOf typedInner) name
      return $ Access t typedInner name
+
+unaryReturnType :: E.UnaryOp -> Type -> TSState Type
+unaryReturnType op t = case op of
+  E.BitInvert -> requireSubtype t (Named "Int")
+  E.BoolNot   -> requireSubtype t (Named "Bool")
 
 checkFnCall :: Expression -> [Expression] -> TSState Expression
 checkFnCall typedFn typedArgs =
