@@ -58,5 +58,8 @@ convertType t = case t of
   T.Nil              -> Named "()"
   (T.TypeName n)     -> Named n
   (T.Function at rt) -> Function (map convertType at) (convertType rt)
-  (T.Struct fields)  -> Struct (map (\(n,t) -> (n, convertType t)) fields)
-  (T.Enum options)   -> Enum (map (\(o,f) -> (o, map (\(n,t) -> (n, convertType t)) f)) options)
+  (T.Struct fields)  -> Struct $ mapSnd convertType fields
+  (T.Enum options)   -> Enum $ mapSnd (mapSnd convertType) options
+
+mapSnd :: (a -> b) -> [(c, a)] -> [(c, b)]
+mapSnd f = map (\(c, a) -> (c, f a))
