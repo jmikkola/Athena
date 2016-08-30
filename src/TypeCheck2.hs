@@ -106,39 +106,38 @@ valToTyped (E.StructVal s fs) = do
   return $ StructVal s fs'
 
 exprToTyped :: E.Expression -> TSState Expression
-exprToTyped e =
-  case e of
-   (E.Paren inner) -> do
-     typedInner <- exprToTyped inner
-     let innerType = typeOf typedInner
-     return $ Paren typedInner innerType
-   (E.Val value) -> do
-     typedVal <- valToTyped value
-     return $ Val typedVal
-   (E.Unary op e') -> do
-     typedInner <- exprToTyped e'
-     t <- unaryReturnType op (typeOf typedInner)
-     return $ Unary t op typedInner
-   (E.Binary op l r) -> do
-     typedL <- exprToTyped l
-     typedR <- exprToTyped r
-     argT <- requireEqual (typeOf typedL) (typeOf typedR)
-     t <- binaryReturnType op argT
-     return $ Binary t op typedL typedR
-   (E.Call fnEx argEs) -> do
-     typedFn <- exprToTyped fnEx
-     typedArgs <- mapM exprToTyped argEs
-     checkFnCall typedFn typedArgs
-   (E.Cast t e') -> do
-     innerExpr <- exprToTyped e'
-     return $ Cast (convertType t) innerExpr
-   (E.Var name) -> do
-     t <- getFromScope name
-     return $ Var t name
-   (E.Access e' name) -> do
-     typedInner <- exprToTyped e'
-     t <- getFieldType (typeOf typedInner) name
-     return $ Access t typedInner name
+exprToTyped e = case e of
+ (E.Paren inner) -> do
+   typedInner <- exprToTyped inner
+   let innerType = typeOf typedInner
+   return $ Paren typedInner innerType
+ (E.Val value) -> do
+   typedVal <- valToTyped value
+   return $ Val typedVal
+ (E.Unary op e') -> do
+   typedInner <- exprToTyped e'
+   t <- unaryReturnType op (typeOf typedInner)
+   return $ Unary t op typedInner
+ (E.Binary op l r) -> do
+   typedL <- exprToTyped l
+   typedR <- exprToTyped r
+   argT <- requireEqual (typeOf typedL) (typeOf typedR)
+   t <- binaryReturnType op argT
+   return $ Binary t op typedL typedR
+ (E.Call fnEx argEs) -> do
+   typedFn <- exprToTyped fnEx
+   typedArgs <- mapM exprToTyped argEs
+   checkFnCall typedFn typedArgs
+ (E.Cast t e') -> do
+   innerExpr <- exprToTyped e'
+   return $ Cast (convertType t) innerExpr
+ (E.Var name) -> do
+   t <- getFromScope name
+   return $ Var t name
+ (E.Access e' name) -> do
+   typedInner <- exprToTyped e'
+   t <- getFieldType (typeOf typedInner) name
+   return $ Access t typedInner name
 
 binaryReturnType :: E.BinOp -> Type -> TSState Type
 binaryReturnType op t
