@@ -119,7 +119,12 @@ exprToTyped e =
      typedInner <- exprToTyped e'
      t <- unaryReturnType op (typeOf typedInner)
      return $ Unary t op typedInner
-   (E.Binary op l r) -> undefined -- TODO
+   (E.Binary op l r) -> do
+     typedL <- exprToTyped l
+     typedR <- exprToTyped r
+     argT <- requireEqual (typeOf typedL) (typeOf typedR)
+     t <- binaryReturnType op argT
+     return $ Binary t op typedL typedR
    (E.Call fnEx argEs) -> do
      typedFn <- exprToTyped fnEx
      typedArgs <- mapM exprToTyped argEs
@@ -134,6 +139,42 @@ exprToTyped e =
      typedInner <- exprToTyped e'
      t <- getFieldType (typeOf typedInner) name
      return $ Access t typedInner name
+
+binaryReturnType :: E.BinOp -> Type -> TSState Type
+binaryReturnType op t
+  | op == E.Plus =
+    -- special case "+" because it also works on strings
+    if t `elem` [Named "Int", Named "Float", Named "String"]
+    then return t
+    else err $ "Can't add values of type: " ++ show t
+  | op `elem` numericOps = requireNumeric t
+  | op `elem` integerOps = requireSubtype t (Named "Int")
+  | op `elem` booleanOps = requireSubtype t (Named "Bool")
+  | op `elem` compOps    = return (Named "Bool")
+  | op `elem` numCompOps = do
+      _ <- requireNumeric t
+      return (Named "bool")
+  | otherwise            = err $ "op missing from list: " ++ show op
+
+numericOps :: [E.BinOp]
+numericOps =
+  [E.Minus, E.Times, E.Divide, E.Power]
+
+integerOps :: [E.BinOp]
+integerOps =
+  [E.Mod, E.BitAnd, E.BitOr, E.BitXor, E.LShift, E.RShift, E.RRShift]
+
+booleanOps :: [E.BinOp]
+booleanOps =
+  [E.BoolAnd, E.BoolOr]
+
+compOps :: [E.BinOp]
+compOps =
+  [E.Eq, E.NotEq]
+
+numCompOps :: [E.BinOp]
+numCompOps =
+  [E.Less, E.LessEq, E.Greater, E.GreaterEq]
 
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t = case op of
@@ -153,6 +194,19 @@ checkFnCall typedFn typedArgs =
           return $ Call retT typedFn typedArgs
       _ ->
         err $ "calling value of type " ++ show fnType ++ " as a function"
+
+-- once interfaces exist, replace this with the Num interface
+requireNumeric :: Type -> TSState Type
+requireNumeric t =
+  if t `elem` [Named "Int", Named "Float"]
+  then return t
+  else err $ "Expected a numeric value: " ++ show t
+
+requireEqual :: Type -> Type -> TSState Type
+requireEqual t1 t2 =
+  if t1 == t2 then return t1
+  else err ("Expected types to be the same: " ++
+            show t1 ++ ", " ++ show t2)
 
 requireSubtype :: Type -> Type -> TSState Type
 requireSubtype sub super =
