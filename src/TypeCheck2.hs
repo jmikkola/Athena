@@ -50,4 +50,13 @@ exprToTyped e =
    (E.Access e name) -> undefined -- TODO
 
 convertType :: T.Type -> Type
-convertType = undefined -- TODO
+convertType t = case t of
+  T.String           -> Named "String"
+  T.Float            -> Named "Float"
+  T.Int              -> Named "Int"
+  T.Bool             -> Named "Bool"
+  T.Nil              -> Named "()"
+  (T.TypeName n)     -> Named n
+  (T.Function at rt) -> Function (map convertType at) (convertType rt)
+  (T.Struct fields)  -> Struct (map (\(n,t) -> (n, convertType t)) fields)
+  (T.Enum options)   -> Enum (map (\(o,f) -> (o, map (\(n,t) -> (n, convertType t)) f)) options)
