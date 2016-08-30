@@ -117,7 +117,10 @@ exprToTyped e =
      return $ Val typedVal
    (E.Unary op e) -> undefined -- TODO
    (E.Binary op l r) -> undefined -- TODO
-   (E.Call fnEx argEs) -> undefined -- TODO
+   (E.Call fnEx argEs) -> do
+     typedFn <- exprToTyped fnEx
+     typedArgs <- mapM exprToTyped argEs
+     checkFnCall typedFn typedArgs
    (E.Cast t e) -> do
      innerExpr <- exprToTyped e
      return $ Cast (convertType t) innerExpr
@@ -128,6 +131,28 @@ exprToTyped e =
      typedInner <- exprToTyped e
      t <- getFieldType (typeOf typedInner) name
      return $ Access t typedInner name
+
+checkFnCall :: Expression -> [Expression] -> TSState Expression
+checkFnCall typedFn typedArgs =
+  let fnType = typeOf typedFn
+      argTypes = map typeOf typedArgs
+  in case fnType of
+      (Function argTs retT) ->
+        if length argTs /= length typedArgs
+        then err $ "argument length mismatch"
+        else do
+          _ <- zipWithM requireSubtype argTypes argTs
+          return $ Call retT typedFn typedArgs
+      _ ->
+        err $ "calling value of type " ++ show fnType ++ " as a function"
+
+requireSubtype :: Type -> Type -> TSState Type
+requireSubtype sub super =
+  -- subtypes don't actually exist yet
+  if sub == super
+  then return sub
+  else err ("can't use a value of type " ++ show sub ++
+            " where a value of type " ++ show super ++ " is expected")
 
 getFieldType :: Type -> String -> TSState Type
 getFieldType typ field = do
