@@ -28,7 +28,7 @@ valToTyped (E.BoolVal b)      = return $ BoolVal b
 valToTyped (E.IntVal i)       = return $ IntVal i
 valToTyped (E.FloatVal f)     = return $ FloatVal f
 valToTyped (E.StructVal s fs) = do
-  fs' <- mapM (\(name, val) -> do { val' <- exprToTyped val; return (name, val') }) fs
+  fs' <- mapMSnd exprToTyped fs
   return $ StructVal s fs'
 
 exprToTyped :: E.Expression -> TSState Expression
@@ -47,6 +47,7 @@ exprToTyped e =
    (E.Cast t e) -> do
      innerExpr <- exprToTyped e
      return $ Cast (convertType t) innerExpr
+   (E.Var var) -> undefined -- TODO
    (E.Access e name) -> undefined -- TODO
 
 convertType :: T.Type -> Type
@@ -63,3 +64,8 @@ convertType t = case t of
 
 mapSnd :: (a -> b) -> [(c, a)] -> [(c, b)]
 mapSnd f = map (\(c, a) -> (c, f a))
+
+mapMSnd f = mapM f'
+  where f' (c, a) = do
+          b <- f a
+          return (c, b)
