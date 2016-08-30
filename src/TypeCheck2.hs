@@ -121,7 +121,9 @@ exprToTyped e =
    (E.Cast t e) -> do
      innerExpr <- exprToTyped e
      return $ Cast (convertType t) innerExpr
-   (E.Var var) -> undefined -- TODO
+   (E.Var name) -> do
+     t <- getFromScope name
+     return $ Var t name
    (E.Access e name) -> undefined -- TODO
 
 convertType :: T.Type -> Type
