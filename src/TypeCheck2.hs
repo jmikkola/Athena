@@ -22,6 +22,80 @@ type TypeScope = [Scope]
 type Subtypes = Map Type (Set Type)
 type TSState = StateT (TypeScope, Subtypes) Result
 
+-- Monad functions --
+
+getTypeScope :: TSState TypeScope
+getTypeScope = liftM fst $ get
+
+getSubtypes :: TSState Subtypes
+getSubtypes = liftM snd $ get
+
+putTypeScope :: TypeScope -> TSState ()
+putTypeScope ts = do
+  subs <- getSubtypes
+  put (ts, subs)
+
+putSubtypes :: Subtypes -> TSState ()
+putSubtypes subs = do
+  ts <- getTypeScope
+  put (ts, subs)
+
+updateTypeScope :: (TypeScope -> TypeScope) -> TSState ()
+updateTypeScope f = do
+  ts <- getTypeScope
+  putTypeScope (f ts)
+
+updateSubtypes :: (Subtypes -> Subtypes) -> TSState ()
+updateSubtypes f = do
+  subs <- getSubtypes
+  putSubtypes (f subs)
+
+-- Scaffolding functions --
+
+err :: String -> TSState a
+err = lift . Left
+
+note :: a -> Maybe b -> Either a b
+note msg = maybe (Left msg) Right
+
+beginScope :: TSState ()
+beginScope = updateTypeScope (Map.empty :)
+
+endScope :: TSState ()
+endScope = do
+  ts <- getTypeScope
+  case ts of
+   []     -> err "compiler bug: ending no scopes"
+   (_:ss) -> putTypeScope ss
+
+scopeLookup :: String -> TypeScope -> Maybe Type
+scopeLookup name (m:ms) = Map.lookup name m <|> scopeLookup name ms
+scopeLookup _    []     = Nothing
+
+getFromScope :: String -> TSState Type
+getFromScope name = do
+  ts <- getTypeScope
+  lift $ note ("Not defined: " ++ name) (scopeLookup name ts)
+
+scopeAdd :: String -> Type -> TypeScope -> Result TypeScope
+scopeAdd name typ (m:ms) =
+  case Map.lookup name m of
+   Nothing  -> return (Map.insert name typ m : ms)
+   (Just _) -> Left ("Duplicate definition for: " ++ name)
+scopeAdd _    _   []     = Left "Empty scope stack??"
+
+setInScope :: String -> Type -> TSState ()
+setInScope name typ = do
+  ts <- getTypeScope
+  newScopes <- lift $ scopeAdd name typ ts
+  putTypeScope ts
+
+-- Typing functions --
+
+defaultScope :: TSState ()
+defaultScope = do
+  setInScope "print" (Function [Named "String"] NilT)
+
 valToTyped :: E.Value -> TSState Value
 valToTyped (E.StrVal s)       = return $ StrVal s
 valToTyped (E.BoolVal b)      = return $ BoolVal b
@@ -56,7 +130,7 @@ convertType t = case t of
   T.Float            -> Named "Float"
   T.Int              -> Named "Int"
   T.Bool             -> Named "Bool"
-  T.Nil              -> Named "()"
+  T.Nil              -> NilT
   (T.TypeName n)     -> Named n
   (T.Function at rt) -> Function (map convertType at) (convertType rt)
   (T.Struct fields)  -> Struct $ mapSnd convertType fields

@@ -61,6 +61,7 @@ type TypeName = String
 
 data Type
   = Named TypeName
+  | NilT
   | Function [Type] Type
   | Struct [(String, Type)]
   | Enum [(TypeName, [(String, Type)])]
