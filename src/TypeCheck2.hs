@@ -124,7 +124,25 @@ exprToTyped e =
    (E.Var name) -> do
      t <- getFromScope name
      return $ Var t name
-   (E.Access e name) -> undefined -- TODO
+   (E.Access e name) -> do
+     typedInner <- exprToTyped e
+     t <- getFieldType (typeOf typedInner) name
+     return $ Access t typedInner name
+
+getFieldType :: Type -> String -> TSState Type
+getFieldType typ field = do
+  fieldTypes <- getStructFields typ
+  let errMsg = "field " ++ field ++ " not on type " ++ show typ
+  lift $ note errMsg (lookup field fieldTypes)
+
+getStructFields :: Type -> TSState [(String, Type)]
+getStructFields (Struct fields) =
+  return fields
+getStructFields (Named name) = do
+  t <- getFromScope name
+  getStructFields t
+getStructFields t =
+  err $ "Can't access field on a value of type " ++ show t
 
 convertType :: T.Type -> Type
 convertType t = case t of
