@@ -102,6 +102,13 @@ addSubtype sub super = updateSubtypes addSub
                 (Just sups) -> Set.insert super sups
           in Map.insert sub newSupers subtypes
 
+getSuperTypesOf :: TypeName -> TSState (Set TypeName)
+getSuperTypesOf sub = do
+  subs <- getSubtypes
+  case Map.lookup sub subs of
+   Nothing -> return Set.empty
+   Just st -> return st
+
 -- Typing functions --
 
 runFile :: D.File -> Result [Decl]
@@ -373,12 +380,29 @@ requireEqual t1 t2 =
             show t1 ++ ", " ++ show t2)
 
 requireSubtype :: Type -> Type -> TSState Type
-requireSubtype sub super =
-  -- subtypes don't actually exist yet
-  if sub == super
+requireSubtype sub super = do
+  isSub <- isSubtype super sub
+  if isSub
   then return sub
   else err ("can't use a value of type " ++ show sub ++
             " where a value of type " ++ show super ++ " is expected")
+
+isSubtype :: Type -> Type -> TSState Bool
+isSubtype super sub
+  | sub == super = return True
+  | otherwise    = case sub of
+    (T.TypeName subName) -> do
+      -- not efficient, but that can be fixed later
+      supers <- getSuperTypesOf subName
+      let superList = map T.TypeName $ Set.toAscList supers
+      matches <- mapM (isSubtype super) superList
+      return $ anyTrue matches
+    _ ->
+      -- Right now, there aren't other ways for it to be a subtype
+      return False
+
+anyTrue :: [Bool] -> Bool
+anyTrue = foldl (||) False
 
 getFieldType :: Type -> String -> TSState Type
 getFieldType typ field = do
