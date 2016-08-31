@@ -10,6 +10,7 @@ import TypeCheck ( checkFile )
 import Emit ( showFile )
 
 import TypeCheck2 ( runFile )
+import Backends.Go.Syntax (NamedT)
 
 main :: IO ()
 main = do
