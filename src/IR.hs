@@ -12,7 +12,7 @@ data Statement
     -- Let handles both variable and function declarations
   | Let String Type Expression
   | Assign [String] Expression
-  | Block [Statement]
+  | Block (Maybe Type) [Statement]
   | Expr Expression
   | If Expression Statement (Maybe Statement)
   | While Expression Statement

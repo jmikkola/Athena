@@ -111,11 +111,16 @@ checkStatement retType stmt = case stmt of
     typedE <- exprToTyped e
     _ <- requireSubtype (typeOf typedE) t
     return $ Let name t typedE
-  (S.Assign names e) -> undefined -- TODO
+  (S.Assign names e) -> do
+    t <- getAssignType names
+    typedE <- exprToTyped e
+    _ <- requireSubtype (typeOf typedE) t
+    return $ Assign names typedE
   (S.Block stmts) -> do
-    typedStmts <- mapM (checkStatement retType) stmts
-    -- TODO: gather and check the block's type
-    return $ Block typedStmts
+    beginScope
+    blk <- checkBlock retType stmts
+    endScope
+    return blk
   (S.Expr e) -> do
     typedE <- exprToTyped e
     return $ Expr typedE
@@ -143,6 +148,38 @@ checkStatement retType stmt = case stmt of
     endScope
 
     return $ While typedTest blk
+
+checkBlock :: Type -> [S.Statement] -> TSState Statement
+checkBlock retType stmts = blkStmts stmts []
+  where
+    blkStmts sts rest = case sts of
+      [] ->
+        return $ Block Nothing (reverse rest)
+      [S.Return rExpr] -> do
+        (typ, stmt) <- returnExpr retType rExpr
+        return $ Block typ (reverse $ stmt : rest)
+      (S.Return _:ss) ->
+        err $ "Unreachable statements after a return: " ++ show ss
+      (st:ss) -> do
+        typedSt <- checkStatement retType st
+        blkStmts ss (typedSt : rest)
+
+returnExpr :: Type -> Maybe E.Expression -> TSState (Maybe Type, Statement)
+returnExpr t rExpr = case rExpr of
+  Nothing -> do
+    _ <- requireSubtype T.Nil t
+    return (Nothing, Return Nothing)
+  Just e -> do
+    typedE <- exprToTyped e
+    let typ = typeOf typedE
+    _ <- requireSubtype typ t
+    return (Just typ, Return $ Just typedE)
+
+getAssignType :: [String] -> TSState Type
+getAssignType []           = err "compiler error: assign statement with no names"
+getAssignType (var:fields) = do
+  t <- getFromScope var
+  foldM getFieldType t fields
 
 valToTyped :: E.Value -> TSState Value
 valToTyped (E.StrVal s)       = return $ StrVal s
