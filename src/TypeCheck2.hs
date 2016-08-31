@@ -97,6 +97,53 @@ defaultScope :: TSState ()
 defaultScope = do
   setInScope "print" (T.Function [T.String] T.Nil)
 
+checkStatement :: Type -> S.Statement -> TSState Statement
+checkStatement retType stmt = case stmt of
+  (S.Return Nothing) -> do
+    _ <- requireSubtype T.Nil retType
+    return $ Return Nothing
+  (S.Return (Just e)) -> do
+    typedE <- exprToTyped e
+    _ <- requireSubtype (typeOf typedE) retType
+    return $ Return (Just typedE)
+  (S.Let name t e) -> do
+    setInScope name t
+    typedE <- exprToTyped e
+    _ <- requireSubtype (typeOf typedE) t
+    return $ Let name t typedE
+  (S.Assign names e) -> undefined -- TODO
+  (S.Block stmts) -> do
+    typedStmts <- mapM (checkStatement retType) stmts
+    -- TODO: gather and check the block's type
+    return $ Block typedStmts
+  (S.Expr e) -> do
+    typedE <- exprToTyped e
+    return $ Expr typedE
+  (S.If test body mElse) -> do
+    typedTest <- exprToTyped test
+    _ <- requireSubtype (typeOf typedTest) T.Bool
+
+    beginScope
+    blk <- checkStatement retType (S.Block body)
+    endScope
+
+    typedElse <- case mElse of
+      Nothing -> return Nothing
+      (Just els) -> do
+        tEls <- checkStatement retType els
+        return $ Just tEls
+
+    return $ If typedTest blk typedElse
+  (S.While test body) -> do
+    typedTest <- exprToTyped test
+    _ <- requireSubtype (typeOf typedTest) T.Bool
+
+    beginScope
+    blk <- checkStatement retType (S.Block body)
+    endScope
+
+    return $ While typedTest blk
+
 valToTyped :: E.Value -> TSState Value
 valToTyped (E.StrVal s)       = return $ StrVal s
 valToTyped (E.BoolVal b)      = return $ BoolVal b

@@ -14,8 +14,8 @@ data Statement
   | Assign [String] Expression
   | Block [Statement]
   | Expr Expression
-  | If Expression [Statement] (Maybe Statement)
-  | While Expression [Statement]
+  | If Expression Statement (Maybe Statement)
+  | While Expression Statement
   deriving (Eq, Show)
 
 class Typeable a where
