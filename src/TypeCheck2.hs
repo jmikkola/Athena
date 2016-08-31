@@ -2,6 +2,7 @@ module TypeCheck2 where
 
 import Control.Applicative ( (<|>) )
 import Control.Monad.State
+import Data.Maybe (fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -14,13 +15,15 @@ import qualified AST.Statement as S
 import Type (Type)
 import qualified Type as T
 
+type TypeName = String
+
 type Result = Either String
 -- Entries in a Scope have a double-meaning:
 --  - lowercase names map to the type of the value
 --  - uppercae names map to the type bound to that name
 type Scope = Map String Type
 type TypeScope = [Scope]
-type Subtypes = Map Type (Set Type)
+type Subtypes = Map TypeName (Set TypeName)
 type TSState = StateT (TypeScope, Subtypes) Result
 
 -- Monad functions --
@@ -89,13 +92,92 @@ setInScope :: String -> Type -> TSState ()
 setInScope name typ = do
   ts <- getTypeScope
   newScopes <- lift $ scopeAdd name typ ts
-  putTypeScope ts
+  putTypeScope newScopes
+
+addSubtype :: TypeName -> TypeName -> TSState ()
+addSubtype sub super = updateSubtypes addSub
+  where addSub subtypes =
+          let newSupers = case Map.lookup sub subtypes of
+                Nothing -> Set.singleton super
+                (Just sups) -> Set.insert super sups
+          in Map.insert sub newSupers subtypes
 
 -- Typing functions --
+
+
+checkFile :: D.File -> Result ()
+checkFile file = evalStateT (checkFileM file) ([], Map.empty)
+
+checkFileM :: D.File -> TSState ()
+checkFileM file = do
+  buildFileScope file
+  _ <- mapM checkDeclaration file
+  return ()
+
+checkDeclaration :: D.Declaration -> TSState Decl
+checkDeclaration d = case d of
+ (D.Function name t args body) -> do
+   (argTypes, retType) <- case t of
+     (T.Function ats rt) -> return (ats, rt)
+     _                   -> err $ "function with non-function type: " ++ show t
+   if length argTypes /= length args
+     then err "arg length mismatch in declaration"
+     else return ()
+   beginScope
+   addFuncScope args argTypes
+   typedBody <- requireReturnType retType body
+   endScope
+   return $ StmtDecl $ Let name t $ Lambda t args typedBody
+ (D.Let name t expr) -> do
+   typedE <- exprToTyped expr
+   _ <- requireSubtype (typeOf typedE) t
+   return $ StmtDecl $ Let name t typedE
+ (D.TypeDef name t) ->
+   return $ TypeDecl name t
+
+requireReturnType :: Type -> S.Statement -> TSState Statement
+requireReturnType retType stmt = do
+  typedStatement <- checkStatement retType stmt
+  lastRetType <- getReturnType typedStatement
+  _ <- requireSubtype lastRetType retType
+  return typedStatement
+
+getReturnType :: Statement -> TSState Type
+getReturnType stmt =
+  case stmt of
+   (Block t _) -> return $ fromMaybe T.Nil t
+   (Expr e)    -> return $ typeOf e
+   _           -> err "function body must be a block or expression"
 
 defaultScope :: TSState ()
 defaultScope = do
   setInScope "print" (T.Function [T.String] T.Nil)
+
+-- Defines the types of the arguments within the function's scope
+addFuncScope :: [String] -> [Type] -> TSState ()
+addFuncScope names types = do
+  _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
+  return ()
+
+buildFileScope :: D.File -> TSState ()
+buildFileScope file = do
+  beginScope
+  defaultScope
+  _ <- mapM addDecl file
+  return ()
+
+addDecl :: D.Declaration -> TSState ()
+addDecl (D.Let n t _)        = setInScope n t
+addDecl (D.Function n t _ _) = setInScope n t
+addDecl (D.TypeDef n t)      =
+  case t of
+   (T.Enum options) -> do
+     setInScope n t
+     _ <- mapM (\(name, _) -> addSubtype name n) options
+     _ <- mapM (\(name, fields) -> setInScope name (T.Struct fields)) options
+     return ()
+   _                -> do
+     setInScope n t
 
 checkStatement :: Type -> S.Statement -> TSState Statement
 checkStatement retType stmt = case stmt of
@@ -318,6 +400,7 @@ getStructFields t =
 mapSnd :: (a -> b) -> [(c, a)] -> [(c, b)]
 mapSnd f = map (\(c, a) -> (c, f a))
 
+mapMSnd :: (Monad m) => (a -> m b) -> [(c, a)] -> m [(c, b)]
 mapMSnd f = mapM f'
   where f' (c, a) = do
           b <- f a

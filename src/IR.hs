@@ -7,6 +7,11 @@ import AST.Expression
 import Type (Type)
 import qualified Type as T
 
+data Decl
+  = StmtDecl Statement
+  | TypeDecl String Type
+  deriving (Eq, Show)
+
 data Statement
   = Return (Maybe Expression)
     -- Let handles both variable and function declarations
