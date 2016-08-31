@@ -9,7 +9,7 @@ import ParserTest ( testMain )
 import TypeCheck ( checkFile )
 import Emit ( showFile )
 
-import TypeCheck2 ( Scope )
+import TypeCheck2 ( runFile )
 
 main :: IO ()
 main = do
@@ -19,6 +19,9 @@ main = do
   case parseFile content of
    Left err   -> putStrLn $ "parse error: " ++ err
    Right file -> do
+     case runFile file of
+      Left err -> putStrLn $ "type 2 error: " ++ err
+      Right t  -> putStrLn $ show t
      case checkFile file of
       Left err -> putStrLn $ "type error: " ++ err
       Right _  -> do

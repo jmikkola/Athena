@@ -104,15 +104,13 @@ addSubtype sub super = updateSubtypes addSub
 
 -- Typing functions --
 
+runFile :: D.File -> Result [Decl]
+runFile file = evalStateT (checkFileM file) ([], Map.empty)
 
-checkFile :: D.File -> Result ()
-checkFile file = evalStateT (checkFileM file) ([], Map.empty)
-
-checkFileM :: D.File -> TSState ()
+checkFileM :: D.File -> TSState [Decl]
 checkFileM file = do
   buildFileScope file
-  _ <- mapM checkDeclaration file
-  return ()
+  mapM checkDeclaration file
 
 checkDeclaration :: D.Declaration -> TSState Decl
 checkDeclaration d = case d of
