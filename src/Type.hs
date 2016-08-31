@@ -1,4 +1,4 @@
-module AST.Type where
+module Type where
 
 data Type
   = String

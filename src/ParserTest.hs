@@ -8,7 +8,7 @@ import Text.Parsec.String (Parser)
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
-import qualified AST.Type as T
+import qualified Type as T
 import Parser
 
 testMain :: IO ()

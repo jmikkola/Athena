@@ -2,7 +2,7 @@ module AST.Declaration where
 
 import AST.Expression (Expression)
 import AST.Statement (Statement)
-import AST.Type (Type)
+import Type (Type)
 
 data Declaration
   = Let String Type Expression

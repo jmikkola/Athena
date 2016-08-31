@@ -1,7 +1,7 @@
 module AST.Statement where
 
 import AST.Expression (Expression)
-import AST.Type (Type)
+import Type (Type)
 
 data Statement
   = Return (Maybe Expression)

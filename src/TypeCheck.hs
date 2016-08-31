@@ -13,8 +13,8 @@ import AST.Expression (Expression, Value)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
 import qualified AST.Statement as S
-import AST.Type (Type)
-import qualified AST.Type as T
+import Type (Type)
+import qualified Type as T
 
 type Result = Either String
 -- Entries in a Scope have a double-meaning:

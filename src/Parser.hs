@@ -10,8 +10,8 @@ import AST.Expression (Expression, BinOp, UnaryOp, Value)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
 import qualified AST.Statement as S
-import AST.Type (Type)
-import qualified AST.Type as T
+import Type (Type)
+import qualified Type as T
 
 parseFile :: String -> Either String File
 parseFile content = applyLeft show $ parse fileParser "<input>" content
@@ -431,7 +431,7 @@ unaryOpParser =
   choices [ ("~", E.BitInvert)
           , ("!", E.BoolNot) ]
 
----- AST.Type parsers ----
+---- Type parsers ----
 
 typeParser :: Parser Type
 typeParser = enumTypeParser <|> structTypeParser <|> choices types <|> namedType
