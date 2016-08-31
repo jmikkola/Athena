@@ -11,6 +11,7 @@ import IR
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
+import Type (Type)
 import qualified Type as T
 
 type Result = Either String
@@ -94,7 +95,7 @@ setInScope name typ = do
 
 defaultScope :: TSState ()
 defaultScope = do
-  setInScope "print" (Function [Named "String"] NilT)
+  setInScope "print" (T.Function [T.String] T.Nil)
 
 valToTyped :: E.Value -> TSState Value
 valToTyped (E.StrVal s)       = return $ StrVal s
@@ -130,7 +131,7 @@ exprToTyped e = case e of
    checkFnCall typedFn typedArgs
  (E.Cast t e') -> do
    innerExpr <- exprToTyped e'
-   return $ Cast (convertType t) innerExpr
+   return $ Cast t innerExpr
  (E.Var name) -> do
    t <- getFromScope name
    return $ Var t name
@@ -143,16 +144,16 @@ binaryReturnType :: E.BinOp -> Type -> TSState Type
 binaryReturnType op t
   | op == E.Plus =
     -- special case "+" because it also works on strings
-    if t `elem` [Named "Int", Named "Float", Named "String"]
+    if t `elem` [T.Int, T.Float, T.String]
     then return t
     else err $ "Can't add values of type: " ++ show t
   | op `elem` numericOps = requireNumeric t
-  | op `elem` integerOps = requireSubtype t (Named "Int")
-  | op `elem` booleanOps = requireSubtype t (Named "Bool")
-  | op `elem` compOps    = return (Named "Bool")
+  | op `elem` integerOps = requireSubtype t T.Int
+  | op `elem` booleanOps = requireSubtype t T.Bool
+  | op `elem` compOps    = return T.Bool
   | op `elem` numCompOps = do
       _ <- requireNumeric t
-      return (Named "bool")
+      return T.Bool
   | otherwise            = err $ "op missing from list: " ++ show op
 
 numericOps :: [E.BinOp]
@@ -177,15 +178,15 @@ numCompOps =
 
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t = case op of
-  E.BitInvert -> requireSubtype t (Named "Int")
-  E.BoolNot   -> requireSubtype t (Named "Bool")
+  E.BitInvert -> requireSubtype t (T.Int)
+  E.BoolNot   -> requireSubtype t (T.Bool)
 
 checkFnCall :: Expression -> [Expression] -> TSState Expression
 checkFnCall typedFn typedArgs =
   let fnType = typeOf typedFn
       argTypes = map typeOf typedArgs
   in case fnType of
-      (Function argTs retT) ->
+      (T.Function argTs retT) ->
         if length argTs /= length typedArgs
         then err $ "argument length mismatch"
         else do
@@ -197,7 +198,7 @@ checkFnCall typedFn typedArgs =
 -- once interfaces exist, replace this with the Num interface
 requireNumeric :: Type -> TSState Type
 requireNumeric t =
-  if t `elem` [Named "Int", Named "Float"]
+  if t `elem` [T.Int, T.Float]
   then return t
   else err $ "Expected a numeric value: " ++ show t
 
@@ -222,25 +223,13 @@ getFieldType typ field = do
   lift $ note errMsg (lookup field fieldTypes)
 
 getStructFields :: Type -> TSState [(String, Type)]
-getStructFields (Struct fields) =
+getStructFields (T.Struct fields) =
   return fields
-getStructFields (Named name) = do
+getStructFields (T.TypeName name) = do
   t <- getFromScope name
   getStructFields t
 getStructFields t =
   err $ "Can't access field on a value of type " ++ show t
-
-convertType :: T.Type -> Type
-convertType t = case t of
-  T.String           -> Named "String"
-  T.Float            -> Named "Float"
-  T.Int              -> Named "Int"
-  T.Bool             -> Named "Bool"
-  T.Nil              -> NilT
-  (T.TypeName n)     -> Named n
-  (T.Function at rt) -> Function (map convertType at) (convertType rt)
-  (T.Struct fields)  -> Struct $ mapSnd convertType fields
-  (T.Enum options)   -> Enum $ mapSnd (mapSnd convertType) options
 
 mapSnd :: (a -> b) -> [(c, a)] -> [(c, b)]
 mapSnd f = map (\(c, a) -> (c, f a))

@@ -4,6 +4,8 @@ import AST.Expression
   ( UnaryOp (..)
   , BinOp (..)
   )
+import Type (Type)
+import qualified Type as T
 
 data Statement
   = Return (Maybe Expression)
@@ -28,11 +30,11 @@ data Value
   deriving (Eq, Show)
 
 instance Typeable Value where
-  typeOf (StrVal _)      = Named "String"
-  typeOf (BoolVal _)     = Named "Bool"
-  typeOf (IntVal _)      = Named "Int"
-  typeOf (FloatVal _)    = Named "Float"
-  typeOf (StructVal n _) = Named n
+  typeOf (StrVal _)      = T.String
+  typeOf (BoolVal _)     = T.Bool
+  typeOf (IntVal _)      = T.Int
+  typeOf (FloatVal _)    = T.Float
+  typeOf (StructVal n _) = T.TypeName n
 
 data Expression
   = Paren Expression Type
@@ -56,13 +58,3 @@ instance Typeable Expression where
   typeOf (Var t _)        = t
   typeOf (Access t _ _)   = t
   typeOf (Lambda t _ _)   = t
-
-type TypeName = String
-
-data Type
-  = Named TypeName
-  | NilT
-  | Function [Type] Type
-  | Struct [(String, Type)]
-  | Enum [(TypeName, [(String, Type)])]
-  deriving (Eq, Ord, Show)
