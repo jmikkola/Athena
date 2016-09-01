@@ -90,6 +90,13 @@ emitType t = case t of
   TypeName name
     -> write name
 
+emitFunctionDecl :: FunctionDecl -> EmitState ()
+emitFunctionDecl (FunctionDecl args rets) = do
+  write "func ("
+  intersperse (write ", ") (map emitNamedT args)
+  write ")"
+  writeReturn rets
+
 writeReturn :: [NamedT] -> EmitState ()
 writeReturn []
   = return ()
@@ -127,6 +134,50 @@ emitNamedT (NamedType name t)
    write name
    write " "
    emitType t
+
+emitExpression :: Expression -> EmitState ()
+emitExpression expr = case expr of
+  Paren e
+    -> do
+      write "("
+      emitExpression e
+      write ")"
+  Unary op e
+    -> do
+      emitUnaryOp op
+      emitExpression e
+  Binary _ _ _
+    -> undefined -- TODO
+  Call _ _
+    -> undefined -- TODO
+  InterfaceCast _ _
+    -> undefined -- TODO
+  TypeCast _ _
+    -> undefined -- TODO
+  Var name
+    -> write name
+  FieldAccess _ _
+    -> undefined -- TODO
+  ArrayAccess _ _
+    -> undefined -- TODO
+  Func _ _ _
+    -> undefined -- TODO
+  StrVal _
+    -> undefined -- TODO
+  BoolVal _
+    -> undefined -- TODO
+  IntVal _
+    -> undefined -- TODO
+  FloatVal _
+    -> undefined -- TODO
+  StructVal _ _
+    -> undefined -- TODO
+
+emitUnaryOp :: UnaryOp -> EmitState ()
+emitUnaryOp BitInvert
+  = write "^"
+emitUnaryOp BoolNot
+  = write "!"
 
 intersperse :: EmitState () -> [EmitState ()] -> EmitState ()
 intersperse sep lst =
