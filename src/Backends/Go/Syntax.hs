@@ -55,6 +55,7 @@ data Expression
   | ArrayAccess Expression Expression
   | Func Type [String] Statement
   | StrVal String
+  | BoolVal Bool
   | IntVal Int
   | FloatVal Float
   | StructVal String [(String, Expression)]

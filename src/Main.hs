@@ -11,6 +11,7 @@ import Emit ( showFile )
 
 import TypeCheck2 ( runFile )
 import Backends.Go.Syntax (NamedT)
+import Backends.Go.Convert ()
 
 main :: IO ()
 main = do
