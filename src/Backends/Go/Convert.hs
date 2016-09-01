@@ -2,6 +2,7 @@ module Backends.Go.Convert where
 
 import qualified Backends.Go.Syntax as Syntax
 import qualified AST.Expression as E
+import qualified Type as T
 import IR
 
 type Result = Either String
@@ -40,9 +41,9 @@ convertExpr expr = case expr of
       r' <- convertExpr r
       case op of
        E.Power
-         -> undefined -- TODO
-       E.BitXor
-         -> undefined -- TODO
+         -- TODO: Handle taking powers of ints
+         -> let powFN = Syntax.FieldAccess (Syntax.Var "math") "Pow"
+            in return $ Syntax.Call powFN [l', r']
        _
          -> do
            op' <- convertBinaryOp op
@@ -52,8 +53,11 @@ convertExpr expr = case expr of
       fEx <- convertExpr f
       argEx <- mapM convertExpr args
       return $ Syntax.Call fEx argEx
-  IR.Cast _ _
-    -> undefined -- TODO
+  IR.Cast t ex
+    -> do
+      expr <- convertExpr ex
+      typ <- convertType t
+      return $ Syntax.TypeCast typ expr
   IR.Var _ n
     -> return $ Syntax.Var n
   IR.Access _ e n
@@ -62,6 +66,35 @@ convertExpr expr = case expr of
       return $ Syntax.FieldAccess e' n
   IR.Lambda _ _ _
     -> undefined -- TODO
+
+convertType :: T.Type -> Result Syntax.Type
+convertType t = case t of
+  T.String
+    -> return Syntax.GoString
+  T.Float
+    -> return Syntax.GoFloat64
+  T.Int
+    -> return Syntax.GoInt64
+  T.Bool
+    -> return Syntax.GoBool
+  T.Nil
+    -> return Syntax.GoVoid -- TODO: come up with a better approach
+  T.Function ts t
+    -> do
+      argTypes <- mapM convertType ts
+      retType <- convertType t
+      let r = case retType of
+            Syntax.GoVoid -> []
+            _             -> [retType]
+      return $ Syntax.GoFunc argTypes r
+  T.TypeName name -- TODO: this should either be GoStruct or GoInterface
+    -> return $ Syntax.TypeName name
+  T.Struct fields
+    -> do
+      fields' <- mapMSnd convertType fields
+      undefined -- TODO
+  T.Enum  _
+    -> undefined -- some interface, but which?
 
 converUnaryOp :: E.UnaryOp -> Result Syntax.UnaryOp
 converUnaryOp E.BitInvert
@@ -85,6 +118,8 @@ convertBinaryOp op = case op of
     -> return Syntax.BitAnd
   E.BitOr
     -> return Syntax.BitOr
+  E.BitXor
+    -> return Syntax.BitXor
   E.BoolAnd
     -> return Syntax.BoolAnd
   E.BoolOr

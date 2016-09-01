@@ -11,6 +11,8 @@ data Type
            , retTypes :: [Type] }
   | GoStruct String
   | GoInterface String
+  | GoVoid -- a bit of a hack
+  | TypeName String
   deriving (Eq, Show)
 
 data FunctionDecl
@@ -50,6 +52,7 @@ data Expression
   | Binary BinaryOp Expression Expression
   | Call Expression [Expression]
   | InterfaceCast Type Expression
+  | TypeCast Type Expression
   | Var String
   | FieldAccess Expression String
   | ArrayAccess Expression Expression
@@ -74,6 +77,7 @@ data BinaryOp
   | Mod
   | BitAnd
   | BitOr
+  | BitXor
   | BoolAnd
   | BoolOr
   | Eq
