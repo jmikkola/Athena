@@ -10,8 +10,9 @@ import TypeCheck ( checkFile )
 import Emit ( showFile )
 
 import TypeCheck2 ( runFile )
-import Backends.Go.Syntax (NamedT)
+import Backends.Go.Syntax ()
 import Backends.Go.Convert ()
+import Backends.Go.Emit ()
 
 main :: IO ()
 main = do
