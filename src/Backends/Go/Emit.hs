@@ -46,6 +46,20 @@ indentString n = replicate n '\t'
 
 --- Actual Emitters ---
 
+emitFile :: [Declaration] -> EmitState ()
+emitFile decls = do
+  write "package main\n\n"
+  emitImports [("fmt", "fmt.Println"), ("math", "math.Pow")]
+  intersperse (write "\n\n") (map emitDeclaration decls)
+
+emitImports :: [(String, String)] -> EmitState ()
+emitImports imps = do
+  write "import ("
+  _ <- mapM (\i -> write $ "\n\t\"" ++ i ++ "\"") $ map fst imps
+  write "\n)\n"
+  _ <- mapM (\fn -> write $ "\nvar _ = " ++ fn) $ map snd imps
+  write "\n\n"
+
 emitType :: Type -> EmitState ()
 emitType t = case t of
   GoInt64
