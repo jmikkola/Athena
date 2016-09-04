@@ -92,7 +92,7 @@ emitType t = case t of
 
 emitFunctionDecl :: FunctionDecl -> EmitState ()
 emitFunctionDecl (FunctionDecl args rets) = do
-  write "func ("
+  write "("
   intersperse (write ", ") (map emitNamedT args)
   write ")"
   writeReturn rets
@@ -134,6 +134,67 @@ emitNamedT (NamedType name t)
    write name
    write " "
    emitType t
+
+emitDeclaration :: Declaration -> EmitState ()
+emitDeclaration decl = case decl of
+  Structure name fields
+    -> do
+      write "type "
+      write name
+      write " struct "
+      inBlock $ mapM emitFieldType fields
+  Interface name methods
+    -> do
+      write "type "
+      write name
+      write " interface "
+      inBlock $ mapM emitMethod methods
+  Variable name mType expr
+    -> do
+      write "var "
+      write name
+      case mType of
+        Nothing -> return ()
+        Just tp -> do
+          write " "
+          emitType tp
+      write " = "
+      emitExpression expr
+  Constant name expr
+    -> do
+      write "const "
+      write name
+      write " = "
+      emitExpression expr
+  Method (recvName, recvType) name fnDecl body
+    -> do
+      write "func ("
+      write recvName
+      write ", "
+      emitType recvType
+      write ") "
+      write name
+      emitFunctionDecl fnDecl
+      write " "
+      emitStatement body
+  Function name fnDecl body
+    -> do
+      write "func "
+      write name
+      emitFunctionDecl fnDecl
+      write " "
+      emitStatement body
+
+emitFieldType :: (String, Type) -> EmitState ()
+emitFieldType (name, typ) = do
+  write name
+  write " "
+  emitType typ
+
+emitMethod :: (String, FunctionDecl) -> EmitState ()
+emitMethod (name, decl) = do
+  write name
+  emitFunctionDecl decl
 
 emitStatement :: Statement -> EmitState ()
 emitStatement stmt = do
