@@ -7,6 +7,34 @@ import IR
 
 type Result = Either String
 
+convertDecl :: IR.Decl -> Result Syntax.Declaration
+convertDecl decl = case decl of
+  IR.StmtDecl stmt
+    -> case stmt of
+        IR.Let name typ expr
+          -> case expr of
+              IR.Lambda t args stmt
+                -> do
+                  decl <- makeFnDecl t args
+                  body <- convertStmt stmt
+                  return $ Syntax.Function name decl body
+              _
+                -> do
+                  typ' <- convertType typ
+                  expr' <- convertExpr expr
+                  return $ Syntax.Variable name (Just typ') expr'
+        _
+          -> fail $ "cannot convert `" ++ show stmt ++ "` to a module-level declaration"
+  IR.TypeDecl name typ
+    -> do
+      typ' <- convertType typ
+      undefined -- TODO: enums can convert to multiple declarations
+
+makeFnDecl typ argNames = undefined
+
+convertStmt :: IR.Statement -> Result Syntax.Statement
+convertStmt _ = error "TODO convertStmt"
+
 convertValue :: IR.Value -> Result Syntax.Expression
 convertValue val = case val of
   IR.StrVal s
