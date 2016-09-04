@@ -135,6 +135,10 @@ emitNamedT (NamedType name t)
    write " "
    emitType t
 
+
+emitStatement :: Statement -> EmitState ()
+emitStatement _ = error "todo"
+
 emitExpression :: Expression -> EmitState ()
 emitExpression expr = case expr of
   Paren e
@@ -146,38 +150,119 @@ emitExpression expr = case expr of
     -> do
       emitUnaryOp op
       emitExpression e
-  Binary _ _ _
-    -> undefined -- TODO
-  Call _ _
-    -> undefined -- TODO
-  InterfaceCast _ _
-    -> undefined -- TODO
-  TypeCast _ _
-    -> undefined -- TODO
+  Binary op l r
+    -> do
+      emitExpression l
+      write " "
+      write (showBinaryOp op)
+      write " "
+      emitExpression r
+  Call fn args
+    -> do
+      emitExpression fn
+      write "("
+      intersperse (write ", ") (map emitExpression args)
+      write ")"
+  InterfaceCast iface ex
+    -> do
+      write "("
+      emitExpression ex
+      write ").("
+      emitType iface
+      write ")"
+  TypeCast typ ex
+    -> do
+       emitType typ
+       write "("
+       emitExpression ex
+       write ")"
   Var name
     -> write name
-  FieldAccess _ _
-    -> undefined -- TODO
-  ArrayAccess _ _
-    -> undefined -- TODO
-  Func _ _ _
-    -> undefined -- TODO
-  StrVal _
-    -> undefined -- TODO
-  BoolVal _
-    -> undefined -- TODO
-  IntVal _
-    -> undefined -- TODO
-  FloatVal _
-    -> undefined -- TODO
-  StructVal _ _
-    -> undefined -- TODO
+  FieldAccess ex field
+    -> do
+       emitExpression ex
+       write "."
+       write field
+  ArrayAccess ex fieldEx
+    -> do
+      emitExpression ex
+      write "["
+      emitExpression fieldEx
+      write "]"
+  Func typ argNames body
+    -> emitFunc typ argNames body
+  StrVal s
+    -> write $ show s
+  BoolVal b
+    -> write (if b then "true" else "false")
+  IntVal i
+    -> write $ show i
+  FloatVal f
+    -> write $ show f
+  StructVal name fields
+    -> do
+       write name
+       write " "
+       inBlock (mapM emitStructField fields)
+
+emitFunc :: Type -> [String] -> Statement -> EmitState ()
+emitFunc (GoFunc ats rts) argNames body = do
+  write "func ("
+  intersperse (write ", ") (map emitArg $ zip argNames ats)
+  write ")"
+  writeReturn $ map JustType rts
+  emitStatement body
+emitFunc t _ _ = error $ "compiler error: bad function type " ++ show t
+
+emitArg :: (String, Type) -> EmitState ()
+emitArg (name, typ) = do
+  write name
+  write " "
+  emitType typ
+
+inBlock :: EmitState a -> EmitState ()
+inBlock f = do
+  write "{\n"
+  increaseIndent
+  _ <- f
+  decreateIndent
+  write "}"
+
+emitStructField :: (String, Expression) -> EmitState ()
+emitStructField (name, ex) = do
+  writeIndent
+  write name
+  write ": "
+  emitExpression ex
+  write ",\n"
 
 emitUnaryOp :: UnaryOp -> EmitState ()
 emitUnaryOp BitInvert
   = write "^"
 emitUnaryOp BoolNot
   = write "!"
+
+showBinaryOp :: BinaryOp -> String
+showBinaryOp op = case op of
+  Plus -> "+"
+  Minus -> "-"
+  Times -> "*"
+  Divide -> "/"
+  Mod -> "%"
+  BitAnd -> "&"
+  BitOr -> "|"
+  BitXor -> "^"
+  BoolAnd -> "&&"
+  BoolOr -> "||"
+  Eq -> "=="
+  NotEq -> "!="
+  Less -> "<"
+  LessEq -> "<="
+  Greater -> ">"
+  GreaterEq -> ">="
+  LShift -> "<<"
+  RShift -> ">>"
+  RRShift -> ">>>"
 
 intersperse :: EmitState () -> [EmitState ()] -> EmitState ()
 intersperse sep lst =
