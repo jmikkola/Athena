@@ -55,9 +55,9 @@ convertExpr expr = case expr of
       return $ Syntax.Call fEx argEx
   IR.Cast t ex
     -> do
-      expr <- convertExpr ex
+      expr' <- convertExpr ex
       typ <- convertType t
-      return $ Syntax.TypeCast typ expr
+      return $ Syntax.TypeCast typ expr'
   IR.Var _ n
     -> return $ Syntax.Var n
   IR.Access _ e n
@@ -79,10 +79,10 @@ convertType t = case t of
     -> return Syntax.GoBool
   T.Nil
     -> return Syntax.GoVoid -- TODO: come up with a better approach
-  T.Function ts t
+  T.Function ts t'
     -> do
       argTypes <- mapM convertType ts
-      retType <- convertType t
+      retType <- convertType t'
       let r = case retType of
             Syntax.GoVoid -> []
             _             -> [retType]

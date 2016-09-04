@@ -44,6 +44,7 @@ data Statement
   | Loop Statement
   | For1 Expression Statement
   | For3 (Maybe Statement) Expression (Maybe Statement) Statement
+  | Block [Statement]
   deriving (Eq, Show)
 
 data Expression

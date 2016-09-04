@@ -135,9 +135,76 @@ emitNamedT (NamedType name t)
    write " "
    emitType t
 
-
 emitStatement :: Statement -> EmitState ()
-emitStatement _ = error "todo"
+emitStatement stmt = do
+  writeIndent
+  emitStatementNoIndent stmt
+
+emitStatementNoIndent :: Statement -> EmitState ()
+emitStatementNoIndent stmt = case stmt of
+  JustReturn
+    -> write "return"
+  Return ex
+    -> do
+      write "return "
+      emitExpression ex
+  VarStmt var (Just typ) ex
+    -> do
+      write "var "
+      write var
+      emitType typ
+      write " = "
+      emitExpression ex
+  VarStmt var Nothing ex
+    -> do
+      write var
+      write " := "
+      emitExpression ex
+  Assign names ex
+    -> do
+      intersperse (write ".") (map write names)
+      write " = "
+      emitExpression ex
+  Expr ex
+    -> emitExpression ex
+  If test body mElse
+    -> do
+      write "if "
+      emitExpression test
+      write " "
+      emitStatementNoIndent body
+      emitElse mElse
+  Loop body
+    -> do
+      write "for "
+      emitStatementNoIndent body
+  For1 test body
+    -> do
+      write "for "
+      emitExpression test
+      write " "
+      emitStatementNoIndent body
+  For3 mStart test mStep body
+    -> do
+      write "for "
+      case mStart of
+        Nothing -> return ()
+        Just st -> emitStatementNoIndent st
+      write ";"
+      emitExpression test
+      write ";"
+      case mStep of
+        Nothing -> return ()
+        Just st -> emitStatementNoIndent st
+      write " "
+      emitStatementNoIndent body
+  Block stmts
+    -> inBlock (mapM emitStatement stmts)
+
+emitElse :: Maybe Statement -> EmitState ()
+emitElse els = case els of
+  Nothing -> return ()
+  Just st -> emitStatementNoIndent st
 
 emitExpression :: Expression -> EmitState ()
 emitExpression expr = case expr of
