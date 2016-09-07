@@ -289,8 +289,12 @@ emitElse :: Maybe Statement -> EmitState ()
 emitElse els = case els of
   Nothing -> return ()
   Just st -> do
-    write " "
-    emitStatementNoIndent st
+    write " else "
+    case st of
+     Block [elseif@(If _ _ _)] ->
+       emitStatementNoIndent elseif
+     _ ->
+       emitStatementNoIndent st
 
 emitExpression :: Expression -> EmitState ()
 emitExpression expr = case expr of
