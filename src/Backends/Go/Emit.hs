@@ -2,7 +2,6 @@ module Backends.Go.Emit where
 
 import Control.Monad.State
 
---import qualified Backends.Go.Syntax as Syntax
 import Backends.Go.Syntax (
   Type (..),
   FunctionDecl (..),
@@ -21,6 +20,11 @@ type EmitState = StateT Output Result
 
 write :: String -> EmitState ()
 write s = modify (\o -> o { pieces = (s : pieces o) })
+
+readAll :: EmitState String
+readAll = do
+  output <- get
+  return $ concat $ reverse $ pieces output
 
 getIndent :: EmitState Int
 getIndent = do
@@ -46,11 +50,15 @@ indentString n = replicate n '\t'
 
 --- Actual Emitters ---
 
-emitFile :: [Declaration] -> EmitState ()
-emitFile decls = do
+emitFile :: [Declaration] -> Either String String
+emitFile file = evalStateT (emitFileM file) (Output 0 [])
+
+emitFileM :: [Declaration] -> EmitState String
+emitFileM decls = do
   write "package main\n\n"
   emitImports [("fmt", "fmt.Println"), ("math", "math.Pow")]
   intersperse (write "\n\n") (map emitDeclaration decls)
+  readAll
 
 emitImports :: [(String, String)] -> EmitState ()
 emitImports imps = do
@@ -156,13 +164,13 @@ emitDeclaration decl = case decl of
       write "type "
       write name
       write " struct "
-      inBlock $ mapM emitFieldType fields
+      linesInBlock emitFieldType fields
   Interface name methods
     -> do
       write "type "
       write name
       write " interface "
-      inBlock $ mapM emitMethod methods
+      linesInBlock emitMethod methods
   Variable name mType expr
     -> do
       write "var "
@@ -273,13 +281,15 @@ emitStatementNoIndent stmt = case stmt of
         Just st -> emitStatementNoIndent st
       write " "
       emitStatementNoIndent body
-  Block stmts
-    -> inBlock (mapM emitStatement stmts)
+  Block stmts ->
+    linesInBlock emitStatement stmts
 
 emitElse :: Maybe Statement -> EmitState ()
 emitElse els = case els of
   Nothing -> return ()
-  Just st -> emitStatementNoIndent st
+  Just st -> do
+    write " "
+    emitStatementNoIndent st
 
 emitExpression :: Expression -> EmitState ()
 emitExpression expr = case expr of
@@ -345,7 +355,7 @@ emitExpression expr = case expr of
     -> do
        write name
        write " "
-       inBlock (mapM emitStructField fields)
+       linesInBlock emitStructField fields
 
 emitFunc :: Type -> [String] -> Statement -> EmitState ()
 emitFunc (GoFunc ats rts) argNames body = do
@@ -362,12 +372,18 @@ emitArg (name, typ) = do
   write " "
   emitType typ
 
+linesInBlock :: (a -> EmitState b) -> [a] -> EmitState ()
+linesInBlock fn items = inBlock $ do
+  intersperse (write "\n") (map (void . fn) items)
+  write "\n"
+
 inBlock :: EmitState a -> EmitState ()
 inBlock f = do
   write "{\n"
   increaseIndent
   _ <- f
   decreateIndent
+  writeIndent
   write "}"
 
 emitStructField :: (String, Expression) -> EmitState ()

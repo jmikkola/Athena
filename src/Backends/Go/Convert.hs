@@ -1,5 +1,7 @@
 module Backends.Go.Convert where
 
+import Control.Monad (liftM)
+
 import qualified Backends.Go.Syntax as Syntax
 import qualified AST.Expression as E
 import qualified Type as T
@@ -7,30 +9,59 @@ import IR
 
 type Result = Either String
 
-convertDecl :: IR.Decl -> Result Syntax.Declaration
-convertDecl decl = case decl of
-  IR.StmtDecl stmt
-    -> case stmt of
-        IR.Let name typ expr
-          -> case expr of
-              IR.Lambda t args stmt'
-                -> do
-                  decl' <- makeFnDecl t args
-                  body <- convertStmt stmt'
-                  return $ Syntax.Function name decl' body
-              _
-                -> do
-                  typ' <- convertType typ
-                  expr' <- convertExpr expr
-                  return $ Syntax.Variable name (Just typ') expr'
-        _
-          -> fail $ "cannot convert `" ++ show stmt ++ "` to a module-level declaration"
-  IR.TypeDecl name typ
-    -> do
-      typ' <- convertType typ
-      undefined -- TODO: enums can convert to multiple declarations
+convertFile :: [IR.Decl] -> Result [Syntax.Declaration]
+convertFile file = liftM concat $ mapM convertDecl file
 
-makeFnDecl typ argNames = undefined
+convertDecl :: IR.Decl -> Result [Syntax.Declaration]
+convertDecl decl = case decl of
+  IR.StmtDecl stmt -> case stmt of
+    IR.Let name typ expr -> case expr of
+      IR.Lambda t args stmt' -> do
+        decl' <- makeFnDecl t args
+        body <- convertStmt stmt'
+        return [Syntax.Function name decl' body]
+      _ -> do
+        typ' <- convertType typ
+        expr' <- convertExpr expr
+        return [Syntax.Variable name (Just typ') expr']
+    _ ->
+      fail $ "cannot convert `" ++ show stmt ++ "` to a module-level declaration"
+  IR.TypeDecl name typ -> case typ of
+    T.Struct fields -> do
+      fields' <- mapMSnd convertType fields
+      return [Syntax.Structure name fields']
+    T.Enum options -> do
+      structures <- makeStructures name options
+      let iface = Syntax.Interface name [(enumMethodName name, enumTagMethodDecl)]
+      return $ iface : structures
+    _ ->
+      fail $ "cannot emit declaration for " ++ show typ
+
+enumTagMethodDecl :: Syntax.FunctionDecl
+enumTagMethodDecl = Syntax.FunctionDecl [] []
+
+enumMethodName :: String -> String
+enumMethodName = (++) "Enum"
+
+makeStructures :: String -> [(String, [(String, T.Type)])] -> Result [Syntax.Declaration]
+makeStructures name options = (liftM concat) (mapM (makeStructure name) options)
+
+makeStructure :: String -> (String, [(String, T.Type)]) -> Result [Syntax.Declaration]
+makeStructure name (optName, fields) = do
+  fields' <- mapMSnd convertType fields
+  let structDef = Syntax.Structure optName fields'
+  let recvType = Syntax.TypeName name
+  let methodDef = Syntax.Method ("self", recvType) (enumMethodName optName)
+                  enumTagMethodDecl (Syntax.Block [])
+  return [structDef, methodDef]
+
+makeFnDecl :: T.Type -> [String] -> Result Syntax.FunctionDecl
+makeFnDecl (T.Function ats rts) argNames = do
+  argTs <- mapM convertType ats
+  retT <- convertType rts
+  let args = map (\(t,n) -> Syntax.NamedType n t) (zip argTs argNames)
+  return $ Syntax.FunctionDecl args [Syntax.JustType retT]
+makeFnDecl t _ = fail $ "cannot use type " ++ show t ++ " for function decl"
 
 convertStmt :: IR.Statement -> Result Syntax.Statement
 convertStmt stmt = case stmt of
@@ -64,18 +95,13 @@ convertStmt stmt = case stmt of
 
 convertValue :: IR.Value -> Result Syntax.Expression
 convertValue val = case val of
-  IR.StrVal s
-    -> return $ Syntax.StrVal s
-  IR.BoolVal b
-    -> return $ Syntax.BoolVal b
-  IR.IntVal i
-    -> return $ Syntax.IntVal i
-  IR.FloatVal f
-    -> return $ Syntax.FloatVal f
-  IR.StructVal n fs
-    -> do
-      fields <- mapMSnd convertExpr fs
-      return $ Syntax.StructVal n fields
+  IR.StrVal s       -> return $ Syntax.StrVal s
+  IR.BoolVal b      -> return $ Syntax.BoolVal b
+  IR.IntVal i       -> return $ Syntax.IntVal i
+  IR.FloatVal f     -> return $ Syntax.FloatVal f
+  IR.StructVal n fs -> do
+    fields <- mapMSnd convertExpr fs
+    return $ Syntax.StructVal n fields
 
 convertExpr :: IR.Expression -> Result Syntax.Expression
 convertExpr expr = case expr of
@@ -120,7 +146,7 @@ convertExpr expr = case expr of
       e' <- convertExpr e
       return $ Syntax.FieldAccess e' n
   IR.Lambda _ _ _
-    -> undefined -- TODO
+    -> error "TODO IR.Lambda" -- TODO
 
 convertType :: T.Type -> Result Syntax.Type
 convertType t = case t of
@@ -143,13 +169,9 @@ convertType t = case t of
             _             -> [retType]
       return $ Syntax.GoFunc argTypes r
   T.TypeName name -- TODO: this should either be GoStruct or GoInterface
-    -> return $ Syntax.TypeName name
-  T.Struct fields
-    -> do
-      fields' <- mapMSnd convertType fields
-      undefined -- TODO
-  T.Enum  _
-    -> undefined -- some interface, but which?
+    -> return $ Syntax.GoStruct name
+  T.Struct _ -> fail "cannot use structure as literal type"
+  T.Enum  _ -> fail "cannot use enum as literal type"
 
 converUnaryOp :: E.UnaryOp -> Result Syntax.UnaryOp
 converUnaryOp E.BitInvert

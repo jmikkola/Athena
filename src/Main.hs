@@ -10,9 +10,8 @@ import TypeCheck ( checkFile )
 import Emit ( showFile )
 
 import TypeCheck2 ( runFile )
-import Backends.Go.Syntax ()
-import Backends.Go.Convert ()
-import Backends.Go.Emit ()
+import Backends.Go.Convert (convertFile)
+import Backends.Go.Emit (emitFile)
 
 main :: IO ()
 main = do
@@ -23,8 +22,12 @@ main = do
    Left err   -> putStrLn $ "parse error: " ++ err
    Right file -> do
      case runFile file of
-      Left err -> putStrLn $ "type 2 error: " ++ err
-      Right t  -> putStrLn $ show t
+      Left err -> putStrLn $ "error typing file: " ++ err
+      Right t  -> case convertFile t of
+        Left err -> putStrLn $ "error converting file: " ++ err
+        Right f -> case emitFile f of
+          Left err -> putStrLn $ "error emitting file: " ++ err
+          Right txt -> putStrLn txt
      case checkFile file of
       Left err -> putStrLn $ "type error: " ++ err
       Right _  -> do
