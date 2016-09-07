@@ -111,8 +111,8 @@ getSuperTypesOf sub = do
 
 -- Typing functions --
 
-runFile :: D.File -> Result [Decl]
-runFile file = evalStateT (checkFileM file) ([], Map.empty)
+runTypechecking :: D.File -> Result [Decl]
+runTypechecking file = evalStateT (checkFileM file) ([], Map.empty)
 
 checkFileM :: D.File -> TSState [Decl]
 checkFileM file = do
