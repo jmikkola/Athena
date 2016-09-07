@@ -13,11 +13,11 @@ convertDecl decl = case decl of
     -> case stmt of
         IR.Let name typ expr
           -> case expr of
-              IR.Lambda t args stmt
+              IR.Lambda t args stmt'
                 -> do
-                  decl <- makeFnDecl t args
-                  body <- convertStmt stmt
-                  return $ Syntax.Function name decl body
+                  decl' <- makeFnDecl t args
+                  body <- convertStmt stmt'
+                  return $ Syntax.Function name decl' body
               _
                 -> do
                   typ' <- convertType typ
@@ -33,7 +33,34 @@ convertDecl decl = case decl of
 makeFnDecl typ argNames = undefined
 
 convertStmt :: IR.Statement -> Result Syntax.Statement
-convertStmt _ = error "TODO convertStmt"
+convertStmt stmt = case stmt of
+  IR.Return Nothing ->
+    return Syntax.JustReturn
+  IR.Return (Just e) -> do
+    e' <- convertExpr e
+    return $ Syntax.Return e'
+  IR.Let s t e -> do
+    e' <- convertExpr e
+    t' <- convertType t
+    return $ Syntax.VarStmt s (Just t') e'
+  IR.Assign fs e -> do
+    e' <- convertExpr e
+    return $ Syntax.Assign fs e'
+  IR.Block _ stmts -> do
+    stmts' <- mapM convertStmt stmts
+    return $ Syntax.Block stmts'
+  IR.Expr e -> do
+    e' <- convertExpr e
+    return $ Syntax.Expr e'
+  IR.If e st melse -> do
+    e' <- convertExpr e
+    st' <- convertStmt st
+    melse' <- mapM convertStmt melse
+    return $ Syntax.If e' st' melse'
+  IR.While e st -> do
+    e' <- convertExpr e
+    st' <- convertStmt st
+    return $ Syntax.For1 e' st'
 
 convertValue :: IR.Value -> Result Syntax.Expression
 convertValue val = case val of
