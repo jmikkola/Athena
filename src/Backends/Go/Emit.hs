@@ -235,6 +235,7 @@ emitStatementNoIndent stmt = case stmt of
     -> do
       write "var "
       write var
+      write " "
       emitType typ
       write " = "
       emitExpression ex

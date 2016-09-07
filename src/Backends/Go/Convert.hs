@@ -18,7 +18,7 @@ convertDecl decl = case decl of
     IR.Let name typ expr -> case expr of
       IR.Lambda t args stmt' -> do
         decl' <- makeFnDecl t args
-        body <- convertStmt stmt'
+        body <- convertBlock stmt'
         return [Syntax.Function name decl' body]
       _ -> do
         typ' <- convertType typ
@@ -63,35 +63,43 @@ makeFnDecl (T.Function ats rts) argNames = do
   return $ Syntax.FunctionDecl args [Syntax.JustType retT]
 makeFnDecl t _ = fail $ "cannot use type " ++ show t ++ " for function decl"
 
-convertStmt :: IR.Statement -> Result Syntax.Statement
+convertBlock :: IR.Statement -> Result Syntax.Statement
+convertBlock stmt = do
+  stmts' <- case stmt of
+    IR.Block _ stmts -> concatMapM convertStmt stmts
+    _                -> convertStmt stmt
+  return $ Syntax.Block stmts'
+
+convertStmt :: IR.Statement -> Result [Syntax.Statement]
 convertStmt stmt = case stmt of
   IR.Return Nothing ->
-    return Syntax.JustReturn
+    return [Syntax.JustReturn]
   IR.Return (Just e) -> do
     e' <- convertExpr e
-    return $ Syntax.Return e'
+    return [Syntax.Return e']
   IR.Let s t e -> do
     e' <- convertExpr e
     t' <- convertType t
-    return $ Syntax.VarStmt s (Just t') e'
+    return [ Syntax.VarStmt s (Just t') e',
+             Syntax.VarStmt "_" (Just t') (Syntax.Var s)]
   IR.Assign fs e -> do
     e' <- convertExpr e
-    return $ Syntax.Assign fs e'
-  IR.Block _ stmts -> do
-    stmts' <- mapM convertStmt stmts
-    return $ Syntax.Block stmts'
+    return [Syntax.Assign fs e']
+  IR.Block _ _ -> do
+    blk <- convertBlock stmt
+    return [blk]
   IR.Expr e -> do
     e' <- convertExpr e
-    return $ Syntax.Expr e'
+    return [Syntax.Expr e']
   IR.If e st melse -> do
     e' <- convertExpr e
-    st' <- convertStmt st
-    melse' <- mapM convertStmt melse
-    return $ Syntax.If e' st' melse'
+    st' <- convertBlock st
+    melse' <- mapM convertBlock melse
+    return [Syntax.If e' st' melse']
   IR.While e st -> do
     e' <- convertExpr e
-    st' <- convertStmt st
-    return $ Syntax.For1 e' st'
+    st' <- convertBlock st
+    return [Syntax.For1 e' st']
 
 convertValue :: IR.Value -> Result Syntax.Expression
 convertValue val = case val of
@@ -146,7 +154,7 @@ convertExpr expr = case expr of
     return $ Syntax.FieldAccess e' n
   IR.Lambda t argNames body -> do
     t' <- convertType t
-    body' <- convertStmt body
+    body' <- convertBlock body
     return $ Syntax.Func t' argNames body'
 
 convertType :: T.Type -> Result Syntax.Type
@@ -228,3 +236,6 @@ mapMSnd f = mapM f'
   where f' (c, a) = do
           b <- f a
           return (c, b)
+
+concatMapM :: (Monad m) => (a -> m [b]) -> [a] -> m [b]
+concatMapM f list = (liftM concat) (mapM f list)
