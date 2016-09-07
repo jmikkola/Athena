@@ -141,12 +141,13 @@ convertExpr expr = case expr of
       return $ Syntax.TypeCast typ expr'
   IR.Var _ n
     -> return $ Syntax.Var n
-  IR.Access _ e n
-    -> do
-      e' <- convertExpr e
-      return $ Syntax.FieldAccess e' n
-  IR.Lambda _ _ _
-    -> error "TODO IR.Lambda" -- TODO
+  IR.Access _ e n -> do
+    e' <- convertExpr e
+    return $ Syntax.FieldAccess e' n
+  IR.Lambda t argNames body -> do
+    t' <- convertType t
+    body' <- convertStmt body
+    return $ Syntax.Func t' argNames body'
 
 convertType :: T.Type -> Result Syntax.Type
 convertType t = case t of
