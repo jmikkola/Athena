@@ -63,6 +63,8 @@ data Expression
   | IntVal Int
   | FloatVal Float
   | StructVal String [(String, Expression)]
+  | Reference Expression
+  | Dereference Expression
   deriving (Show, Eq)
 
 data UnaryOp

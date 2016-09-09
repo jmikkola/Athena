@@ -29,13 +29,26 @@ convertDecl decl = case decl of
   IR.TypeDecl name typ -> case typ of
     T.Struct fields -> do
       fields' <- mapMSnd convertType fields
-      return [Syntax.Structure name fields']
+      stringMethod <- makeStringMethod name fields'
+      return [Syntax.Structure name fields', stringMethod]
     T.Enum options -> do
       structures <- makeStructures name options
       let iface = Syntax.Interface name [(enumMethodName name, enumTagMethodDecl)]
       return $ iface : structures
     _ ->
       fail $ "cannot emit declaration for " ++ show typ
+
+makeStringMethod :: String -> [(String, Syntax.Type)] -> Result Syntax.Declaration
+makeStringMethod structName fields =
+  let fieldNames = map fst fields
+      decl = Syntax.FunctionDecl [] [Syntax.JustType $ Syntax.GoString]
+      sprintf = Syntax.FieldAccess (Syntax.Var "fmt") "Sprintf"
+      format = Syntax.StrVal $ concatMap (++ ": %v,\n") fieldNames
+      values = map (Syntax.FieldAccess (Syntax.Var "self")) fieldNames
+      printExpr = Syntax.Call sprintf (format : values)
+      printStmt = Syntax.Return printExpr
+      body = Syntax.Block [printStmt]
+  in return $ Syntax.Method ("self", Syntax.GoStruct structName) "String" decl body
 
 enumTagMethodDecl :: Syntax.FunctionDecl
 enumTagMethodDecl = Syntax.FunctionDecl [] []
@@ -109,7 +122,7 @@ convertValue val = case val of
   IR.FloatVal f     -> return $ Syntax.FloatVal f
   IR.StructVal n fs -> do
     fields <- mapMSnd convertExpr fs
-    return $ Syntax.StructVal n fields
+    return $ Syntax.Reference $ Syntax.StructVal n fields
 
 convertExpr :: IR.Expression -> Result Syntax.Expression
 convertExpr expr = case expr of

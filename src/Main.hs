@@ -1,6 +1,5 @@
 module Main where
 
-import Control.Monad (liftM)
 import Control.Monad.Except
 import System.Environment ( getArgs )
 import System.Process ( rawSystem )
@@ -8,8 +7,6 @@ import System.Exit ( exitWith, ExitCode )
 
 import Parser ( parseFile )
 import ParserTest ( testMain )
-import TypeCheck ( checkFile )
-import Emit ( showFile )
 
 import TypeCheck2 (runTypechecking)
 import Backends.Go.Convert (convertFile)

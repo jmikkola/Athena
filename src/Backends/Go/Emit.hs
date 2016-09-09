@@ -192,7 +192,7 @@ emitDeclaration decl = case decl of
     -> do
       write "func ("
       write recvName
-      write ", "
+      write " "
       emitType recvType
       write ") "
       write name
@@ -367,6 +367,12 @@ emitExpression expr = case expr of
        write name
        write " "
        linesInBlock emitStructField fields
+  Reference ex -> do
+    write "&"
+    emitExpression ex
+  Dereference ex -> do
+    write "*"
+    emitExpression ex
 
 emitFunc :: Type -> [String] -> Statement -> EmitState ()
 emitFunc (GoFunc ats rts) argNames body = do
