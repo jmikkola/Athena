@@ -147,8 +147,10 @@ convertExpr expr = case expr of
       expr' <- convertExpr ex
       typ <- convertType t
       return $ Syntax.TypeCast typ expr'
-  IR.Var _ n
-    -> return $ Syntax.Var n
+  IR.Var _ n ->
+    if n == "print"
+    then return $ Syntax.FieldAccess (Syntax.Var "fmt") "Println"
+    else return $ Syntax.Var n
   IR.Access _ e n -> do
     e' <- convertExpr e
     return $ Syntax.FieldAccess e' n

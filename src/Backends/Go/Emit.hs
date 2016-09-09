@@ -327,12 +327,18 @@ emitExpression expr = case expr of
       write ").("
       emitType iface
       write ")"
-  TypeCast typ ex
-    -> do
-       emitType typ
-       write "("
+  TypeCast typ ex -> case typ of
+    GoString -> do
+       write "fmt.Sprintf(\"%v\", "
        emitExpression ex
        write ")"
+    GoVoid ->
+      fail "compiler bug: can't cast to Nil"
+    _ -> do
+      emitType typ
+      write "("
+      emitExpression ex
+      write ")"
   Var name
     -> write name
   FieldAccess ex field
