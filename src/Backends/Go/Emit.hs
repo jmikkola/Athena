@@ -209,6 +209,7 @@ emitDeclaration decl = case decl of
 
 emitFieldType :: (String, Type) -> EmitState ()
 emitFieldType (name, typ) = do
+  writeIndent
   write name
   write " "
   emitType typ
@@ -362,11 +363,9 @@ emitExpression expr = case expr of
     -> write $ show i
   FloatVal f
     -> write $ show f
-  StructVal name fields
-    -> do
-       write name
-       write " "
-       linesInBlock emitStructField fields
+  StructVal name fields -> do
+    write name
+    linesInBlock emitStructField fields
   Reference ex -> do
     write "&"
     emitExpression ex
@@ -390,16 +389,12 @@ emitArg (name, typ) = do
   emitType typ
 
 linesInBlock :: (a -> EmitState b) -> [a] -> EmitState ()
-linesInBlock fn items = inBlock $ do
-  intersperse (write "\n") (map (void . fn) items)
-  write "\n"
-
-inBlock :: EmitState a -> EmitState ()
-inBlock f = do
+linesInBlock fn items = do
   write "{\n"
   increaseIndent
-  _ <- f
+  intersperse (write "\n") (map (void . fn) items)
   decreateIndent
+  write "\n"
   writeIndent
   write "}"
 
@@ -409,7 +404,7 @@ emitStructField (name, ex) = do
   write name
   write ": "
   emitExpression ex
-  write ",\n"
+  write ","
 
 emitUnaryOp :: UnaryOp -> EmitState ()
 emitUnaryOp BitInvert
