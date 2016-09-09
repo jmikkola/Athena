@@ -20,12 +20,16 @@ type ExitCodeResult = ExceptT String IO ExitCode
 either2Except :: Monad m => Either e a -> ExceptT e m a
 either2Except = ExceptT . return
 
+compileAndEmit :: String -> Either String String
+compileAndEmit content = do
+  parsed <- parseFile content
+  checked <- runTypechecking parsed
+  goSyntax <- convertFile checked
+  emitFile goSyntax
+
 compile :: String -> ExitCodeResult
 compile content = do
-  parsed <- either2Except $ parseFile content
-  checked <- either2Except $ runTypechecking parsed
-  goSyntax <- either2Except $ convertFile checked
-  output <- either2Except $ emitFile goSyntax
+  output <- either2Except $ compileAndEmit content
   _ <- lift $ writeFile "out.go" output
   lift $ rawSystem "go" ["build", "-o", "a.out", "out.go"]
 
