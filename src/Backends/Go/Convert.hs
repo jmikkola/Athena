@@ -62,11 +62,12 @@ makeStructures name options = (liftM concat) (mapM (makeStructure name) options)
 makeStructure :: String -> (String, [(String, T.Type)]) -> Result [Syntax.Declaration]
 makeStructure name (optName, fields) = do
   fields' <- mapMSnd convertType fields
+  strMethod <- makeStringMethod name fields'
   let structDef = Syntax.Structure optName fields'
   let recvType = Syntax.TypeName name
   let methodDef = Syntax.Method ("self", recvType) (enumMethodName optName)
                   enumTagMethodDecl (Syntax.Block [])
-  return [structDef, methodDef]
+  return [structDef, methodDef, strMethod]
 
 makeFnDecl :: T.Type -> [String] -> Result Syntax.FunctionDecl
 makeFnDecl (T.Function ats rts) argNames = do
