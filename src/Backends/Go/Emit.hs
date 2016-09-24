@@ -216,6 +216,7 @@ emitFieldType (name, typ) = do
 
 emitMethod :: (String, FunctionDecl) -> EmitState ()
 emitMethod (name, decl) = do
+  writeIndent
   write name
   emitFunctionDecl decl
 
