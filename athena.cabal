@@ -59,11 +59,9 @@ executable athena
                 Backends.Go.Emit,
                 Backends.Go.Syntax,
                 Type,
-                Emit,
                 IR,
                 Parser,
                 ParserTest,
-                TypeCheck2,
                 TypeCheck
 
   -- LANGUAGE extensions used by modules in this package.

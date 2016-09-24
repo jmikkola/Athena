@@ -8,7 +8,7 @@ import System.Exit ( exitWith, ExitCode )
 import Parser ( parseFile )
 import ParserTest ( testMain )
 
-import TypeCheck2 (runTypechecking)
+import TypeCheck (runTypechecking)
 import Backends.Go.Convert (convertFile)
 import Backends.Go.Emit (emitFile)
 

@@ -2,19 +2,20 @@ module TypeCheck where
 
 import Control.Applicative ( (<|>) )
 import Control.Monad.State
+import Data.Maybe (fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import AST.Declaration (Declaration, File)
+import IR
 import qualified AST.Declaration as D
-import AST.Expression (Expression, Value)
 import qualified AST.Expression as E
-import AST.Statement (Statement)
 import qualified AST.Statement as S
 import Type (Type)
 import qualified Type as T
+
+type TypeName = String
 
 type Result = Either String
 -- Entries in a Scope have a double-meaning:
@@ -22,21 +23,63 @@ type Result = Either String
 --  - uppercae names map to the type bound to that name
 type Scope = Map String Type
 type TypeScope = [Scope]
-type Subtypes = Map Type (Set Type)
+type Subtypes = Map TypeName (Set TypeName)
 type TSState = StateT (TypeScope, Subtypes) Result
 
-checkFile :: File -> Result ()
-checkFile file = evalStateT (checkFileM file) ([], Map.empty)
+-- Monad functions --
 
-checkFileM :: File -> TSState ()
-checkFileM file = do
-  buildFileScope file
-  _ <- mapM checkDeclaration file
-  return ()
+getTypeScope :: TSState TypeScope
+getTypeScope = liftM fst $ get
+
+getSubtypes :: TSState Subtypes
+getSubtypes = liftM snd $ get
+
+putTypeScope :: TypeScope -> TSState ()
+putTypeScope ts = do
+  subs <- getSubtypes
+  put (ts, subs)
+
+putSubtypes :: Subtypes -> TSState ()
+putSubtypes subs = do
+  ts <- getTypeScope
+  put (ts, subs)
+
+updateTypeScope :: (TypeScope -> TypeScope) -> TSState ()
+updateTypeScope f = do
+  ts <- getTypeScope
+  putTypeScope (f ts)
+
+updateSubtypes :: (Subtypes -> Subtypes) -> TSState ()
+updateSubtypes f = do
+  subs <- getSubtypes
+  putSubtypes (f subs)
+
+-- Scaffolding functions --
+
+err :: String -> TSState a
+err = lift . Left
+
+note :: a -> Maybe b -> Either a b
+note msg = maybe (Left msg) Right
+
+beginScope :: TSState ()
+beginScope = updateTypeScope (Map.empty :)
+
+endScope :: TSState ()
+endScope = do
+  ts <- getTypeScope
+  case ts of
+   []     -> err "compiler bug: ending no scopes"
+   (_:ss) -> putTypeScope ss
 
 scopeLookup :: String -> TypeScope -> Maybe Type
 scopeLookup name (m:ms) = Map.lookup name m <|> scopeLookup name ms
 scopeLookup _    []     = Nothing
+
+getFromScope :: String -> TSState Type
+getFromScope name = do
+  ts <- getTypeScope
+  lift $ note ("Not defined: " ++ name) (scopeLookup name ts)
 
 scopeAdd :: String -> Type -> TypeScope -> Result TypeScope
 scopeAdd name typ (m:ms) =
@@ -45,163 +88,179 @@ scopeAdd name typ (m:ms) =
    (Just _) -> Left ("Duplicate definition for: " ++ name)
 scopeAdd _    _   []     = Left "Empty scope stack??"
 
-startScope :: TSState ()
-startScope = modify (\(scopes, subs) -> (Map.empty : scopes, subs))
-
-endScope :: TSState ()
-endScope = do
-  (scopes, subtypes) <- get
-  case scopes of
-   (_:ss) -> put (ss, subtypes)
-   []     -> err "No scope to end??"
-
-getFromScope :: String -> TSState Type
-getFromScope name = do
-  (scopes, _) <- get
-  lift $ note ("Not defined: " ++ name) (scopeLookup name scopes)
-
 setInScope :: String -> Type -> TSState ()
 setInScope name typ = do
-  (scopes, subtypes) <- get
-  newScopes <- lift $ scopeAdd name typ scopes
-  put (newScopes, subtypes)
+  ts <- getTypeScope
+  newScopes <- lift $ scopeAdd name typ ts
+  putTypeScope newScopes
+
+addSubtype :: TypeName -> TypeName -> TSState ()
+addSubtype sub super = updateSubtypes addSub
+  where addSub subtypes =
+          let newSupers = case Map.lookup sub subtypes of
+                Nothing -> Set.singleton super
+                (Just sups) -> Set.insert super sups
+          in Map.insert sub newSupers subtypes
+
+getSuperTypesOf :: TypeName -> TSState (Set TypeName)
+getSuperTypesOf sub = do
+  subs <- getSubtypes
+  case Map.lookup sub subs of
+   Nothing -> return Set.empty
+   Just st -> return st
+
+-- Typing functions --
+
+runTypechecking :: D.File -> Result [Decl]
+runTypechecking file = evalStateT (checkFileM file) ([], Map.empty)
+
+checkFileM :: D.File -> TSState [Decl]
+checkFileM file = do
+  buildFileScope file
+  mapM checkDeclaration file
+
+checkDeclaration :: D.Declaration -> TSState Decl
+checkDeclaration d = case d of
+ (D.Function name t args body) -> do
+   (argTypes, retType) <- case t of
+     (T.Function ats rt) -> return (ats, rt)
+     _                   -> err $ "function with non-function type: " ++ show t
+   if length argTypes /= length args
+     then err "arg length mismatch in declaration"
+     else return ()
+   beginScope
+   addFuncScope args argTypes
+   typedBody <- requireReturnType retType body
+   endScope
+   return $ StmtDecl $ Let name t $ Lambda t args typedBody
+ (D.Let name t expr) -> do
+   typedE <- exprToTyped expr
+   _ <- requireSubtype (typeOf typedE) t
+   return $ StmtDecl $ Let name t typedE
+ (D.TypeDef name t) ->
+   return $ TypeDecl name t
+
+requireReturnType :: Type -> S.Statement -> TSState Statement
+requireReturnType retType stmt = do
+  typedStatement <- checkStatement retType stmt
+  lastRetType <- getReturnType typedStatement
+  _ <- requireSubtype lastRetType retType
+  return typedStatement
+
+getReturnType :: Statement -> TSState Type
+getReturnType stmt =
+  case stmt of
+   (Block t _) -> return $ fromMaybe T.Nil t
+   (Expr e)    -> return $ typeOf e
+   _           -> err "function body must be a block or expression"
+
+defaultScope :: TSState ()
+defaultScope = do
+  setInScope "print" (T.Function [T.String] T.Nil)
+
+-- Defines the types of the arguments within the function's scope
+addFuncScope :: [String] -> [Type] -> TSState ()
+addFuncScope names types = do
+  _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
   return ()
 
-setSubtype :: Type -> Type -> TSState ()
-setSubtype sub super = do
-  (scopes, subtypes) <- get
-  let newSupers =
-       case Map.lookup sub subtypes of
-         Nothing       -> Set.singleton super
-         (Just others) -> Set.insert super others
-  let newSubtypes = Map.insert sub newSupers subtypes
-  put (scopes, newSubtypes)
-  return ()
-
-buildFileScope :: File -> TSState ()
+buildFileScope :: D.File -> TSState ()
 buildFileScope file = do
-  startScope
-  defineDefaultFunctions
+  beginScope
+  defaultScope
   _ <- mapM addDecl file
   return ()
 
-addDecl :: Declaration -> TSState ()
+addDecl :: D.Declaration -> TSState ()
 addDecl (D.Let n t _)        = setInScope n t
 addDecl (D.Function n t _ _) = setInScope n t
 addDecl (D.TypeDef n t)      =
   case t of
    (T.Enum options) -> do
      setInScope n t
-     -- TODO: extend the system to both understand that these are subtypes of t,
-     -- and to know that they are structure types
-     _ <- mapM (\optName -> setSubtype (T.TypeName optName) (T.TypeName n)) (map fst options)
+     _ <- mapM (\(name, _) -> addSubtype name n) options
      _ <- mapM (\(name, fields) -> setInScope name (T.Struct fields)) options
      return ()
    _                -> do
      setInScope n t
 
-defineDefaultFunctions :: TSState ()
-defineDefaultFunctions = do
-  setInScope "print" $ T.Function [T.String] T.Nil
+checkStatement :: Type -> S.Statement -> TSState Statement
+checkStatement retType stmt = case stmt of
+  (S.Return Nothing) -> do
+    _ <- requireSubtype T.Nil retType
+    return $ Return Nothing
+  (S.Return (Just e)) -> do
+    typedE <- exprToTyped e
+    _ <- requireSubtype (typeOf typedE) retType
+    return $ Return (Just typedE)
+  (S.Let name t e) -> do
+    setInScope name t
+    typedE <- exprToTyped e
+    _ <- requireSubtype (typeOf typedE) t
+    return $ Let name t typedE
+  (S.Assign names e) -> do
+    t <- getAssignType names
+    typedE <- exprToTyped e
+    _ <- requireSubtype (typeOf typedE) t
+    return $ Assign names typedE
+  (S.Block stmts) -> do
+    beginScope
+    blk <- checkBlock retType stmts
+    endScope
+    return blk
+  (S.Expr e) -> do
+    typedE <- exprToTyped e
+    return $ Expr typedE
+  (S.If test body mElse) -> do
+    typedTest <- exprToTyped test
+    _ <- requireSubtype (typeOf typedTest) T.Bool
 
-addFuncScope :: [String] -> [Type] -> TSState ()
-addFuncScope names types = do
-  _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
-  return ()
+    beginScope
+    blk <- checkStatement retType (S.Block body)
+    endScope
 
-checkDeclaration :: Declaration -> TSState ()
-checkDeclaration d =
-  case d of
-   (D.Function _ t args body) -> do
-     (argTypes, retType) <- case t of
-       (T.Function ats rt) -> return (ats, rt)
-       _                   -> err $ "function with non-function type: " ++ show t
-     if length argTypes /= length args
-        then err "arg length mismatch in declaration"
-        else do
-           startScope
-           addFuncScope args argTypes
-           requireReturnType body retType
-           endScope
-   (D.Let _ t expr) -> do
-     _ <- requireExprType expr t
-     return ()
-   (D.TypeDef _ _) -> return () -- already handled in buildFileScope
+    typedElse <- case mElse of
+      Nothing -> return Nothing
+      (Just els) -> do
+        tEls <- checkStatement retType els
+        return $ Just tEls
 
-requireReturnType :: Statement -> Type -> TSState ()
-requireReturnType stmt t = do
-  lastRet <- getReturnType stmt t
-  _ <- requireSubtype lastRet t
-  return ()
+    return $ If typedTest blk typedElse
+  (S.While test body) -> do
+    typedTest <- exprToTyped test
+    _ <- requireSubtype (typeOf typedTest) T.Bool
 
-getReturnType :: Statement -> Type -> TSState Type
-getReturnType stmt expectedRetType =
-  case stmt of
-   (S.Block stmts) -> checkBlock stmts expectedRetType
-   _               -> err "function body must be a block"
+    beginScope
+    blk <- checkStatement retType (S.Block body)
+    endScope
 
-err :: String -> TSState a
-err = lift . Left
+    return $ While typedTest blk
 
-checkBlock :: [Statement] -> Type -> TSState Type
-checkBlock stmts expectedRetType =
-  case stmts of
-   []               -> return T.Nil
-   [S.Return me] -> returnExpr me expectedRetType
-   (S.Return _:_)   -> err $ "Statements after a return: " ++ show stmts
-   (s:ss)           -> do
-     _ <- checkStatement s expectedRetType
-     checkBlock ss expectedRetType
+checkBlock :: Type -> [S.Statement] -> TSState Statement
+checkBlock retType stmts = blkStmts stmts []
+  where
+    blkStmts sts rest = case sts of
+      [] ->
+        return $ Block Nothing (reverse rest)
+      [S.Return rExpr] -> do
+        (typ, stmt) <- returnExpr retType rExpr
+        return $ Block typ (reverse $ stmt : rest)
+      (S.Return _:ss) ->
+        err $ "Unreachable statements after a return: " ++ show ss
+      (st:ss) -> do
+        typedSt <- checkStatement retType st
+        blkStmts ss (typedSt : rest)
 
-returnExpr :: Maybe Expression -> Type -> TSState Type
-returnExpr Nothing  expectedRetType = do
-  requireSubtype expectedRetType T.Nil
-returnExpr (Just e) expectedRetType = do
-  retType <- checkExpression e
-  requireSubtype retType expectedRetType
-
--- Returns a return type, if the statement returns
-checkStatement :: Statement -> Type -> TSState ()
-checkStatement s expectedRetType =
-  case s of
-   (S.Return mExpr) -> do
-     _ <- returnExpr mExpr expectedRetType
-     return ()
-   (S.Let name t e) -> do
-     setInScope name t
-     _ <- requireExprType e t
-     return ()
-   (S.Assign names e) -> do
-     t <- getAssignType names
-     _ <- requireExprType e t
-     return ()
-   (S.Block stmts) -> do
-     startScope
-     _ <- checkBlock stmts expectedRetType
-     endScope
-   (S.Expr e) -> do
-     _ <- checkExpression e
-     return ()
-   (S.If test body mElse) -> do
-     _ <- requireExprType test T.Bool
-
-     startScope
-     _ <- checkBlock body expectedRetType
-     endScope
-
-     _ <- case mElse of
-       Nothing    -> return ()
-       (Just els) -> checkStatement els expectedRetType
-
-     return ()
-   (S.While test body) -> do
-     _ <- requireExprType test T.Bool
-
-     startScope
-     _ <- checkBlock body expectedRetType
-     endScope
-
-     return ()
+returnExpr :: Type -> Maybe E.Expression -> TSState (Maybe Type, Statement)
+returnExpr t rExpr = case rExpr of
+  Nothing -> do
+    _ <- requireSubtype T.Nil t
+    return (Nothing, Return Nothing)
+  Just e -> do
+    typedE <- exprToTyped e
+    let typ = typeOf typedE
+    _ <- requireSubtype typ t
+    return (Just typ, Return $ Just typedE)
 
 getAssignType :: [String] -> TSState Type
 getAssignType []           = err "compiler error: assign statement with no names"
@@ -209,185 +268,162 @@ getAssignType (var:fields) = do
   t <- getFromScope var
   foldM getFieldType t fields
 
-requireExprType :: Expression -> Type -> TSState Type
-requireExprType e t =
-  case e of
-   (E.Paren e')     -> do
-     requireExprType e' t
-   (E.Val v)        -> do
-     vt <- valueType v
-     requireSubtype vt t
-   (E.Unary op e')  -> do
-     et <- checkExpression e'
-     resultT <- unaryReturnType op et
-     requireSubtype resultT t
-   (E.Binary o l r) -> do
-     lt <- checkExpression l
-     _ <- requireExprType r lt
-     resultT <- binReturnType o lt
-     _ <- requireEqual t resultT
-     return resultT
-   (E.Call f args)  -> do
-     fnType <- checkExpression f
-     argTypes <- mapM checkExpression args
-     requireEqual fnType (T.Function argTypes t)
-   (E.Cast t' e')   -> do
-     _ <- requireSubtype t' t
-     checkExpression e'
-   (E.Var var)      -> do
-     requireVarType var t
-   (E.Access e' f)  -> do
-     et <- checkExpression e'
-     t' <- getFieldType et f
-     requireSubtype t' t
+valToTyped :: E.Value -> TSState Value
+valToTyped (E.StrVal s)       = return $ StrVal s
+valToTyped (E.BoolVal b)      = return $ BoolVal b
+valToTyped (E.IntVal i)       = return $ IntVal i
+valToTyped (E.FloatVal f)     = return $ FloatVal f
+valToTyped (E.StructVal s fs) = do
+  fs' <- mapMSnd exprToTyped fs
+  return $ StructVal s fs'
 
-checkExpression :: Expression -> TSState Type
-checkExpression e =
-  case e of
-   (E.Paren e')     -> checkExpression e'
-   (E.Val v)        -> valueType v
-   (E.Unary o e')   -> do
-     t <- checkExpression e'
-     unaryReturnType o t
-   (E.Binary o l r) -> do
-     t <- checkExpression l
-     _ <- requireExprType r t
-     binReturnType o t
-   (E.Call f args)  -> do
-     fType <- checkExpression f
-     case fType of
-      (T.Function argTypes retType) ->
-        if length argTypes /= length args
-        then err "arg length mismatch"
-        else do
-          _ <- mapM (\(t, arg) -> requireExprType arg t) (zip argTypes args)
-          return retType
-      _  -> err $ "trying to call a non-function type: " ++ show fType
-   (E.Cast t' e')   -> do
-     _ <- checkExpression e'
-     return t'
-   (E.Var var)      -> do
-     getFromScope var
-   (E.Access e' f)  -> do
-     et <- checkExpression e'
-     getFieldType et f
+exprToTyped :: E.Expression -> TSState Expression
+exprToTyped e = case e of
+ (E.Paren inner) -> do
+   typedInner <- exprToTyped inner
+   let innerType = typeOf typedInner
+   return $ Paren typedInner innerType
+ (E.Val value) -> do
+   typedVal <- valToTyped value
+   return $ Val typedVal
+ (E.Unary op e') -> do
+   typedInner <- exprToTyped e'
+   t <- unaryReturnType op (typeOf typedInner)
+   return $ Unary t op typedInner
+ (E.Binary op l r) -> do
+   typedL <- exprToTyped l
+   typedR <- exprToTyped r
+   argT <- requireEqual (typeOf typedL) (typeOf typedR)
+   t <- binaryReturnType op argT
+   return $ Binary t op typedL typedR
+ (E.Call fnEx argEs) -> do
+   typedFn <- exprToTyped fnEx
+   typedArgs <- mapM exprToTyped argEs
+   checkFnCall typedFn typedArgs
+ (E.Cast t e') -> do
+   innerExpr <- exprToTyped e'
+   return $ Cast t innerExpr
+ (E.Var name) -> do
+   t <- getFromScope name
+   return $ Var t name
+ (E.Access e' name) -> do
+   typedInner <- exprToTyped e'
+   t <- getFieldType (typeOf typedInner) name
+   return $ Access t typedInner name
 
-getFieldType :: Type -> String -> TSState Type
-getFieldType typ fieldName = do
-  fieldTypes <- getStructFields typ
-  case lookup fieldName fieldTypes of
-   (Just t) -> return t
-   Nothing  -> err $ "field " ++ fieldName ++ " not found on type " ++ show typ
-
-getStructFields :: Type -> TSState [(String, Type)]
-getStructFields typ =
-  case typ of
-   (T.Struct fields) -> return fields
-   (T.TypeName name) -> do
-     realType <- getFromScope name
-     getStructFields realType
-   _                 ->
-     err $ "Can't access field  on a value of type " ++ show typ
-
-unaryReturnType :: E.UnaryOp -> Type -> TSState Type
-unaryReturnType op t =
-  case op of
-   E.BitInvert -> requireEqual t T.Int
-   E.BoolNot   -> requireEqual t T.Bool
-
-numericOps :: [E.BinOp]
-numericOps = [E.Minus, E.Times, E.Divide, E.Power]
-
-integerOps :: [E.BinOp]
-integerOps = [E.Mod, E.BitAnd, E.BitOr, E.BitXor, E.LShift, E.RShift, E.RRShift]
-
-booleanOps :: [E.BinOp]
-booleanOps = [E.BoolAnd, E.BoolOr]
-
-compOps    :: [E.BinOp]
-compOps    = [E.Eq, E.NotEq]
-
-numCompOps :: [E.BinOp]
-numCompOps = [E.Less, E.LessEq, E.Greater, E.GreaterEq]
-
-binReturnType :: E.BinOp -> Type -> TSState Type
-binReturnType op t
-  | op == E.Plus          =
+binaryReturnType :: E.BinOp -> Type -> TSState Type
+binaryReturnType op t
+  | op == E.Plus =
+    -- special case "+" because it also works on strings
     if t `elem` [T.Int, T.Float, T.String]
     then return t
     else err $ "Can't add values of type: " ++ show t
   | op `elem` numericOps = requireNumeric t
-  | op `elem` integerOps = requireEqual t T.Int
-  | op `elem` booleanOps = requireEqual t T.Bool
+  | op `elem` integerOps = requireSubtype t T.Int
+  | op `elem` booleanOps = requireSubtype t T.Bool
   | op `elem` compOps    = return T.Bool
   | op `elem` numCompOps = do
       _ <- requireNumeric t
       return T.Bool
   | otherwise            = err $ "op missing from list: " ++ show op
 
+numericOps :: [E.BinOp]
+numericOps =
+  [E.Minus, E.Times, E.Divide, E.Power]
+
+integerOps :: [E.BinOp]
+integerOps =
+  [E.Mod, E.BitAnd, E.BitOr, E.BitXor, E.LShift, E.RShift, E.RRShift]
+
+booleanOps :: [E.BinOp]
+booleanOps =
+  [E.BoolAnd, E.BoolOr]
+
+compOps :: [E.BinOp]
+compOps =
+  [E.Eq, E.NotEq]
+
+numCompOps :: [E.BinOp]
+numCompOps =
+  [E.Less, E.LessEq, E.Greater, E.GreaterEq]
+
+unaryReturnType :: E.UnaryOp -> Type -> TSState Type
+unaryReturnType op t = case op of
+  E.BitInvert -> requireSubtype t (T.Int)
+  E.BoolNot   -> requireSubtype t (T.Bool)
+
+checkFnCall :: Expression -> [Expression] -> TSState Expression
+checkFnCall typedFn typedArgs =
+  let fnType = typeOf typedFn
+      argTypes = map typeOf typedArgs
+  in case fnType of
+      (T.Function argTs retT) ->
+        if length argTs /= length typedArgs
+        then err $ "argument length mismatch"
+        else do
+          _ <- zipWithM requireSubtype argTypes argTs
+          return $ Call retT typedFn typedArgs
+      _ ->
+        err $ "calling value of type " ++ show fnType ++ " as a function"
+
+-- once interfaces exist, replace this with the Num interface
 requireNumeric :: Type -> TSState Type
 requireNumeric t =
-  case t of
-   T.Int   -> return t
-   T.Float -> return t
-   _       -> err $ "Expected a numeric value: " ++ show t
-
-requireVarType :: String -> Type -> TSState Type
-requireVarType var t = do
-  t' <- getFromScope var
-  if t == t'
-    then return t
-    else err $ "type mismatch " ++ show t' ++ " and " ++ show t
-
-valueType :: Value -> TSState Type
-valueType (E.StrVal _)       = return T.String
-valueType (E.BoolVal _)      = return T.Bool
-valueType (E.IntVal _)       = return T.Int
-valueType (E.FloatVal _)     = return T.Float
-valueType (E.StructVal tn f) = do
-  structType <- getFromScope tn
-  -- TODO: require that values for all fields are specified
-  _ <- mapM (checkField structType) f
-  return $ T.TypeName tn
-
-checkField :: Type -> (String, Expression) -> TSState ()
-checkField typ (field, e) = do
-  ftyp <- getFieldType typ field
-  _ <- requireExprType e ftyp
-  return ()
-
-resolveTypeName :: Type -> TSState Type
-resolveTypeName (T.TypeName name) = do
-  t <- getFromScope name
-  resolveTypeName t
-resolveTypeName t                 =
-  return t
+  if t `elem` [T.Int, T.Float]
+  then return t
+  else err $ "Expected a numeric value: " ++ show t
 
 requireEqual :: Type -> Type -> TSState Type
-requireEqual t1 t2 = do
-  if t1 == t2
-    then return t1
-    else err ("Type mismatch between " ++ show t1 ++ " and " ++ show t2)
+requireEqual t1 t2 =
+  if t1 == t2 then return t1
+  else err ("Expected types to be the same: " ++
+            show t1 ++ ", " ++ show t2)
 
 requireSubtype :: Type -> Type -> TSState Type
-requireSubtype sub super =
-  if sub == super
-    then return sub
-    else do
-      supers <- getSupersOf sub
-      -- TODO: rethink this logic.
-      if Set.member super supers
-        then return sub
-        else err (show sub ++ " is not a subtype of " ++ show super)
+requireSubtype sub super = do
+  isSub <- isSubtype super sub
+  if isSub
+  then return sub
+  else err ("can't use a value of type " ++ show sub ++
+            " where a value of type " ++ show super ++ " is expected")
 
+isSubtype :: Type -> Type -> TSState Bool
+isSubtype super sub
+  | sub == super = return True
+  | otherwise    = case sub of
+    (T.TypeName subName) -> do
+      -- not efficient, but that can be fixed later
+      supers <- getSuperTypesOf subName
+      let superList = map T.TypeName $ Set.toAscList supers
+      matches <- mapM (isSubtype super) superList
+      return $ anyTrue matches
+    _ ->
+      -- Right now, there aren't other ways for it to be a subtype
+      return False
 
-getSupersOf :: Type -> TSState (Set Type)
-getSupersOf sub = do
-  (_, subtypes) <- get
-  case Map.lookup sub subtypes of
-    Nothing     -> return Set.empty
-    -- TODO: recurse up for more subtypes
-    (Just sups) -> return sups
+anyTrue :: [Bool] -> Bool
+anyTrue = foldl (||) False
 
-note :: a -> Maybe b -> Either a b
-note msg = maybe (Left msg) Right
+getFieldType :: Type -> String -> TSState Type
+getFieldType typ field = do
+  fieldTypes <- getStructFields typ
+  let errMsg = "field " ++ field ++ " not on type " ++ show typ
+  lift $ note errMsg (lookup field fieldTypes)
+
+getStructFields :: Type -> TSState [(String, Type)]
+getStructFields (T.Struct fields) =
+  return fields
+getStructFields (T.TypeName name) = do
+  t <- getFromScope name
+  getStructFields t
+getStructFields t =
+  err $ "Can't access field on a value of type " ++ show t
+
+mapSnd :: (a -> b) -> [(c, a)] -> [(c, b)]
+mapSnd f = map (\(c, a) -> (c, f a))
+
+mapMSnd :: (Monad m) => (a -> m b) -> [(c, a)] -> m [(c, b)]
+mapMSnd f = mapM f'
+  where f' (c, a) = do
+          b <- f a
+          return (c, b)
