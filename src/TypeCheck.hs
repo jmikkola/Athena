@@ -138,7 +138,7 @@ checkDeclaration d = case d of
    typedE <- exprToTyped expr
    _ <- requireSubtype (typeOf typedE) t
    return $ StmtDecl $ Let name t typedE
- (D.TypeDef name t) ->
+ (D.TypeDef name t) -> do
    typ <- typeDeclToType t
    return $ IR.TypeDecl name typ
 
@@ -159,7 +159,7 @@ typeDeclToType t = case t of
     typedOpts <- mapM convertEnumOption opts
     return $ Type.Enum (zip names typedOpts)
 
-convertEnumOption :: T.EnumOption -> TSState [(String, Type])
+convertEnumOption :: T.EnumOption -> TSState [(String, Type)]
 convertEnumOption fields = do
   let (names, ts) = unzip fields
   types <- mapM typeDeclToType ts
@@ -212,7 +212,7 @@ addDecl (D.TypeDef n t)      =
 checkStatement :: Type -> S.Statement -> TSState Statement
 checkStatement retType stmt = case stmt of
   (S.Return Nothing) -> do
-    _ <- requireSubtype T.Nil retType
+    _ <- requireSubtype Type.Nil retType
     return $ Return Nothing
   (S.Return (Just e)) -> do
     typedE <- exprToTyped e
@@ -238,7 +238,7 @@ checkStatement retType stmt = case stmt of
     return $ Expr typedE
   (S.If test body mElse) -> do
     typedTest <- exprToTyped test
-    _ <- requireSubtype (typeOf typedTest) T.Bool
+    _ <- requireSubtype (typeOf typedTest) Type.Bool
 
     beginScope
     blk <- checkStatement retType (S.Block body)
@@ -253,7 +253,7 @@ checkStatement retType stmt = case stmt of
     return $ If typedTest blk typedElse
   (S.While test body) -> do
     typedTest <- exprToTyped test
-    _ <- requireSubtype (typeOf typedTest) T.Bool
+    _ <- requireSubtype (typeOf typedTest) Type.Bool
 
     beginScope
     blk <- checkStatement retType (S.Block body)
@@ -279,7 +279,7 @@ checkBlock retType stmts = blkStmts stmts []
 returnExpr :: Type -> Maybe E.Expression -> TSState (Maybe Type, Statement)
 returnExpr t rExpr = case rExpr of
   Nothing -> do
-    _ <- requireSubtype T.Nil t
+    _ <- requireSubtype Type.Nil t
     return (Nothing, Return Nothing)
   Just e -> do
     typedE <- exprToTyped e
@@ -340,16 +340,16 @@ binaryReturnType :: E.BinOp -> Type -> TSState Type
 binaryReturnType op t
   | op == E.Plus =
     -- special case "+" because it also works on strings
-    if t `elem` [T.Int, T.Float, T.String]
+    if t `elem` [Type.Int, Type.Float, Type.String]
     then return t
     else err $ "Can't add values of type: " ++ show t
   | op `elem` numericOps = requireNumeric t
-  | op `elem` integerOps = requireSubtype t T.Int
-  | op `elem` booleanOps = requireSubtype t T.Bool
-  | op `elem` compOps    = return T.Bool
+  | op `elem` integerOps = requireSubtype t Type.Int
+  | op `elem` booleanOps = requireSubtype t Type.Bool
+  | op `elem` compOps    = return Type.Bool
   | op `elem` numCompOps = do
       _ <- requireNumeric t
-      return T.Bool
+      return Type.Bool
   | otherwise            = err $ "op missing from list: " ++ show op
 
 numericOps :: [E.BinOp]
@@ -374,8 +374,8 @@ numCompOps =
 
 unaryReturnType :: E.UnaryOp -> Type -> TSState Type
 unaryReturnType op t = case op of
-  E.BitInvert -> requireSubtype t (T.Int)
-  E.BoolNot   -> requireSubtype t (T.Bool)
+  E.BitInvert -> requireSubtype t (Type.Int)
+  E.BoolNot   -> requireSubtype t (Type.Bool)
 
 checkFnCall :: Expression -> [Expression] -> TSState Expression
 checkFnCall typedFn typedArgs =
@@ -394,7 +394,7 @@ checkFnCall typedFn typedArgs =
 -- once interfaces exist, replace this with the Num interface
 requireNumeric :: Type -> TSState Type
 requireNumeric t =
-  if t `elem` [T.Int, T.Float]
+  if t `elem` [Type.Int, Type.Float]
   then return t
   else err $ "Expected a numeric value: " ++ show t
 

@@ -18,3 +18,6 @@ data TypeReference
 
 ref2named :: TypeReference -> Type
 ref2named (Ref name t) = TypeName name t
+
+refname :: TypeReference -> String
+refname (Ref name _) = name

@@ -21,7 +21,7 @@ convertDecl decl = case decl of
         body <- convertBlock stmt'
         return [Syntax.Function name decl' body]
       _ -> do
-        typ' <- convertType typ
+        typ' <- convertType $ T.ref2named typ
         expr' <- convertExpr expr
         return [Syntax.Variable name (Just typ') expr']
     _ ->
@@ -93,7 +93,7 @@ convertStmt stmt = case stmt of
     return [Syntax.Return e']
   IR.Let s t e -> do
     e' <- convertExpr e
-    t' <- convertType t
+    t' <- convertType $ T.ref2named t
     return [ Syntax.VarStmt s (Just t') e',
              Syntax.VarStmt "_" (Just t') (Syntax.Var s)]
   IR.Assign fs e -> do
@@ -121,9 +121,10 @@ convertValue val = case val of
   IR.BoolVal b      -> return $ Syntax.BoolVal b
   IR.IntVal i       -> return $ Syntax.IntVal i
   IR.FloatVal f     -> return $ Syntax.FloatVal f
-  IR.StructVal n fs -> do
+  IR.StructVal tref fs -> do
+    let name = T.refname tref
     fields <- mapMSnd convertExpr fs
-    return $ Syntax.Reference $ Syntax.StructVal n fields
+    return $ Syntax.Reference $ Syntax.StructVal name fields
 
 convertExpr :: IR.Expression -> Result Syntax.Expression
 convertExpr expr = case expr of
@@ -159,7 +160,7 @@ convertExpr expr = case expr of
   IR.Cast t ex
     -> do
       expr' <- convertExpr ex
-      typ <- convertType t
+      typ <- convertType $ T.ref2named t
       return $ Syntax.TypeCast typ expr'
   IR.Var _ n ->
     if n == "print"
@@ -193,8 +194,13 @@ convertType t = case t of
             Syntax.GoVoid -> []
             _             -> [retType]
       return $ Syntax.GoFunc argTypes r
-  T.TypeName name -- TODO: this should either be GoStruct or GoInterface
-    -> return $ Syntax.GoStruct name
+  T.TypeName name actual -> case actual of
+    T.Struct _ ->
+      return $ Syntax.GoStruct name
+    T.Enum _ ->
+      fail "TODO: add a separate enum option type"
+    _ ->
+      fail $ "cannot convert type " ++ show t
   T.Struct _ -> fail "cannot use structure as literal type"
   T.Enum  _ -> fail "cannot use enum as literal type"
 
