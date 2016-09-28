@@ -140,9 +140,30 @@ checkDeclaration d = case d of
    return $ StmtDecl $ Let name t typedE
  (D.TypeDef name t) ->
    typ <- typeDeclToType t
-   return $ T.TypeDecl name typ
+   return $ IR.TypeDecl name typ
 
 typeDeclToType :: T.TypeDecl -> TSState Type
+typeDeclToType t = case t of
+  T.TypeName name ->
+    err $ "TODO: handle defining type aliases - " ++ name
+  T.Function ats rt -> do
+    argTypes <- mapM typeDeclToType ats
+    retType <- typeDeclToType rt
+    return $ Type.Function argTypes retType
+  T.Struct fields -> do
+    let (names, ts) = unzip fields
+    types <- mapM typeDeclToType ts
+    return $ Type.Struct (zip names types)
+  T.Enum options -> do
+    let (names, opts) = unzip options
+    typedOpts <- mapM convertEnumOption opts
+    return $ Type.Enum (zip names typedOpts)
+
+convertEnumOption :: T.EnumOption -> TSState [(String, Type])
+convertEnumOption fields = do
+  let (names, ts) = unzip fields
+  types <- mapM typeDeclToType ts
+  return $ zip names types
 
 requireReturnType :: Type -> S.Statement -> TSState Statement
 requireReturnType retType stmt = do
@@ -154,13 +175,13 @@ requireReturnType retType stmt = do
 getReturnType :: Statement -> TSState Type
 getReturnType stmt =
   case stmt of
-   (Block t _) -> return $ fromMaybe T.Nil t
+   (Block t _) -> return $ fromMaybe Type.Nil t
    (Expr e)    -> return $ typeOf e
    _           -> err "function body must be a block or expression"
 
 defaultScope :: TSState ()
 defaultScope = do
-  setInScope "print" (T.Function [T.String] T.Nil)
+  setInScope "print" (Type.Function [Type.String] Type.Nil)
 
 -- Defines the types of the arguments within the function's scope
 addFuncScope :: [String] -> [Type] -> TSState ()
