@@ -10,8 +10,8 @@ import AST.Expression (Expression, BinOp, UnaryOp, Value)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
 import qualified AST.Statement as S
-import Type (Type)
-import qualified Type as T
+import AST.Type (Type, TypeDecl)
+import qualified AST.Type as T
 
 parseFile :: String -> Either String File
 parseFile content = applyLeft show $ parse fileParser "<input>" content
@@ -65,7 +65,7 @@ typeDeclaration = do
   _ <- any1LinearWhitespace
   name <- typeName
   _ <- any1LinearWhitespace
-  typ <- typeParser
+  typ <- typeDefParser
   return $ D.TypeDef name typ
 
 funcArgDecl :: Parser [(String, Type)]
@@ -434,17 +434,14 @@ unaryOpParser =
 ---- Type parsers ----
 
 typeParser :: Parser Type
-typeParser = enumTypeParser <|> structTypeParser <|> choices types <|> namedType
+typeParser = do
+  name <- string "()" <|> typeName
+  return name -- return $ Type name
 
-types :: [(String, Type)]
-types = [ ("String", T.String)
-        , ("Float", T.Float)
-        , ("Int", T.Int)
-        , ("Bool", T.Bool)
-        , ("()", T.Nil)
-        ]
+typeDefParser :: Parser TypeDef
+typeDefParser = enumTypeParser <|> structTypeParser <|> namedType
 
-enumTypeParser :: Parser Type
+enumTypeParser :: Parser TypeDef
 enumTypeParser = do
   _ <- string "enum"
   _ <- any1LinearWhitespace
@@ -454,7 +451,7 @@ enumTypeParser = do
   _ <- string "}"
   return $ T.Enum options
 
-enumField :: Parser (String, [(String, Type)])
+enumField :: Parser (String, T.EnumOption)
 enumField = do
   name <- typeName
   fields <- optionMaybe $ try $ do
@@ -462,7 +459,7 @@ enumField = do
     structTypeBody
   return (name, unwrapOr fields [])
 
-structTypeParser :: Parser Type
+structTypeParser :: Parser TypeDef
 structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
@@ -484,10 +481,10 @@ structField = do
   typ <- typeParser
   return (name, typ)
 
-namedType :: Parser Type
+namedType :: Parser TypeDecl
 namedType = do
-  name <- typeName
-  return $ T.TypeName name
+  t <- typeParser
+  return $ T.TypeName t
 
 ---- Helper functions ----
 

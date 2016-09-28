@@ -2,12 +2,12 @@ module AST.Declaration where
 
 import AST.Expression (Expression)
 import AST.Statement (Statement)
-import Type (Type)
+import AST.Type (Type, TypeDecl)
 
 data Declaration
   = Let String Type Expression
-  | Function String Type [String] Statement
-  | TypeDef String Type
+  | Function String TypeDecl [String] Statement
+  | TypeDef String TypeDecl
   deriving (Eq, Show)
 
 type File = [Declaration]

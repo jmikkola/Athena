@@ -7,7 +7,11 @@ data Type
   | Bool
   | Nil
   | Function [Type] Type
-  | TypeName String
+  | TypeName String Type -- Right?
   | Struct [(String, Type)]
   | Enum [(String, [(String, Type)])]
+  deriving (Eq, Ord, Show)
+
+data TypeReference
+  = Ref String Type
   deriving (Eq, Ord, Show)

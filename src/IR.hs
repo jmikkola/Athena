@@ -4,7 +4,7 @@ import AST.Expression
   ( UnaryOp (..)
   , BinOp (..)
   )
-import Type (Type)
+import Type (Type, TypeReference)
 import qualified Type as T
 
 data Decl
@@ -15,7 +15,7 @@ data Decl
 data Statement
   = Return (Maybe Expression)
     -- Let handles both variable and function declarations
-  | Let String Type Expression
+  | Let String TypeReference Expression
   | Assign [String] Expression
   | Block (Maybe Type) [Statement]
   | Expr Expression
@@ -31,7 +31,7 @@ data Value
   | BoolVal Bool
   | IntVal Int
   | FloatVal Float
-  | StructVal String [(String, Expression)]
+  | StructVal TypeReference [(String, Expression)]
   deriving (Eq, Show)
 
 instance Typeable Value where
@@ -39,7 +39,8 @@ instance Typeable Value where
   typeOf (BoolVal _)     = T.Bool
   typeOf (IntVal _)      = T.Int
   typeOf (FloatVal _)    = T.Float
-  typeOf (StructVal n _) = T.TypeName n
+  typeOf (StructVal t _) =
+    let Ref _ typ = t in T.TypeName n
 
 data Expression
   = Paren Expression Type
@@ -47,7 +48,7 @@ data Expression
   | Unary Type UnaryOp Expression
   | Binary Type BinOp Expression Expression
   | Call Type Expression [Expression]
-  | Cast Type Expression
+  | Cast TypeReference Expression
   | Var Type String
   | Access Type Expression String
   | Lambda Type [String] Statement

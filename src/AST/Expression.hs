@@ -1,6 +1,6 @@
 module AST.Expression where
 
-import Type (Type)
+import AST.Type (Type)
 
 data Value
   = StrVal String

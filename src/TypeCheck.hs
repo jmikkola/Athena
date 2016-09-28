@@ -12,8 +12,9 @@ import IR
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
+import qualified AST.Type as T
+import Type
 import Type (Type)
-import qualified Type as T
 
 type TypeName = String
 
@@ -138,7 +139,10 @@ checkDeclaration d = case d of
    _ <- requireSubtype (typeOf typedE) t
    return $ StmtDecl $ Let name t typedE
  (D.TypeDef name t) ->
-   return $ TypeDecl name t
+   typ <- typeDeclToType t
+   return $ T.TypeDecl name typ
+
+typeDeclToType :: T.TypeDecl -> TSState Type
 
 requireReturnType :: Type -> S.Statement -> TSState Statement
 requireReturnType retType stmt = do

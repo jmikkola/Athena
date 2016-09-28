@@ -55,6 +55,7 @@ executable athena
                 AST.Declaration,
                 AST.Expression,
                 AST.Statement,
+                AST.Type,
                 Backends.Go.Convert,
                 Backends.Go.Emit,
                 Backends.Go.Syntax,
