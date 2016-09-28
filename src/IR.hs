@@ -39,8 +39,7 @@ instance Typeable Value where
   typeOf (BoolVal _)     = T.Bool
   typeOf (IntVal _)      = T.Int
   typeOf (FloatVal _)    = T.Float
-  typeOf (StructVal t _) =
-    let Ref _ typ = t in T.TypeName n
+  typeOf (StructVal t _) = T.ref2named t
 
 data Expression
   = Paren Expression Type
@@ -60,7 +59,7 @@ instance Typeable Expression where
   typeOf (Unary t _ _)    = t
   typeOf (Binary t _ _ _) = t
   typeOf (Call t _ _)     = t
-  typeOf (Cast t _)       = t
+  typeOf (Cast t _)       = T.ref2named t
   typeOf (Var t _)        = t
   typeOf (Access t _ _)   = t
   typeOf (Lambda t _ _)   = t

@@ -15,3 +15,6 @@ data Type
 data TypeReference
   = Ref String Type
   deriving (Eq, Ord, Show)
+
+ref2named :: TypeReference -> Type
+ref2named (Ref name t) = TypeName name t
