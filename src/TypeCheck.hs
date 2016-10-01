@@ -14,7 +14,6 @@ import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Type as T
 import Type
-import Type (Type)
 
 type TypeName = String
 
@@ -123,9 +122,12 @@ checkFileM file = do
 checkDeclaration :: D.Declaration -> TSState Decl
 checkDeclaration d = case d of
  (D.Function name t args body) -> do
-   (argTypes, retType) <- case t of
-     (T.Function ats rt) -> return (ats, rt)
-     _                   -> err $ "function with non-function type: " ++ show t
+   typ <- typeDeclToType t
+   (argTypes, retType) <- case typ of
+     (Function ats rt) ->
+       return (ats, rt)
+     _                 ->
+       err $ "function with non-function type: " ++ show t
    if length argTypes /= length args
      then err "arg length mismatch in declaration"
      else return ()
@@ -133,11 +135,12 @@ checkDeclaration d = case d of
    addFuncScope args argTypes
    typedBody <- requireReturnType retType body
    endScope
-   return $ StmtDecl $ Let name t $ Lambda t args typedBody
+   return $ StmtDecl $ Let name typ $ Lambda typ args typedBody
  (D.Let name t expr) -> do
    typedE <- exprToTyped expr
-   _ <- requireSubtype (typeOf typedE) t
-   return $ StmtDecl $ Let name t typedE
+   typ <- getFromScope t
+   _ <- requireSubtype (typeOf typedE) typ
+   return $ StmtDecl $ Let name typ typedE
  (D.TypeDef name t) -> do
    typ <- typeDeclToType t
    return $ IR.TypeDecl name typ
@@ -197,17 +200,22 @@ buildFileScope file = do
   return ()
 
 addDecl :: D.Declaration -> TSState ()
-addDecl (D.Let n t _)        = setInScope n t
-addDecl (D.Function n t _ _) = setInScope n t
-addDecl (D.TypeDef n t)      =
-  case t of
-   (T.Enum options) -> do
-     setInScope n t
-     _ <- mapM (\(name, _) -> addSubtype name n) options
-     _ <- mapM (\(name, fields) -> setInScope name (T.Struct fields)) options
-     return ()
-   _                -> do
-     setInScope n t
+addDecl (D.Let n t _)        = do
+  typ <- getFromScope t
+  setInScope n typ
+addDecl (D.Function n t _ _) = do
+  typ <- typeDeclToType t
+  setInScope n typ
+addDecl (D.TypeDef n t) = do
+  typ <- typeDeclToType t
+  case typ of
+    (Enum options) -> do
+      setInScope n typ
+      _ <- mapM (\(name, _) -> addSubtype name n) options
+      _ <- mapM (\(name, fields) -> setInScope name (Struct fields)) options
+      return ()
+    _                ->
+      setInScope n typ
 
 checkStatement :: Type -> S.Statement -> TSState Statement
 checkStatement retType stmt = case stmt of
@@ -219,10 +227,11 @@ checkStatement retType stmt = case stmt of
     _ <- requireSubtype (typeOf typedE) retType
     return $ Return (Just typedE)
   (S.Let name t e) -> do
-    setInScope name t
+    typ <- getFromScope t
+    setInScope name typ
     typedE <- exprToTyped e
-    _ <- requireSubtype (typeOf typedE) t
-    return $ Let name t typedE
+    _ <- requireSubtype (typeOf typedE) typ
+    return $ Let name typ typedE
   (S.Assign names e) -> do
     t <- getAssignType names
     typedE <- exprToTyped e
@@ -300,7 +309,13 @@ valToTyped (E.IntVal i)       = return $ IntVal i
 valToTyped (E.FloatVal f)     = return $ FloatVal f
 valToTyped (E.StructVal s fs) = do
   fs' <- mapMSnd exprToTyped fs
-  return $ StructVal s fs'
+  tref <- getTypeRef s
+  return $ StructVal tref fs'
+
+getTypeRef :: String -> TSState TypeReference
+getTypeRef name = do
+  typ <- getFromScope name
+  return $ Ref name typ
 
 exprToTyped :: E.Expression -> TSState Expression
 exprToTyped e = case e of
@@ -327,7 +342,8 @@ exprToTyped e = case e of
    checkFnCall typedFn typedArgs
  (E.Cast t e') -> do
    innerExpr <- exprToTyped e'
-   return $ Cast t innerExpr
+   ref <- getTypeRef t
+   return $ Cast ref innerExpr
  (E.Var name) -> do
    t <- getFromScope name
    return $ Var t name
@@ -382,7 +398,7 @@ checkFnCall typedFn typedArgs =
   let fnType = typeOf typedFn
       argTypes = map typeOf typedArgs
   in case fnType of
-      (T.Function argTs retT) ->
+      (Function argTs retT) ->
         if length argTs /= length typedArgs
         then err $ "argument length mismatch"
         else do
@@ -416,10 +432,10 @@ isSubtype :: Type -> Type -> TSState Bool
 isSubtype super sub
   | sub == super = return True
   | otherwise    = case sub of
-    (T.TypeName subName) -> do
+    (TypeName subName _) -> do
       -- not efficient, but that can be fixed later
       supers <- getSuperTypesOf subName
-      let superList = map T.TypeName $ Set.toAscList supers
+      superList <- mapM (\name -> do {typ <- getFromScope name; return $ TypeName name typ}) (Set.toAscList supers)
       matches <- mapM (isSubtype super) superList
       return $ anyTrue matches
     _ ->
@@ -436,11 +452,10 @@ getFieldType typ field = do
   lift $ note errMsg (lookup field fieldTypes)
 
 getStructFields :: Type -> TSState [(String, Type)]
-getStructFields (T.Struct fields) =
+getStructFields (Struct fields) =
   return fields
-getStructFields (T.TypeName name) = do
-  t <- getFromScope name
-  getStructFields t
+getStructFields (TypeName _ typ) =
+  getStructFields typ
 getStructFields t =
   err $ "Can't access field on a value of type " ++ show t
 

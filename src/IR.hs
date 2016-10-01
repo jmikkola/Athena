@@ -15,7 +15,7 @@ data Decl
 data Statement
   = Return (Maybe Expression)
     -- Let handles both variable and function declarations
-  | Let String TypeReference Expression
+  | Let String Type Expression
   | Assign [String] Expression
   | Block (Maybe Type) [Statement]
   | Expr Expression

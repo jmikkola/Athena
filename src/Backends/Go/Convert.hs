@@ -21,7 +21,7 @@ convertDecl decl = case decl of
         body <- convertBlock stmt'
         return [Syntax.Function name decl' body]
       _ -> do
-        typ' <- convertType $ T.ref2named typ
+        typ' <- convertType typ
         expr' <- convertExpr expr
         return [Syntax.Variable name (Just typ') expr']
     _ ->
@@ -93,7 +93,7 @@ convertStmt stmt = case stmt of
     return [Syntax.Return e']
   IR.Let s t e -> do
     e' <- convertExpr e
-    t' <- convertType $ T.ref2named t
+    t' <- convertType t
     return [ Syntax.VarStmt s (Just t') e',
              Syntax.VarStmt "_" (Just t') (Syntax.Var s)]
   IR.Assign fs e -> do

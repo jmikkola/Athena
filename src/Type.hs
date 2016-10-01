@@ -1,5 +1,6 @@
 module Type where
 
+-- Idea: Just include the names directly in all types?
 data Type
   = String
   | Float
