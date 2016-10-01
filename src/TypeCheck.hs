@@ -153,8 +153,7 @@ typeDeclToType tname t = case t of
     "Float" -> return Type.Float
     "Int" -> return Type.Int
     "Bool" -> return Type.Bool
-    _ ->
-      err $ "TODO: handle defining type aliases - " ++ name
+    _ -> getFromScope name
   T.Function ats rt -> do
     argTypes <- mapM (typeDeclToType "") ats
     retType <- typeDeclToType "" rt
