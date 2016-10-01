@@ -56,7 +56,7 @@ funcDeclaration = do
     _ <- any1LinearWhitespace
     return typ
   body <- blockStatement
-  let typ = T.Function (map snd args) (unwrapOr retType T.Nil)
+  let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
   return $ D.Function name typ (map fst args) body
 
 typeDeclaration :: Parser Declaration
@@ -431,17 +431,19 @@ unaryOpParser =
   choices [ ("~", E.BitInvert)
           , ("!", E.BoolNot) ]
 
----- Type parsers ----
+---- AST.Type parsers ----
+
+nilType = T.TypeName "()"
 
 typeParser :: Parser Type
 typeParser = do
   name <- string "()" <|> typeName
   return name -- return $ Type name
 
-typeDefParser :: Parser TypeDef
+typeDefParser :: Parser TypeDecl
 typeDefParser = enumTypeParser <|> structTypeParser <|> namedType
 
-enumTypeParser :: Parser TypeDef
+enumTypeParser :: Parser TypeDecl
 enumTypeParser = do
   _ <- string "enum"
   _ <- any1LinearWhitespace
@@ -459,14 +461,14 @@ enumField = do
     structTypeBody
   return (name, unwrapOr fields [])
 
-structTypeParser :: Parser TypeDef
+structTypeParser :: Parser TypeDecl
 structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
   fields <- structTypeBody
   return $ T.Struct fields
 
-structTypeBody :: Parser [(String, Type)]
+structTypeBody :: Parser [(String, TypeDecl)]
 structTypeBody = do
   _ <- string "{"
   _ <- statementSep
@@ -474,12 +476,12 @@ structTypeBody = do
   _ <- string "}"
   return fields
 
-structField :: Parser (String, Type)
+structField :: Parser (String, TypeDecl)
 structField = do
   name <- valueName
   _ <- any1LinearWhitespace
   typ <- typeParser
-  return (name, typ)
+  return (name, T.TypeName typ)
 
 namedType :: Parser TypeDecl
 namedType = do
