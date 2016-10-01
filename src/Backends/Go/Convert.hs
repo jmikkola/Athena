@@ -27,11 +27,11 @@ convertDecl decl = case decl of
     _ ->
       fail $ "cannot convert `" ++ show stmt ++ "` to a module-level declaration"
   IR.TypeDecl name typ -> case typ of
-    T.Struct fields -> do
+    T.Struct _ fields -> do
       fields' <- mapMSnd convertType fields
       stringMethod <- makeStringMethod name fields'
       return [Syntax.Structure name fields', stringMethod]
-    T.Enum options -> do
+    T.Enum _ options -> do
       structures <- makeStructures name options
       let iface = Syntax.Interface name [(enumMethodName name, enumTagMethodDecl)]
       return $ iface : structures
@@ -121,8 +121,8 @@ convertValue val = case val of
   IR.BoolVal b      -> return $ Syntax.BoolVal b
   IR.IntVal i       -> return $ Syntax.IntVal i
   IR.FloatVal f     -> return $ Syntax.FloatVal f
-  IR.StructVal tref fs -> do
-    let name = T.refname tref
+  IR.StructVal t fs -> do
+    let name = T.name t
     fields <- mapMSnd convertExpr fs
     return $ Syntax.Reference $ Syntax.StructVal name fields
 
@@ -160,7 +160,7 @@ convertExpr expr = case expr of
   IR.Cast t ex
     -> do
       expr' <- convertExpr ex
-      typ <- convertType $ T.ref2named t
+      typ <- convertType t
       return $ Syntax.TypeCast typ expr'
   IR.Var _ n ->
     if n == "print"
@@ -194,15 +194,11 @@ convertType t = case t of
             Syntax.GoVoid -> []
             _             -> [retType]
       return $ Syntax.GoFunc argTypes r
-  T.TypeName name actual -> case actual of
-    T.Struct _ ->
-      return $ Syntax.GoStruct name
-    T.Enum _ ->
-      fail "TODO: add a separate enum option type"
-    _ ->
-      fail $ "cannot convert type " ++ show t
-  T.Struct _ -> fail "cannot use structure as literal type"
-  T.Enum  _ -> fail "cannot use enum as literal type"
+
+  T.Struct n _ ->
+    return $ Syntax.GoStruct n
+  T.Enum n _ ->
+    return $ Syntax.GoInterface n
 
 converUnaryOp :: E.UnaryOp -> Result Syntax.UnaryOp
 converUnaryOp E.BitInvert

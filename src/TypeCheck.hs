@@ -320,13 +320,8 @@ valToTyped (E.IntVal i)       = return $ IntVal i
 valToTyped (E.FloatVal f)     = return $ FloatVal f
 valToTyped (E.StructVal s fs) = do
   fs' <- mapMSnd exprToTyped fs
-  tref <- getTypeRef s
-  return $ StructVal tref fs'
-
-getTypeRef :: String -> TSState TypeReference
-getTypeRef name = do
-  typ <- getFromScope name
-  return $ Ref name typ
+  typ <- getFromScope s
+  return $ StructVal typ fs'
 
 exprToTyped :: E.Expression -> TSState Expression
 exprToTyped e = case e of
@@ -353,8 +348,8 @@ exprToTyped e = case e of
    checkFnCall typedFn typedArgs
  (E.Cast t e') -> do
    innerExpr <- exprToTyped e'
-   ref <- getTypeRef t
-   return $ Cast ref innerExpr
+   typ <- typeDeclToType t
+   return $ Cast typ innerExpr
  (E.Var name) -> do
    t <- getFromScope name
    return $ Var t name
@@ -442,16 +437,13 @@ requireSubtype sub super = do
 isSubtype :: Type -> Type -> TSState Bool
 isSubtype super sub
   | sub == super = return True
-  | otherwise    = case sub of
-    (TypeName subName _) -> do
-      -- not efficient, but that can be fixed later
+  | otherwise    = do
+    -- not efficient, but that can be fixed later
+      let subName = Type.name sub
       supers <- getSuperTypesOf subName
-      superList <- mapM (\name -> do {typ <- getFromScope name; return $ TypeName name typ}) (Set.toAscList supers)
+      superList <- mapM getFromScope (Set.toAscList supers)
       matches <- mapM (isSubtype super) superList
       return $ anyTrue matches
-    _ ->
-      -- Right now, there aren't other ways for it to be a subtype
-      return False
 
 anyTrue :: [Bool] -> Bool
 anyTrue = foldl (||) False
@@ -465,8 +457,6 @@ getFieldType typ field = do
 getStructFields :: Type -> TSState [(String, Type)]
 getStructFields (Struct fields) =
   return fields
-getStructFields (TypeName _ typ) =
-  getStructFields typ
 getStructFields t =
   err $ "Can't access field on a value of type " ++ show t
 

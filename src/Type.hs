@@ -1,6 +1,7 @@
 module Type where
 
--- Idea: Just include the names directly in all types?
+import Data.List (intercalate)
+
 data Type
   = String
   | Float
@@ -8,17 +9,17 @@ data Type
   | Bool
   | Nil
   | Function [Type] Type
-  | TypeName String Type -- Right?
-  | Struct [(String, Type)]
-  | Enum [(String, [(String, Type)])]
+  | Struct String [(String, Type)]
+  | Enum String [(String, [(String, Type)])]
   deriving (Eq, Ord, Show)
 
-data TypeReference
-  = Ref String Type
-  deriving (Eq, Ord, Show)
-
-ref2named :: TypeReference -> Type
-ref2named (Ref name t) = TypeName name t
-
-refname :: TypeReference -> String
-refname (Ref name _) = name
+name :: Type -> String
+name t = case t of
+  String -> "String"
+  Float -> "Float"
+  Int -> "Int"
+  Bool -> "Bool"
+  Nil -> "()"
+  Function ats rt -> "Function(" ++ (intercalate "," $ map name ats) ++ ")" ++ name rt
+  Struct n _ -> n
+  Enum n _ -> n
