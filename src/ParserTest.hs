@@ -8,7 +8,7 @@ import Text.Parsec.String (Parser)
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
-import qualified Type as T
+import qualified AST.Type as T
 import Parser
 
 testMain :: IO ()
@@ -17,6 +17,15 @@ testMain = do
   let passCount = length [p | p <- passing, p]
   let totalCount = length passing
   putStrLn $ show passCount ++ "/" ++ show totalCount ++ " tests passed"
+
+boolT :: T.TypeDecl
+boolT = T.TypeName "Bool"
+intT :: T.TypeDecl
+intT = T.TypeName "Int"
+stringT :: T.TypeDecl
+stringT = T.TypeName "String"
+nilT :: T.TypeDecl
+nilT = T.TypeName "()"
 
 tests :: [IO Bool]
 tests =
@@ -28,7 +37,7 @@ tests =
   , expectParses expressionParser "f(a)" (E.Call (E.Var "f") [E.Var "a"])
   , expectParses expressionParser "f(a, b , c )"
     (E.Call (E.Var "f") [E.Var "a", E.Var "b", E.Var "c"])
-  , expectParses expressionParser "Bool(a)" (E.Cast T.Bool (E.Var "a"))
+  , expectParses expressionParser "Bool(a)" (E.Cast "Bool" (E.Var "a"))
   , expectParses expressionParser "(2 + 3)"
     (E.Paren (E.Binary E.Plus (E.Val (E.IntVal 2)) (E.Val (E.IntVal 3))))
   , expectParses expressionParser "Point{\nx: 123,\ny: 45, \n}"
@@ -54,9 +63,9 @@ tests =
     (E.Binary E.BoolAnd
      (E.Binary E.Eq (E.Val (E.IntVal 1)) (E.Val (E.IntVal 1)))
      (E.Binary E.Less (E.Val (E.IntVal 2)) (E.Val (E.IntVal 3))))
-  , expectParses typeParser "Int" T.Int
-  , expectParses typeParser "struct {\n  a  Int\nb String\n}"
-    (T.Struct [("a", T.Int), ("b", T.String)])
+  , expectParses typeParser "Int" "Int"
+  , expectParses typeDefParser "struct {\n  a  Int\nb String\n}"
+    (T.Struct [("a", intT), ("b", stringT)])
   , testEnumType
   , testEnumType2
 
@@ -78,13 +87,13 @@ tests =
   , expectParses statementParser "{\n{\n}\n{\n}\n}"
     (S.Block [S.Block [], S.Block []])
   , expectParses statementParser "let a123 Bool = True"
-    (S.Let "a123" T.Bool (E.Val $ E.BoolVal True))
+    (S.Let "a123" "Bool" (E.Val $ E.BoolVal True))
   , expectParses statementParser "a.b.c = True"
     (S.Assign ["a", "b", "c"] (E.Val $ E.BoolVal True))
   , expectParses statementParser "print(c)"
     (S.Expr $ E.Call (E.Var "print") [(E.Var "c")])
   , expectParses letStatement "let int Int = 5 + (2 * 10) / 3 % 4"
-    (S.Let "int" T.Int (E.Binary E.Plus
+    (S.Let "int" "Int" (E.Binary E.Plus
                         (E.Val (E.IntVal 5))
                         (E.Binary E.Divide (E.Paren
                                              (E.Binary E.Times
@@ -108,21 +117,21 @@ tests =
 testEnumType :: IO Bool
 testEnumType =
   let text = "enum {\n Cons {\n item Int \n next List \n } \n End \n }"
-      expected = T.Enum [ ("Cons", [("item", T.Int), ("next", T.TypeName "List")])
+      expected = T.Enum [ ("Cons", [("item", intT), ("next", T.TypeName "List")])
                         , ("End", []) ]
-  in expectParses typeParser text expected
+  in expectParses typeDefParser text expected
 
 testEnumType2 :: IO Bool
 testEnumType2 =
   let text = "enum {\n TInt\n TFloat \n }"
       expected = T.Enum [ ("TInt", [])
                         , ("TFloat", []) ]
-  in expectParses typeParser text expected
+  in expectParses typeDefParser text expected
 
 testParsingBlock :: IO Bool
 testParsingBlock =
   let text = "{\n  let a1 Bool = True \n  return a1  \n }"
-      expected = S.Block [ S.Let "a1" T.Bool (E.Val $ E.BoolVal True)
+      expected = S.Block [ S.Let "a1" "Bool" (E.Val $ E.BoolVal True)
                          , S.Return (Just $ E.Var "a1")
                          ]
   in expectParses statementParser text expected
@@ -138,20 +147,20 @@ testParsingIf =
 testParsingFunc :: IO Bool
 testParsingFunc =
   let text = "fn main() {\n}"
-      expected = D.Function "main" (T.Function [] T.Nil) [] (S.Block [])
+      expected = D.Function "main" (T.Function [] nilT) [] (S.Block [])
   in expectParses declarationParser text expected
 
 testParsingFunc2 :: IO Bool
 testParsingFunc2 =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
-      fnType = T.Function [T.Int, T.Bool] T.Bool
+      fnType = T.Function [intT, boolT] boolT
       expected = D.Function "main" fnType ["a", "b"] (S.Block [])
   in expectParses declarationParser text expected
 
 testParsingTypeDecl :: IO Bool
 testParsingTypeDecl =
   let text = "type Foo struct {\n  asdf Int\n  xyz Foo\n}"
-      declaredType = T.Struct [("asdf", T.Int), ("xyz", T.TypeName "Foo")]
+      declaredType = T.Struct [("asdf", intT), ("xyz", T.TypeName "Foo")]
       expected = D.TypeDef "Foo" declaredType
   in expectParses declarationParser text expected
 

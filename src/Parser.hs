@@ -433,6 +433,7 @@ unaryOpParser =
 
 ---- AST.Type parsers ----
 
+nilType :: TypeDecl
 nilType = T.TypeName "()"
 
 typeParser :: Parser Type
