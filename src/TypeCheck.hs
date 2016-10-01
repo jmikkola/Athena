@@ -147,8 +147,14 @@ checkDeclaration d = case d of
 
 typeDeclToType :: T.TypeDecl -> TSState Type
 typeDeclToType t = case t of
-  T.TypeName name ->
-    err $ "TODO: handle defining type aliases - " ++ name
+  T.TypeName name -> case name of
+    "()" -> return Type.Nil
+    "String" -> return Type.String
+    "Float" -> return Type.Float
+    "Int" -> return Type.Int
+    "Bool" -> return Type.Bool
+    _ ->
+      err $ "TODO: handle defining type aliases - " ++ name
   T.Function ats rt -> do
     argTypes <- mapM typeDeclToType ats
     retType <- typeDeclToType rt
@@ -185,6 +191,11 @@ getReturnType stmt =
 defaultScope :: TSState ()
 defaultScope = do
   setInScope "print" (Type.Function [Type.String] Type.Nil)
+  setInScope "()" Type.Nil
+  setInScope "String" Type.String
+  setInScope "Float" Type.Float
+  setInScope "Int" Type.Int
+  setInScope "Bool" Type.Bool
 
 -- Defines the types of the arguments within the function's scope
 addFuncScope :: [String] -> [Type] -> TSState ()
