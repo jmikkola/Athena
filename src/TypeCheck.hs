@@ -216,6 +216,7 @@ addDecl (D.Let n t _)        = do
 addDecl (D.Function n t _ _) = do
   typ <- typeDeclToType "" t
   setInScope n typ
+-- TODO: allow types to references themselves
 addDecl (D.TypeDef n t) = do
   typ <- typeDeclToType n t
   case typ of

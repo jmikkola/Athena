@@ -1,0 +1,10 @@
+type Color enum {
+  Red
+  Blue
+  Green
+}
+
+fn main() {
+  let a Color = Red{}
+  print(String(a))
+}
