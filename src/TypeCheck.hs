@@ -122,7 +122,7 @@ checkFileM file = do
 checkDeclaration :: D.Declaration -> TSState Decl
 checkDeclaration d = case d of
  (D.Function name t args body) -> do
-   typ <- typeDeclToType t
+   typ <- typeDeclToType "" t
    (argTypes, retType) <- case typ of
      (Function ats rt) ->
        return (ats, rt)
@@ -142,11 +142,11 @@ checkDeclaration d = case d of
    _ <- requireSubtype (typeOf typedE) typ
    return $ StmtDecl $ Let name typ typedE
  (D.TypeDef name t) -> do
-   typ <- typeDeclToType t
+   typ <- typeDeclToType name t
    return $ IR.TypeDecl name typ
 
-typeDeclToType :: T.TypeDecl -> TSState Type
-typeDeclToType t = case t of
+typeDeclToType :: String -> T.TypeDecl -> TSState Type
+typeDeclToType tname t = case t of
   T.TypeName name -> case name of
     "()" -> return Type.Nil
     "String" -> return Type.String
@@ -156,22 +156,22 @@ typeDeclToType t = case t of
     _ ->
       err $ "TODO: handle defining type aliases - " ++ name
   T.Function ats rt -> do
-    argTypes <- mapM typeDeclToType ats
-    retType <- typeDeclToType rt
+    argTypes <- mapM (typeDeclToType "") ats
+    retType <- typeDeclToType "" rt
     return $ Type.Function argTypes retType
   T.Struct fields -> do
-    let (names, ts) = unzip fields
-    types <- mapM typeDeclToType ts
-    return $ Type.Struct (zip names types)
+    types <- mapM (\(name, ty) -> typeDeclToType name ty) fields
+    let names = map fst fields
+    return $ Type.Struct tname (zip names types)
   T.Enum options -> do
     let (names, opts) = unzip options
     typedOpts <- mapM convertEnumOption opts
-    return $ Type.Enum (zip names typedOpts)
+    return $ Type.Enum tname (zip names typedOpts)
 
 convertEnumOption :: T.EnumOption -> TSState [(String, Type)]
 convertEnumOption fields = do
-  let (names, ts) = unzip fields
-  types <- mapM typeDeclToType ts
+  types <- mapM (\(name, t) -> typeDeclToType name t) fields
+  let names = map fst fields
   return $ zip names types
 
 requireReturnType :: Type -> S.Statement -> TSState Statement
@@ -215,15 +215,15 @@ addDecl (D.Let n t _)        = do
   typ <- getFromScope t
   setInScope n typ
 addDecl (D.Function n t _ _) = do
-  typ <- typeDeclToType t
+  typ <- typeDeclToType "" t
   setInScope n typ
 addDecl (D.TypeDef n t) = do
-  typ <- typeDeclToType t
+  typ <- typeDeclToType n t
   case typ of
-    (Enum options) -> do
+    (Enum _ options) -> do
       setInScope n typ
       _ <- mapM (\(name, _) -> addSubtype name n) options
-      _ <- mapM (\(name, fields) -> setInScope name (Struct fields)) options
+      _ <- mapM (\(name, fields) -> setInScope name (Struct name fields)) options
       return ()
     _                ->
       setInScope n typ
@@ -348,7 +348,7 @@ exprToTyped e = case e of
    checkFnCall typedFn typedArgs
  (E.Cast t e') -> do
    innerExpr <- exprToTyped e'
-   typ <- typeDeclToType t
+   typ <- getFromScope t
    return $ Cast typ innerExpr
  (E.Var name) -> do
    t <- getFromScope name
@@ -439,7 +439,7 @@ isSubtype super sub
   | sub == super = return True
   | otherwise    = do
     -- not efficient, but that can be fixed later
-      let subName = Type.name sub
+      let subName = Type.nameOf sub
       supers <- getSuperTypesOf subName
       superList <- mapM getFromScope (Set.toAscList supers)
       matches <- mapM (isSubtype super) superList
@@ -455,7 +455,7 @@ getFieldType typ field = do
   lift $ note errMsg (lookup field fieldTypes)
 
 getStructFields :: Type -> TSState [(String, Type)]
-getStructFields (Struct fields) =
+getStructFields (Struct _ fields) =
   return fields
 getStructFields t =
   err $ "Can't access field on a value of type " ++ show t

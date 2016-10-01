@@ -122,7 +122,7 @@ convertValue val = case val of
   IR.IntVal i       -> return $ Syntax.IntVal i
   IR.FloatVal f     -> return $ Syntax.FloatVal f
   IR.StructVal t fs -> do
-    let name = T.name t
+    let name = T.nameOf t
     fields <- mapMSnd convertExpr fs
     return $ Syntax.Reference $ Syntax.StructVal name fields
 

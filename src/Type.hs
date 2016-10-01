@@ -13,13 +13,14 @@ data Type
   | Enum String [(String, [(String, Type)])]
   deriving (Eq, Ord, Show)
 
-name :: Type -> String
-name t = case t of
+nameOf :: Type -> String
+nameOf t = case t of
   String -> "String"
   Float -> "Float"
   Int -> "Int"
   Bool -> "Bool"
   Nil -> "()"
-  Function ats rt -> "Function(" ++ (intercalate "," $ map name ats) ++ ")" ++ name rt
+  Function ats rt ->
+    "Function(" ++ (intercalate "," $ map nameOf ats) ++ ")" ++ nameOf rt
   Struct n _ -> n
   Enum n _ -> n
