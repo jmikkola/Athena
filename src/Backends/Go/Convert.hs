@@ -27,13 +27,13 @@ convertDecl decl = case decl of
     _ ->
       fail $ "cannot convert `" ++ show stmt ++ "` to a module-level declaration"
   IR.TypeDecl name typ -> case typ of
-    T.Struct _ fields -> do
+    T.Struct tname fields -> do
       fields' <- mapMSnd convertType fields
-      stringMethod <- makeStringMethod name fields'
-      return [Syntax.Structure name fields', stringMethod]
-    T.Enum _ options -> do
-      structures <- makeStructures name options
-      let iface = Syntax.Interface name [(enumMethodName name, enumTagMethodDecl)]
+      stringMethod <- makeStringMethod tname fields'
+      return [Syntax.Structure tname fields', stringMethod]
+    T.Enum tname options -> do
+      structures <- makeStructures tname options
+      let iface = Syntax.Interface tname [(enumMethodName tname, enumTagMethodDecl)]
       return $ iface : structures
     _ ->
       fail $ "cannot emit declaration for " ++ show typ
@@ -43,7 +43,8 @@ makeStringMethod structName fields =
   let fieldNames = map fst fields
       decl = Syntax.FunctionDecl [] [Syntax.JustType $ Syntax.GoString]
       sprintf = Syntax.FieldAccess (Syntax.Var "fmt") "Sprintf"
-      format = Syntax.StrVal $ concatMap (++ ": %v,\n") fieldNames
+      formatStr = structName ++ "{" ++ (concatMap (++ ": %v,") fieldNames) ++ "}"
+      format = Syntax.StrVal formatStr
       values = map (Syntax.FieldAccess (Syntax.Var "self")) fieldNames
       printExpr = Syntax.Call sprintf (format : values)
       printStmt = Syntax.Return printExpr
@@ -62,10 +63,10 @@ makeStructures name options = (liftM concat) (mapM (makeStructure name) options)
 makeStructure :: String -> (String, [(String, T.Type)]) -> Result [Syntax.Declaration]
 makeStructure name (optName, fields) = do
   fields' <- mapMSnd convertType fields
-  strMethod <- makeStringMethod name fields'
+  strMethod <- makeStringMethod optName fields'
   let structDef = Syntax.Structure optName fields'
-  let recvType = Syntax.TypeName name
-  let methodDef = Syntax.Method ("self", recvType) (enumMethodName optName)
+  let recvType = Syntax.TypeName optName
+  let methodDef = Syntax.Method ("self", recvType) (enumMethodName name)
                   enumTagMethodDecl (Syntax.Block [])
   return [structDef, methodDef, strMethod]
 

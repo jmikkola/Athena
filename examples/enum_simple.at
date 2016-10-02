@@ -4,7 +4,20 @@ type Color enum {
   Green
 }
 
+type Channel struct {
+  color Color
+  value Int
+}
+
 fn main() {
-  let a Color = Red{}
+  let a Color = Red{
+  }
+  a = Blue{
+  }
+  let c Channel = Channel{
+    color: a,
+    value: 123,
+  }
   print(String(a))
+  print(String(c))
 }
