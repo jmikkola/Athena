@@ -216,17 +216,32 @@ addDecl (D.Let n t _)        = do
 addDecl (D.Function n t _ _) = do
   typ <- typeDeclToType "" t
   setInScope n typ
--- TODO: allow types to references themselves
 addDecl (D.TypeDef n t) = do
-  typ <- typeDeclToType n t
-  case typ of
-    (Enum _ options) -> do
-      setInScope n typ
-      _ <- mapM (\(name, _) -> addSubtype name n) options
-      _ <- mapM (\(name, fields) -> setInScope name (Struct name fields)) options
+  scopes <- getTypeScope
+  subtypes <- getSubtypes
+  let (typ, scopes', subtypes', err) =
+        case evalStateT (addTypeToState n t typ) (scopes, subtypes) of
+         Left err ->
+           (Type.Nil, [], Map.empty, Just err)
+         Right (typ, scs, subs) ->
+           (typ,      scs, subs,     Nothing)
+  case err of
+   Nothing -> put (scopes', subtypes')
+   Just e  -> fail e
+
+addTypeToState :: String -> T.TypeDecl -> Type -> TSState (Type, TypeScope, Subtypes)
+addTypeToState name t typ = do
+  setInScope name typ
+  typ' <- typeDeclToType name t
+  case typ' of
+   (Enum _ options) -> do
+      _ <- mapM (\(n, _) -> addSubtype n name) options
+      _ <- mapM (\(n, fields) -> setInScope n (Struct n fields)) options
       return ()
-    _                ->
-      setInScope n typ
+   _ -> return ()
+  scopes <- getTypeScope
+  subtypes <- getSubtypes
+  return (typ', scopes, subtypes)
 
 checkStatement :: Type -> S.Statement -> TSState Statement
 checkStatement retType stmt = case stmt of
