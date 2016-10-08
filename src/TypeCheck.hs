@@ -20,9 +20,6 @@ import Type
 type TypeName = String
 
 type Result = Either String
--- Entries in a Scope have a double-meaning:
---  - lowercase names map to the type of the value
---  - uppercae names map to the type bound to that name
 type Scope = Map String TypeRef
 type TypeScope = [Scope]
 type Subtypes = Map TypeRef (Set TypeRef)
