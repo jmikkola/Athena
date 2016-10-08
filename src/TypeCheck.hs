@@ -34,6 +34,11 @@ data TypeCheckState
     }
 type TSState = StateT TypeCheckState Result
 
+-- types
+
+nilT :: TypeRef
+nilT = "()"
+
 -- Monad functions --
 
 getVarScope :: TSState TypeScope
@@ -153,13 +158,13 @@ runTypechecking file = evalStateT (checkFileM file) startingState
 
 startingState :: TypeCheckState
 startingState =
-  let printType = Type.Function ["String"] "()"
+  let printType = Type.Function ["String"] nilT
       printTypeName = Type.genName printType
   in TypeCheckState
      { varScope = [Map.singleton "print" printTypeName]
      , types = Map.fromList
                [ (printTypeName, printType)
-               , ("()", Type.Nil)
+               , (nilT, Type.Nil)
                , ("String", Type.String)
                , ("Float", Type.Float)
                , ("Int", Type.Int)
@@ -297,18 +302,17 @@ checkDeclaration d = case d of
    typ <- getType t -- added in the gatherNamedTypes phase
    return $ IR.TypeDecl name typ
 
--- ????
-requireReturnType :: Type -> S.Statement -> TSState Statement
+requireReturnType :: TypeRef -> S.Statement -> TSState Statement
 requireReturnType retType stmt = do
   typedStatement <- checkStatement retType stmt
   lastRetType <- getReturnType typedStatement
   _ <- requireSubtype lastRetType retType
   return typedStatement
 
-getReturnType :: Statement -> TSState Type
+getReturnType :: Statement -> TSState TypeRef
 getReturnType stmt =
   case stmt of
-   (Block t _) -> return $ fromMaybe Type.Nil t
+   (Block t _) -> return $ fromMaybe nilT t
    (Expr e)    -> return $ typeOf e
    _           -> err "function body must be a block or expression"
 
@@ -318,21 +322,22 @@ addFuncScope names types = do
   _ <- mapM (\(n,t) -> setVarInScope n t) (zip names types)
   return ()
 
-checkStatement :: Type -> S.Statement -> TSState Statement
+checkStatement :: TypeRef -> S.Statement -> TSState Statement
 checkStatement retType stmt = case stmt of
   (S.Return Nothing) -> do
-    _ <- requireSubtype Type.Nil retType
+    _ <- requireSubtype nilT retType
     return $ Return Nothing
   (S.Return (Just e)) -> do
     typedE <- exprToTyped e
     _ <- requireSubtype (typeOf typedE) retType
     return $ Return (Just typedE)
   (S.Let name t e) -> do
-    typ <- getFromScope t
-    setVarInScope name typ
+    tname <- ensureAdded t
+    _ <- getType tname
+    setVarInScope name tname
     typedE <- exprToTyped e
-    _ <- requireSubtype (typeOf typedE) typ
-    return $ Let name typ typedE
+    _ <- requireSubtype (typeOf typedE) tname
+    return $ Let name tname typedE
   (S.Assign names e) -> do
     t <- getAssignType names
     typedE <- exprToTyped e
@@ -348,7 +353,7 @@ checkStatement retType stmt = case stmt of
     return $ Expr typedE
   (S.If test body mElse) -> do
     typedTest <- exprToTyped test
-    _ <- requireSubtype (typeOf typedTest) Type.Bool
+    _ <- requireSubtype (typeOf typedTest) "Bool"
 
     beginScope
     blk <- checkStatement retType (S.Block body)
@@ -363,7 +368,7 @@ checkStatement retType stmt = case stmt of
     return $ If typedTest blk typedElse
   (S.While test body) -> do
     typedTest <- exprToTyped test
-    _ <- requireSubtype (typeOf typedTest) Type.Bool
+    _ <- requireSubtype (typeOf typedTest) "Bool"
 
     beginScope
     blk <- checkStatement retType (S.Block body)
@@ -371,7 +376,7 @@ checkStatement retType stmt = case stmt of
 
     return $ While typedTest blk
 
-checkBlock :: Type -> [S.Statement] -> TSState Statement
+checkBlock :: TypeRef -> [S.Statement] -> TSState Statement
 checkBlock retType stmts = blkStmts stmts []
   where
     blkStmts sts rest = case sts of
@@ -386,10 +391,10 @@ checkBlock retType stmts = blkStmts stmts []
         typedSt <- checkStatement retType st
         blkStmts ss (typedSt : rest)
 
-returnExpr :: Type -> Maybe E.Expression -> TSState (Maybe Type, Statement)
+returnExpr :: TypeRef -> Maybe E.Expression -> TSState (Maybe TypeRef, Statement)
 returnExpr t rExpr = case rExpr of
   Nothing -> do
-    _ <- requireSubtype Type.Nil t
+    _ <- requireSubtype nilT t
     return (Nothing, Return Nothing)
   Just e -> do
     typedE <- exprToTyped e
@@ -397,7 +402,7 @@ returnExpr t rExpr = case rExpr of
     _ <- requireSubtype typ t
     return (Just typ, Return $ Just typedE)
 
-getAssignType :: [String] -> TSState Type
+getAssignType :: [String] -> TSState TypeRef
 getAssignType []           = err "compiler error: assign statement with no names"
 getAssignType (var:fields) = do
   t <- getFromScope var
@@ -410,8 +415,8 @@ valToTyped (E.IntVal i)       = return $ IntVal i
 valToTyped (E.FloatVal f)     = return $ FloatVal f
 valToTyped (E.StructVal s fs) = do
   fs' <- mapMSnd exprToTyped fs
-  typ <- getFromScope s
-  return $ StructVal typ fs'
+  _ <- getType s
+  return $ StructVal s fs'
 
 exprToTyped :: E.Expression -> TSState Expression
 exprToTyped e = case e of
@@ -542,9 +547,10 @@ getFieldType :: Type -> String -> TSState Type
 getFieldType typ field = do
   fieldTypes <- getStructFields typ
   let errMsg = "field " ++ field ++ " not on type " ++ show typ
-  lift $ note errMsg (lookup field fieldTypes)
+  fieldTname <- lift $ note errMsg (lookup field fieldTypes)
+  getType fieldTname
 
-getStructFields :: Type -> TSState [(String, Type)]
+getStructFields :: Type -> TSState [(String, TypeRef)]
 getStructFields (Struct _ fields) =
   return fields
 getStructFields t =
