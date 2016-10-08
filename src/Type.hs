@@ -8,19 +8,27 @@ data Type
   | Int
   | Bool
   | Nil
-  | Function [Type] Type
-  | Struct String [(String, Type)]
-  | Enum String [(String, [(String, Type)])]
+  | Function [TypeRef] TypeRef
+  | Struct [(String, TypeRef)]
+  | Enum [(String, [(String, TypeRef)])]
   deriving (Eq, Ord, Show)
 
-nameOf :: Type -> String
-nameOf t = case t of
-  String -> "String"
-  Float -> "Float"
-  Int -> "Int"
-  Bool -> "Bool"
-  Nil -> "()"
+type TypeRef = String -- name of a type
+
+genName :: Type -> String
+genName t = case t of
+  String          -> "String"
+  Float           -> "Float"
+  Int             -> "Int"
+  Bool            -> "Bool"
+  Nil             -> "()"
   Function ats rt ->
     "Function(" ++ (intercalate "," $ map nameOf ats) ++ ")" ++ nameOf rt
-  Struct n _ -> n
-  Enum n _ -> n
+  Struct fields   ->
+    "Struct{" ++ (intercalate "," $ map (\(s,r) -> s ++ ":" ++ r) fields) ++ "}"
+  Enum options    ->
+    "Enum{" ++ (intercalate "|" $ map (\(s,o) -> s ++ o2s o) fields) ++ "}" 
+
+o2s :: [(String, TypeRef)] -> String
+o2s fields =
+  "{" ++ (intercalate "," $ map (\(f,r) -> f ++ ":" ++ r)) ++ "}"

@@ -8,6 +8,8 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import System.IO.Unsafe
+
 import IR
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
@@ -21,33 +23,41 @@ type Result = Either String
 -- Entries in a Scope have a double-meaning:
 --  - lowercase names map to the type of the value
 --  - uppercae names map to the type bound to that name
-type Scope = Map String Type
+type Scope = Map String TypeRef
 type TypeScope = [Scope]
-type Subtypes = Map TypeName (Set TypeName)
-type TSState = StateT (TypeScope, Subtypes) Result
+type Subtypes = Map TypeRef (Set TypeRef)
+data TypeCheckState
+  = TypeCheckState
+    { varScope :: [Scope]
+    , types :: Map TypeRef Type
+    , subtypes :: Subtypes
+    }
+type TSState = StateT TypeCheckState Result
 
 -- Monad functions --
 
-getTypeScope :: TSState TypeScope
-getTypeScope = liftM fst $ get
+getVarScope :: TSState TypeScope
+getVarScope = liftM varScope $ get
+
+getTypes :: TSState (Map TypeRef Type)
+getTypes = liftM types $ get
 
 getSubtypes :: TSState Subtypes
-getSubtypes = liftM snd $ get
+getSubtypes = liftM subtypes $ get
 
-putTypeScope :: TypeScope -> TSState ()
-putTypeScope ts = do
-  subs <- getSubtypes
-  put (ts, subs)
+putVarScope :: TypeScope -> TSState ()
+putVarScope vars = modify (\s -> s { varScope = vars })
+
+putTypes :: Map TypeRef Type -> TSState ()
+putTypes typs = modify (\s -> s { types = typs })
 
 putSubtypes :: Subtypes -> TSState ()
-putSubtypes subs = do
-  ts <- getTypeScope
-  put (ts, subs)
+putSubtypes subs = modify (\s -> s { subtypes = subs })
 
-updateTypeScope :: (TypeScope -> TypeScope) -> TSState ()
-updateTypeScope f = do
-  ts <- getTypeScope
-  putTypeScope (f ts)
+updateVarScope :: (TypeScope -> TypeScope) -> TSState ()
+updateVarScope f = do
+  ts <- getVarScope
+  putVarScope (f ts)
 
 updateSubtypes :: (Subtypes -> Subtypes) -> TSState ()
 updateSubtypes f = do
@@ -63,14 +73,14 @@ note :: a -> Maybe b -> Either a b
 note msg = maybe (Left msg) Right
 
 beginScope :: TSState ()
-beginScope = updateTypeScope (Map.empty :)
+beginScope = updateVarScope (Map.empty :)
 
 endScope :: TSState ()
 endScope = do
-  ts <- getTypeScope
+  ts <- getVarScope
   case ts of
    []     -> err "compiler bug: ending no scopes"
-   (_:ss) -> putTypeScope ss
+   (_:ss) -> putVarScope ss
 
 scopeLookup :: String -> TypeScope -> Maybe Type
 scopeLookup name (m:ms) = Map.lookup name m <|> scopeLookup name ms
@@ -78,51 +88,193 @@ scopeLookup _    []     = Nothing
 
 getFromScope :: String -> TSState Type
 getFromScope name = do
-  ts <- getTypeScope
+  ts <- getVarScope
   lift $ note ("Not defined: " ++ name) (scopeLookup name ts)
 
-scopeAdd :: String -> Type -> TypeScope -> Result TypeScope
-scopeAdd name typ (m:ms) =
+defineVar :: String -> Type -> TypeScope -> Result TypeScope
+defineVar name typ (m:ms) =
   case Map.lookup name m of
    Nothing  -> return (Map.insert name typ m : ms)
    (Just _) -> Left ("Duplicate definition for: " ++ name)
-scopeAdd _    _   []     = Left "Empty scope stack??"
+defineVar _    _   []     =
+  Left "compiler bug: empty scope stack??"
 
-setInScope :: String -> Type -> TSState ()
-setInScope name typ = do
-  ts <- getTypeScope
-  newScopes <- lift $ scopeAdd name typ ts
-  putTypeScope newScopes
+setVarInScope :: String -> Type -> TSState ()
+setVarInScope name typ = do
+  ts <- getVarScope
+  newScopes <- lift $ defineVar name typ ts
+  putVarScope newScopes
 
-addSubtype :: TypeName -> TypeName -> TSState ()
+defineType :: TypeRef -> Type -> TypeScope -> Result TypeScope
+defineType name typ tscope =
+  case Map.lookup name tscope of
+   Nothing  -> return (Map.insert name typ tscope)
+   (Just t) ->
+     -- Allow identical anonymouse types to share a name
+     if t == typ && name == T.genName typ
+     then return tscope
+     else Left ("Duplicate definition for: " ++ name)
+defineType _    _   []     =
+  Left "compiler bug: empty scope stack??"
+
+addType :: TypeRef -> Type -> TSState ()
+addType name typ = do
+  ts <- getTypes
+  newTypes <- lift $ defineType name typ ts
+  putTypes newTypes
+
+getType :: TypeRef -> TSState Type
+getType name = do
+  ts <- getTypes
+  case Map.lookup name ts of
+   (Just t) -> return t
+   Nothing  -> err $ "undefined type: " ++ name
+
+addSubtype :: TypeRef -> TypeRef -> TSState ()
 addSubtype sub super = updateSubtypes addSub
   where addSub subtypes =
           let newSupers = case Map.lookup sub subtypes of
-                Nothing -> Set.singleton super
+                Nothing     -> Set.singleton super
                 (Just sups) -> Set.insert super sups
           in Map.insert sub newSupers subtypes
 
-getSuperTypesOf :: TypeName -> TSState (Set TypeName)
+getSuperTypesOf :: TypeRef -> TSState (Set TypeRef)
 getSuperTypesOf sub = do
   subs <- getSubtypes
+  -- TODO: traverse more than just one level
   case Map.lookup sub subs of
    Nothing -> return Set.empty
    Just st -> return st
 
 -- Typing functions --
 
-runTypechecking :: D.File -> Result [Decl]
-runTypechecking file = evalStateT (checkFileM file) ([], Map.empty)
+runTypechecking :: D.File -> Result (Map TypeRef Type, [Decl])
+runTypechecking file = evalStateT (checkFileM file) startingState
 
-checkFileM :: D.File -> TSState [Decl]
+startingState :: TypeCheckState
+startingState =
+  let printType = Type.Function ["String"] "()"
+      printTypeName = Type.genName printType
+  in TypeCheckState
+     { varScope = [Map.singleton "print" printTypeName]
+     , types = Map.fromList
+               [ (printTypeName, printType)
+               , ("()", Type.Nil)
+               , ("String", Type.String)
+               , ("Float", Type.Float)
+               , ("Int", Type.Int)
+               , ("Bool", Type.Bool)
+               ]
+     , subtypes = Map.empty
+     }
+
+checkFileM :: D.File -> TSState (Map TypeRef Type, [Decl])
 checkFileM file = do
-  buildFileScope file
-  mapM checkDeclaration file
+  gatherNamedTypes file
+  gatherVarBindings files
+  declarations <- mapM checkDeclaration file
+  validateTypes
+  types <- getTypes
+  return (types, declarations)
 
+gatherNamedTypes :: D.File -> TSState ()
+gatherNamedTypes file = do
+  _ <- mapM addDeclaredTypes file
+  return ()
+
+addDeclaredTypes :: D.Declaration -> TSState ()
+addDeclaredTypes d = case d of
+  (D.TypeDef name t) ->
+    declareType name t
+  _                  ->
+    return () -- no other ways for types to be declared
+
+declareType :: TypeRef -> D.TypeDecl -> TSState ()
+declareType name t = case t of
+  -- This isn't allowed at this level; another pass needs to be added
+  -- to resolve aliasing
+  T.TypeName alias ->
+    err $ "can't alias type " ++ name ++ " to " ++ alias
+  T.Function argTs rt -> do
+    argTypes <- mapM ensureAdded argTs
+    retType <- ensureAdded rt
+    addType name (Type.Function argTypes retType)
+  T.Struct fields -> do
+    typedFields <- mapMSnd ensureAdded fields
+    addType name (Type.Struct typedFields)
+  T.Enum options -> do
+    typedOptions <- mapMSnd ensureOptionAdded options
+    addType name (Type.Enum typedOptions)
+
+ensureAdded :: D.TypeDecl -> TSState TypeRef
+ensureAdded t = case t of
+  T.TypeName name ->
+    return name
+  T.Function argTs rt -> do
+    argTypes <- mapM ensureAdded argTs
+    retType <- ensureAdded rt
+    addAnonType $ Type.Function argTypes retType
+  T.Struct fields -> do
+    typedFields <- mapMSnd ensureAdded fields
+    addAnonType $ Type.Struct typedFields
+  T.Enum options -> do
+    typedOptions <- mapMSnd ensureOptionAdded options
+    addAnonType $ Type.Enum typedOptions
+
+ensureOptionAdded :: T.EnumOption -> TSState [(String, TypeRef)]
+ensureOptionAdded = mapMSnd ensureAdded
+
+addAnonType :: Type -> TSState TypeRef
+addAnonType typ = do
+  let name = Type.genName typ
+  addType name typ
+  return name
+
+-- Validate types ensures that no type contains a reference to
+-- types that don't exist.
+validateTypes :: TSState ()
+validateTypes = do
+  typs <- getTypes
+  _ <- mapM validateType $ Map.elems typs
+  return ()
+
+validateType :: Type -> TSSTate ()
+validateType typ = case t of
+  Function atyps rtyp -> do
+    _ <- mapM getType (rtyp : atyps)
+    return ()
+  Struct fields -> do
+    _ <- mapMSnd getType fields
+    return ()
+  Enum options -> do
+    _ <- mapMSnd (\option -> mapMSnd getType option) options
+    return ()
+  _ ->
+    return () -- no way for other types to be invalid
+
+-- Adds module-level bindings and their types
+gatherVarBindings :: D.File -> TSState ()
+gatherVarBindings file = do
+  _ <- mapM addDecl file
+  return ()
+
+-- Adds names and their types to the module-level scope
+addDecl :: D.Declaration -> TSState ()
+addDecl (D.Let n t _)        = do
+  _ <- getType t -- ensure type exists
+  setVarInScope n t
+addDecl (D.Function n t _ _) = do
+  tname <- ensureAdded t
+  setVarInScope n tname
+addDecl (D.TypeDef n t) =
+  return () -- already dealt with in the gatherNamedTypes phase
+
+-- Typechecks the contents of declarations
 checkDeclaration :: D.Declaration -> TSState Decl
 checkDeclaration d = case d of
  (D.Function name t args body) -> do
-   typ <- typeDeclToType "" t
+   tname <- ensureAdded t
+   typ <- getType tname
    (argTypes, retType) <- case typ of
      (Function ats rt) ->
        return (ats, rt)
@@ -135,44 +287,17 @@ checkDeclaration d = case d of
    addFuncScope args argTypes
    typedBody <- requireReturnType retType body
    endScope
-   return $ StmtDecl $ Let name typ $ Lambda typ args typedBody
+   return $ StmtDecl $ Let name tname $ Lambda tname args typedBody
  (D.Let name t expr) -> do
    typedE <- exprToTyped expr
-   typ <- getFromScope t
-   _ <- requireSubtype (typeOf typedE) typ
-   return $ StmtDecl $ Let name typ typedE
+   tname <- ensureAdded t
+   _ <- requireSubtype (typeOf typedE) tt
+   return $ StmtDecl $ Let name tname typedE
  (D.TypeDef name t) -> do
-   typ <- typeDeclToType name t
+   typ <- getType t -- added in the gatherNamedTypes phase
    return $ IR.TypeDecl name typ
 
-typeDeclToType :: String -> T.TypeDecl -> TSState Type
-typeDeclToType tname t = case t of
-  T.TypeName name -> case name of
-    "()" -> return Type.Nil
-    "String" -> return Type.String
-    "Float" -> return Type.Float
-    "Int" -> return Type.Int
-    "Bool" -> return Type.Bool
-    _ -> getFromScope name
-  T.Function ats rt -> do
-    argTypes <- mapM (typeDeclToType "") ats
-    retType <- typeDeclToType "" rt
-    return $ Type.Function argTypes retType
-  T.Struct fields -> do
-    types <- mapM (\(name, ty) -> typeDeclToType name ty) fields
-    let names = map fst fields
-    return $ Type.Struct tname (zip names types)
-  T.Enum options -> do
-    let (names, opts) = unzip options
-    typedOpts <- mapM convertEnumOption opts
-    return $ Type.Enum tname (zip names typedOpts)
-
-convertEnumOption :: T.EnumOption -> TSState [(String, Type)]
-convertEnumOption fields = do
-  types <- mapM (\(name, t) -> typeDeclToType name t) fields
-  let names = map fst fields
-  return $ zip names types
-
+-- ????
 requireReturnType :: Type -> S.Statement -> TSState Statement
 requireReturnType retType stmt = do
   typedStatement <- checkStatement retType stmt
@@ -187,61 +312,11 @@ getReturnType stmt =
    (Expr e)    -> return $ typeOf e
    _           -> err "function body must be a block or expression"
 
-defaultScope :: TSState ()
-defaultScope = do
-  setInScope "print" (Type.Function [Type.String] Type.Nil)
-  setInScope "()" Type.Nil
-  setInScope "String" Type.String
-  setInScope "Float" Type.Float
-  setInScope "Int" Type.Int
-  setInScope "Bool" Type.Bool
-
 -- Defines the types of the arguments within the function's scope
-addFuncScope :: [String] -> [Type] -> TSState ()
+addFuncScope :: [String] -> [TypeRef] -> TSState ()
 addFuncScope names types = do
-  _ <- mapM (\(n,t) -> setInScope n t) (zip names types)
+  _ <- mapM (\(n,t) -> setVarInScope n t) (zip names types)
   return ()
-
-buildFileScope :: D.File -> TSState ()
-buildFileScope file = do
-  beginScope
-  defaultScope
-  _ <- mapM addDecl file
-  return ()
-
-addDecl :: D.Declaration -> TSState ()
-addDecl (D.Let n t _)        = do
-  typ <- getFromScope t
-  setInScope n typ
-addDecl (D.Function n t _ _) = do
-  typ <- typeDeclToType "" t
-  setInScope n typ
-addDecl (D.TypeDef n t) = do
-  scopes <- getTypeScope
-  subtypes <- getSubtypes
-  let (typ, scopes', subtypes', err) =
-        case evalStateT (addTypeToState n t typ) (scopes, subtypes) of
-         Left err ->
-           (Type.Nil, [], Map.empty, Just err)
-         Right (typ, scs, subs) ->
-           (typ,      scs, subs,     Nothing)
-  case err of
-   Nothing -> put (scopes', subtypes')
-   Just e  -> fail e
-
-addTypeToState :: String -> T.TypeDecl -> Type -> TSState (Type, TypeScope, Subtypes)
-addTypeToState name t typ = do
-  setInScope name typ
-  typ' <- typeDeclToType name t
-  case typ' of
-   (Enum _ options) -> do
-      _ <- mapM (\(n, _) -> addSubtype n name) options
-      _ <- mapM (\(n, fields) -> setInScope n (Struct n fields)) options
-      return ()
-   _ -> return ()
-  scopes <- getTypeScope
-  subtypes <- getSubtypes
-  return (typ', scopes, subtypes)
 
 checkStatement :: Type -> S.Statement -> TSState Statement
 checkStatement retType stmt = case stmt of
@@ -254,7 +329,7 @@ checkStatement retType stmt = case stmt of
     return $ Return (Just typedE)
   (S.Let name t e) -> do
     typ <- getFromScope t
-    setInScope name typ
+    setVarInScope name typ
     typedE <- exprToTyped e
     _ <- requireSubtype (typeOf typedE) typ
     return $ Let name typ typedE
