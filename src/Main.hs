@@ -20,8 +20,8 @@ either2Except = ExceptT . return
 compileAndEmit :: String -> Either String String
 compileAndEmit content = do
   parsed <- parseFile content
-  checked <- runTypechecking parsed
-  goSyntax <- convertFile checked
+  (types, checked) <- runTypechecking parsed
+  goSyntax <- convertFile types checked
   emitFile goSyntax
 
 compile :: String -> ExitCodeResult

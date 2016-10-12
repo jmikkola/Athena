@@ -1,39 +1,50 @@
 module Backends.Go.Convert where
 
 import Control.Monad (liftM)
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 import qualified Backends.Go.Syntax as Syntax
 import qualified AST.Expression as E
 import qualified Type as T
+import Type (Type, TypeRef)
 import IR
 
 type Result = Either String
 
-convertFile :: [IR.Decl] -> Result [Syntax.Declaration]
-convertFile file = liftM concat $ mapM convertDecl file
+convertFile :: Map TypeRef Type -> [IR.Decl] -> Result [Syntax.Declaration]
+convertFile types file = liftM concat $ mapM (convertDecl types) file
 
-convertDecl :: IR.Decl -> Result [Syntax.Declaration]
-convertDecl decl = case decl of
+note :: a -> Maybe b -> Either a b
+note msg = maybe (Left msg) Right
+
+getType :: Map TypeRef Type -> TypeRef -> Result Type
+getType types tref = note msg $ Map.lookup tref types
+  where msg = "Compiler bug: missing type for reference " ++  tref
+
+-- TODO: consider putting type map in a state monad
+convertDecl :: Map TypeRef Type -> IR.Decl -> Result [Syntax.Declaration]
+convertDecl types decl = case decl of
   IR.StmtDecl stmt -> case stmt of
     IR.Let name typ expr -> case expr of
       IR.Lambda t args stmt' -> do
-        decl' <- makeFnDecl t args
-        body <- convertBlock stmt'
+        decl' <- makeFnDecl types t args
+        body <- convertBlock types stmt'
         return [Syntax.Function name decl' body]
       _ -> do
-        typ' <- convertType typ
-        expr' <- convertExpr expr
+        typ' <- convertType types typ
+        expr' <- convertExpr types expr
         return [Syntax.Variable name (Just typ') expr']
     _ ->
       fail $ "cannot convert `" ++ show stmt ++ "` to a module-level declaration"
   IR.TypeDecl name typ -> case typ of
-    T.Struct tname fields -> do
-      fields' <- mapMSnd convertType fields
-      stringMethod <- makeStringMethod tname fields'
-      return [Syntax.Structure tname fields', stringMethod]
-    T.Enum tname options -> do
-      structures <- makeStructures tname options
-      let iface = Syntax.Interface tname [(enumMethodName tname, enumTagMethodDecl)]
+    T.Struct fields -> do
+      fields' <- mapMSnd (convertType types) fields
+      stringMethod <- makeStringMethod name fields'
+      return [Syntax.Structure name fields', stringMethod]
+    T.Enum options -> do
+      structures <- makeStructures types name options
+      let iface = Syntax.Interface name [(enumMethodName name, enumTagMethodDecl)]
       return $ iface : structures
     _ ->
       fail $ "cannot emit declaration for " ++ show typ
@@ -57,12 +68,15 @@ enumTagMethodDecl = Syntax.FunctionDecl [] []
 enumMethodName :: String -> String
 enumMethodName = (++) "Enum"
 
-makeStructures :: String -> [(String, [(String, T.Type)])] -> Result [Syntax.Declaration]
-makeStructures name options = (liftM concat) (mapM (makeStructure name) options)
+makeStructures :: Map TypeRef Type -> String -> [(String, [(String, TypeRef)])]
+               -> Result [Syntax.Declaration]
+makeStructures types name options =
+  (liftM concat) (mapM (makeStructure types name) options)
 
-makeStructure :: String -> (String, [(String, T.Type)]) -> Result [Syntax.Declaration]
-makeStructure name (optName, fields) = do
-  fields' <- mapMSnd convertType fields
+makeStructure :: Map TypeRef Type -> String -> (String, [(String, TypeRef)])
+              -> Result [Syntax.Declaration]
+makeStructure types name (optName, fields) = do
+  fields' <- mapMSnd (convertType types) fields
   strMethod <- makeStringMethod optName fields'
   let structDef = Syntax.Structure optName fields'
   let recvType = Syntax.TypeName optName
@@ -70,80 +84,86 @@ makeStructure name (optName, fields) = do
                   enumTagMethodDecl (Syntax.Block [])
   return [structDef, methodDef, strMethod]
 
-makeFnDecl :: T.Type -> [String] -> Result Syntax.FunctionDecl
-makeFnDecl (T.Function ats rts) argNames = do
-  argTs <- mapM convertType ats
-  retT <- convertType rts
+requireFnType :: Map TypeRef Type -> TypeRef -> Result ([TypeRef], TypeRef)
+requireFnType types tref = do
+  t <- getType types tref
+  case t of
+   (T.Function ats rt) -> return (ats, rt)
+   _                   -> Left $ "compiler bug: expected function type"
+
+makeFnDecl :: Map TypeRef Type -> TypeRef -> [String] -> Result Syntax.FunctionDecl
+makeFnDecl types tref argNames = do
+  (ats, rts) <- requireFnType types tref
+  argTs <- mapM (convertType types) ats
+  retT <- convertType types rts
   let args = map (\(t,n) -> Syntax.NamedType n t) (zip argTs argNames)
   return $ Syntax.FunctionDecl args [Syntax.JustType retT]
-makeFnDecl t _ = fail $ "cannot use type " ++ show t ++ " for function decl"
 
-convertBlock :: IR.Statement -> Result Syntax.Statement
-convertBlock stmt = do
+convertBlock :: Map TypeRef Type -> IR.Statement -> Result Syntax.Statement
+convertBlock types stmt = do
   stmts' <- case stmt of
-    IR.Block _ stmts -> concatMapM convertStmt stmts
-    _                -> convertStmt stmt
+    IR.Block _ stmts -> concatMapM (convertStmt types) stmts
+    _                -> convertStmt types stmt
   return $ Syntax.Block stmts'
 
-convertStmt :: IR.Statement -> Result [Syntax.Statement]
-convertStmt stmt = case stmt of
+convertStmt :: Map TypeRef Type -> IR.Statement -> Result [Syntax.Statement]
+convertStmt types stmt = case stmt of
   IR.Return Nothing ->
     return [Syntax.JustReturn]
   IR.Return (Just e) -> do
-    e' <- convertExpr e
+    e' <- convertExpr types e
     return [Syntax.Return e']
   IR.Let s t e -> do
-    e' <- convertExpr e
-    t' <- convertType t
+    e' <- convertExpr types e
+    t' <- convertType types t
     return [ Syntax.VarStmt s (Just t') e',
              Syntax.VarStmt "_" (Just t') (Syntax.Var s)]
   IR.Assign fs e -> do
-    e' <- convertExpr e
+    e' <- convertExpr types e
     return [Syntax.Assign fs e']
   IR.Block _ _ -> do
-    blk <- convertBlock stmt
+    blk <- convertBlock types stmt
     return [blk]
   IR.Expr e -> do
-    e' <- convertExpr e
+    e' <- convertExpr types e
     return [Syntax.Expr e']
   IR.If e st melse -> do
-    e' <- convertExpr e
-    st' <- convertBlock st
-    melse' <- mapM convertBlock melse
+    e' <- convertExpr types e
+    st' <- convertBlock types st
+    melse' <- mapM (convertBlock types) melse
     return [Syntax.If e' st' melse']
   IR.While e st -> do
-    e' <- convertExpr e
-    st' <- convertBlock st
+    e' <- convertExpr types e
+    st' <- convertBlock types st
     return [Syntax.For1 e' st']
 
-convertValue :: IR.Value -> Result Syntax.Expression
-convertValue val = case val of
+convertValue :: Map TypeRef Type -> IR.Value -> Result Syntax.Expression
+convertValue types val = case val of
   IR.StrVal s       -> return $ Syntax.StrVal s
   IR.BoolVal b      -> return $ Syntax.BoolVal b
   IR.IntVal i       -> return $ Syntax.IntVal i
   IR.FloatVal f     -> return $ Syntax.FloatVal f
-  IR.StructVal t fs -> do
-    let name = T.nameOf t
-    fields <- mapMSnd convertExpr fs
-    return $ Syntax.Reference $ Syntax.StructVal name fields
+  IR.StructVal tname fs -> do
+    fields <- mapMSnd (convertExpr types) fs
+    return $ Syntax.Reference $ Syntax.StructVal tname fields
 
-convertExpr :: IR.Expression -> Result Syntax.Expression
-convertExpr expr = case expr of
+convertExpr :: Map TypeRef Type -> IR.Expression -> Result Syntax.Expression
+convertExpr types expr = case expr of
   IR.Paren e _
     -> do
-      e' <- convertExpr e
+      e' <- convertExpr types e
       return $ Syntax.Paren e'
   IR.Val val
-    -> convertValue val
+    -> convertValue types val
   IR.Unary _ op e
     -> do
-      e' <- convertExpr e
+      e' <- convertExpr types e
       op' <- converUnaryOp op
       return $ Syntax.Unary op' e'
   IR.Binary _ op l r
     -> do
-      l' <- convertExpr l
-      r' <- convertExpr r
+      l' <- convertExpr types l
+      r' <- convertExpr types r
       case op of
        E.Power
          -- TODO: Handle taking powers of ints
@@ -155,51 +175,53 @@ convertExpr expr = case expr of
            return $ Syntax.Binary op' l' r'
   IR.Call _ f args
     -> do
-      fEx <- convertExpr f
-      argEx <- mapM convertExpr args
+      fEx <- convertExpr types f
+      argEx <- mapM (convertExpr types) args
       return $ Syntax.Call fEx argEx
   IR.Cast t ex
     -> do
-      expr' <- convertExpr ex
-      typ <- convertType t
+      expr' <- convertExpr types ex
+      typ <- convertType types t
       return $ Syntax.TypeCast typ expr'
   IR.Var _ n ->
     if n == "print"
     then return $ Syntax.FieldAccess (Syntax.Var "fmt") "Println"
     else return $ Syntax.Var n
   IR.Access _ e n -> do
-    e' <- convertExpr e
+    e' <- convertExpr types e
     return $ Syntax.FieldAccess e' n
   IR.Lambda t argNames body -> do
-    t' <- convertType t
-    body' <- convertBlock body
+    t' <- convertType types t
+    body' <- convertBlock types body
     return $ Syntax.Func t' argNames body'
 
-convertType :: T.Type -> Result Syntax.Type
-convertType t = case t of
-  T.String
-    -> return Syntax.GoString
-  T.Float
-    -> return Syntax.GoFloat64
-  T.Int
-    -> return Syntax.GoInt64
-  T.Bool
-    -> return Syntax.GoBool
-  T.Nil
-    -> return Syntax.GoVoid -- TODO: come up with a better approach
-  T.Function ts t'
-    -> do
-      argTypes <- mapM convertType ts
-      retType <- convertType t'
-      let r = case retType of
-            Syntax.GoVoid -> []
-            _             -> [retType]
-      return $ Syntax.GoFunc argTypes r
+convertType :: Map TypeRef Type -> TypeRef -> Result Syntax.Type
+convertType types tref = do
+  t <- getType types tref
+  case t of
+    T.String
+      -> return Syntax.GoString
+    T.Float
+      -> return Syntax.GoFloat64
+    T.Int
+      -> return Syntax.GoInt64
+    T.Bool
+      -> return Syntax.GoBool
+    T.Nil
+      -> return Syntax.GoVoid -- TODO: come up with a better approach
+    T.Function ts t'
+      -> do
+        argTypes <- mapM (convertType types) ts
+        retType <- convertType types t'
+        let r = case retType of
+              Syntax.GoVoid -> []
+              _             -> [retType]
+        return $ Syntax.GoFunc argTypes r
 
-  T.Struct n _ ->
-    return $ Syntax.GoStruct n
-  T.Enum n _ ->
-    return $ Syntax.GoInterface n
+    T.Struct _ ->
+      return $ Syntax.GoStruct tref
+    T.Enum _ ->
+      return $ Syntax.GoInterface tref
 
 converUnaryOp :: E.UnaryOp -> Result Syntax.UnaryOp
 converUnaryOp E.BitInvert
