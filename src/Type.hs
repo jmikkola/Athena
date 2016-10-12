@@ -23,12 +23,12 @@ genName t = case t of
   Bool            -> "Bool"
   Nil             -> "()"
   Function ats rt ->
-    "Function(" ++ (intercalate "," $ map nameOf ats) ++ ")" ++ nameOf rt
+    "Function(" ++ (intercalate "," ats) ++ ")" ++ rt
   Struct fields   ->
     "Struct{" ++ (intercalate "," $ map (\(s,r) -> s ++ ":" ++ r) fields) ++ "}"
   Enum options    ->
-    "Enum{" ++ (intercalate "|" $ map (\(s,o) -> s ++ o2s o) fields) ++ "}" 
+    "Enum{" ++ (intercalate "|" $ map (\(s,o) -> s ++ o2s o) options) ++ "}"
 
 o2s :: [(String, TypeRef)] -> String
 o2s fields =
-  "{" ++ (intercalate "," $ map (\(f,r) -> f ++ ":" ++ r)) ++ "}"
+  "{" ++ (intercalate "," $ map (\(f,r) -> f ++ ":" ++ r) fields) ++ "}"
