@@ -113,7 +113,7 @@ defineType name typ tscope =
    Nothing  -> return (Map.insert name typ tscope)
    (Just t) ->
      -- Allow identical anonymouse types to share a name
-     if t == typ && name == T.genName typ
+     if t == typ && name == genName typ
      then return tscope
      else Left ("Duplicate definition for: " ++ name)
 defineType _    _   []     =
@@ -173,7 +173,7 @@ startingState =
 checkFileM :: D.File -> TSState (Map TypeRef Type, [Decl])
 checkFileM file = do
   gatherNamedTypes file
-  gatherVarBindings files
+  gatherVarBindings file
   declarations <- mapM checkDeclaration file
   validateTypes
   types <- getTypes
@@ -191,7 +191,7 @@ addDeclaredTypes d = case d of
   _                  ->
     return () -- no other ways for types to be declared
 
-declareType :: TypeRef -> D.TypeDecl -> TSState ()
+declareType :: TypeRef -> T.TypeDecl -> TSState ()
 declareType name t = case t of
   -- This isn't allowed at this level; another pass needs to be added
   -- to resolve aliasing
@@ -208,7 +208,7 @@ declareType name t = case t of
     typedOptions <- mapMSnd ensureOptionAdded options
     addType name (Type.Enum typedOptions)
 
-ensureAdded :: D.TypeDecl -> TSState TypeRef
+ensureAdded :: T.TypeDecl -> TSState TypeRef
 ensureAdded t = case t of
   T.TypeName name ->
     return name
@@ -240,8 +240,8 @@ validateTypes = do
   _ <- mapM validateType $ Map.elems typs
   return ()
 
-validateType :: Type -> TSSTate ()
-validateType typ = case t of
+validateType :: Type -> TSState ()
+validateType typ = case typ of
   Function atyps rtyp -> do
     _ <- mapM getType (rtyp : atyps)
     return ()
@@ -293,7 +293,7 @@ checkDeclaration d = case d of
  (D.Let name t expr) -> do
    typedE <- exprToTyped expr
    tname <- ensureAdded t
-   _ <- requireSubtype (typeOf typedE) tt
+   _ <- requireSubtype (typeOf typedE) tname
    return $ StmtDecl $ Let name tname typedE
  (D.TypeDef name t) -> do
    typ <- getType t -- added in the gatherNamedTypes phase
@@ -518,21 +518,20 @@ requireEqual t1 t2 =
   else err ("Expected types to be the same: " ++
             show t1 ++ ", " ++ show t2)
 
-requireSubtype :: Type -> Type -> TSState Type
+requireSubtype :: TypeRef -> TypeRef -> TSState Type
 requireSubtype sub super = do
   isSub <- isSubtype super sub
   if isSub
   then return sub
-  else err ("can't use a value of type " ++ show sub ++
-            " where a value of type " ++ show super ++ " is expected")
+  else err ("can't use a value of type " ++ sub ++
+            " where a value of type " ++ super ++ " is expected")
 
-isSubtype :: Type -> Type -> TSState Bool
+isSubtype :: TypeRef -> TypeRef -> TSState Bool
 isSubtype super sub
   | sub == super = return True
   | otherwise    = do
     -- not efficient, but that can be fixed later
-      let subName = Type.nameOf sub
-      supers <- getSuperTypesOf subName
+      supers <- getSuperTypesOf sub
       superList <- mapM getFromScope (Set.toAscList supers)
       matches <- mapM (isSubtype super) superList
       return $ anyTrue matches
