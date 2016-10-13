@@ -438,8 +438,8 @@ exprToTyped e = case e of
    checkFnCall typedFn typedArgs
  (E.Cast t e') -> do
    innerExpr <- exprToTyped e'
-   typ <- getFromScope t
-   return $ Cast typ innerExpr
+   _ <- getType t
+   return $ Cast t innerExpr
  (E.Var name) -> do
    t <- getFromScope name
    return $ Var t name
@@ -532,7 +532,7 @@ isSubtype super sub
   | otherwise    = do
     -- not efficient, but that can be fixed later
       supers <- getSuperTypesOf sub
-      superList <- mapM getFromScope (Set.toAscList supers)
+      let superList = Set.toAscList supers
       matches <- mapM (isSubtype super) superList
       return $ anyTrue matches
 
