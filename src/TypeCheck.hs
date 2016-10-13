@@ -23,10 +23,11 @@ type Result = Either String
 type Scope = Map String TypeRef
 type TypeScope = [Scope]
 type Subtypes = Map TypeRef (Set TypeRef)
+type TypeMap = Map TypeRef Type
 data TypeCheckState
   = TypeCheckState
     { varScope :: [Scope]
-    , types :: Map TypeRef Type
+    , types :: TypeMap
     , subtypes :: Subtypes
     }
 type TSState = StateT TypeCheckState Result
@@ -41,7 +42,7 @@ nilT = "()"
 getVarScope :: TSState TypeScope
 getVarScope = liftM varScope $ get
 
-getTypes :: TSState (Map TypeRef Type)
+getTypes :: TSState (TypeMap)
 getTypes = liftM types $ get
 
 getSubtypes :: TSState Subtypes
@@ -50,7 +51,7 @@ getSubtypes = liftM subtypes $ get
 putVarScope :: TypeScope -> TSState ()
 putVarScope vars = modify (\s -> s { varScope = vars })
 
-putTypes :: Map TypeRef Type -> TSState ()
+putTypes :: TypeMap -> TSState ()
 putTypes typs = modify (\s -> s { types = typs })
 
 putSubtypes :: Subtypes -> TSState ()
@@ -84,16 +85,16 @@ endScope = do
    []     -> err "compiler bug: ending no scopes"
    (_:ss) -> putVarScope ss
 
-scopeLookup :: String -> TypeScope -> Maybe Type
+scopeLookup :: String -> TypeScope -> Maybe TypeRef
 scopeLookup name (m:ms) = Map.lookup name m <|> scopeLookup name ms
 scopeLookup _    []     = Nothing
 
-getFromScope :: String -> TSState Type
+getFromScope :: String -> TSState TypeRef
 getFromScope name = do
   ts <- getVarScope
   lift $ note ("Not defined: " ++ name) (scopeLookup name ts)
 
-defineVar :: String -> Type -> TypeScope -> Result TypeScope
+defineVar :: String -> TypeRef -> TypeScope -> Result TypeScope
 defineVar name typ (m:ms) =
   case Map.lookup name m of
    Nothing  -> return (Map.insert name typ m : ms)
@@ -101,23 +102,21 @@ defineVar name typ (m:ms) =
 defineVar _    _   []     =
   Left "compiler bug: empty scope stack??"
 
-setVarInScope :: String -> Type -> TSState ()
+setVarInScope :: String -> TypeRef -> TSState ()
 setVarInScope name typ = do
   ts <- getVarScope
   newScopes <- lift $ defineVar name typ ts
   putVarScope newScopes
 
-defineType :: TypeRef -> Type -> TypeScope -> Result TypeScope
-defineType name typ tscope =
-  case Map.lookup name tscope of
-   Nothing  -> return (Map.insert name typ tscope)
+defineType :: TypeRef -> Type -> TypeMap -> Result TypeMap
+defineType name typ types =
+  case Map.lookup name types of
+   Nothing  -> return (Map.insert name typ types)
    (Just t) ->
      -- Allow identical anonymouse types to share a name
      if t == typ && name == genName typ
-     then return tscope
+     then return types
      else Left ("Duplicate definition for: " ++ name)
-defineType _    _   []     =
-  Left "compiler bug: empty scope stack??"
 
 addType :: TypeRef -> Type -> TSState ()
 addType name typ = do
@@ -150,7 +149,7 @@ getSuperTypesOf sub = do
 
 -- Typing functions --
 
-runTypechecking :: D.File -> Result (Map TypeRef Type, [Decl])
+runTypechecking :: D.File -> Result (TypeMap, [Decl])
 runTypechecking file = evalStateT (checkFileM file) startingState
 
 startingState :: TypeCheckState
@@ -170,7 +169,7 @@ startingState =
      , subtypes = Map.empty
      }
 
-checkFileM :: D.File -> TSState (Map TypeRef Type, [Decl])
+checkFileM :: D.File -> TSState (TypeMap, [Decl])
 checkFileM file = do
   gatherNamedTypes file
   gatherVarBindings file
@@ -290,13 +289,13 @@ checkDeclaration d = case d of
    typedBody <- requireReturnType retType body
    endScope
    return $ StmtDecl $ Let name tname $ Lambda tname args typedBody
- (D.Let name t expr) -> do
+ (D.Let name tname expr) -> do
    typedE <- exprToTyped expr
-   tname <- ensureAdded t
+   _ <- getType tname -- ensure exists
    _ <- requireSubtype (typeOf typedE) tname
    return $ StmtDecl $ Let name tname typedE
  (D.TypeDef name t) -> do
-   typ <- getType t -- added in the gatherNamedTypes phase
+   typ <- getType name -- added in the gatherNamedTypes phase
    return $ IR.TypeDecl name typ
 
 requireReturnType :: TypeRef -> S.Statement -> TSState Statement
@@ -328,8 +327,7 @@ checkStatement retType stmt = case stmt of
     typedE <- exprToTyped e
     _ <- requireSubtype (typeOf typedE) retType
     return $ Return (Just typedE)
-  (S.Let name t e) -> do
-    tname <- ensureAdded t
+  (S.Let name tname e) -> do
     _ <- getType tname
     setVarInScope name tname
     typedE <- exprToTyped e
@@ -447,23 +445,23 @@ exprToTyped e = case e of
    return $ Var t name
  (E.Access e' name) -> do
    typedInner <- exprToTyped e'
-   t <- getFieldType (typeOf typedInner) name
-   return $ Access t typedInner name
+   tref <- getFieldType (typeOf typedInner) name
+   return $ Access tref typedInner name
 
-binaryReturnType :: E.BinOp -> Type -> TSState Type
+binaryReturnType :: E.BinOp -> TypeRef -> TSState TypeRef
 binaryReturnType op t
   | op == E.Plus =
     -- special case "+" because it also works on strings
-    if t `elem` [Type.Int, Type.Float, Type.String]
+    if t `elem` ["Int", "Float", "String"]
     then return t
     else err $ "Can't add values of type: " ++ show t
   | op `elem` numericOps = requireNumeric t
-  | op `elem` integerOps = requireSubtype t Type.Int
-  | op `elem` booleanOps = requireSubtype t Type.Bool
-  | op `elem` compOps    = return Type.Bool
+  | op `elem` integerOps = requireSubtype t "Int"
+  | op `elem` booleanOps = requireSubtype t "Bool"
+  | op `elem` compOps    = return "Bool"
   | op `elem` numCompOps = do
       _ <- requireNumeric t
-      return Type.Bool
+      return "Bool"
   | otherwise            = err $ "op missing from list: " ++ show op
 
 numericOps :: [E.BinOp]
@@ -486,16 +484,18 @@ numCompOps :: [E.BinOp]
 numCompOps =
   [E.Less, E.LessEq, E.Greater, E.GreaterEq]
 
-unaryReturnType :: E.UnaryOp -> Type -> TSState Type
+unaryReturnType :: E.UnaryOp -> TypeRef -> TSState TypeRef
 unaryReturnType op t = case op of
-  E.BitInvert -> requireSubtype t (Type.Int)
-  E.BoolNot   -> requireSubtype t (Type.Bool)
+  E.BitInvert -> requireSubtype t "Int"
+  E.BoolNot   -> requireSubtype t "Bool"
 
 checkFnCall :: Expression -> [Expression] -> TSState Expression
 checkFnCall typedFn typedArgs =
-  let fnType = typeOf typedFn
+  let fnTypeRef = typeOf typedFn
       argTypes = map typeOf typedArgs
-  in case fnType of
+  in do
+    fnType <- getType fnTypeRef
+    case fnType of
       (Function argTs retT) ->
         if length argTs /= length typedArgs
         then err $ "argument length mismatch"
@@ -506,19 +506,19 @@ checkFnCall typedFn typedArgs =
         err $ "calling value of type " ++ show fnType ++ " as a function"
 
 -- once interfaces exist, replace this with the Num interface
-requireNumeric :: Type -> TSState Type
+requireNumeric :: TypeRef -> TSState TypeRef
 requireNumeric t =
-  if t `elem` [Type.Int, Type.Float]
+  if t `elem` ["Int", "Float"]
   then return t
   else err $ "Expected a numeric value: " ++ show t
 
-requireEqual :: Type -> Type -> TSState Type
+requireEqual :: TypeRef -> TypeRef -> TSState TypeRef
 requireEqual t1 t2 =
   if t1 == t2 then return t1
   else err ("Expected types to be the same: " ++
-            show t1 ++ ", " ++ show t2)
+            t1 ++ ", " ++ t2)
 
-requireSubtype :: TypeRef -> TypeRef -> TSState Type
+requireSubtype :: TypeRef -> TypeRef -> TSState TypeRef
 requireSubtype sub super = do
   isSub <- isSubtype super sub
   if isSub
@@ -539,15 +539,16 @@ isSubtype super sub
 anyTrue :: [Bool] -> Bool
 anyTrue = foldl (||) False
 
-getFieldType :: Type -> String -> TSState Type
-getFieldType typ field = do
+getFieldType :: TypeRef -> String -> TSState TypeRef
+getFieldType tname field = do
+  typ <- getType tname
   fieldTypes <- getStructFields typ
   let errMsg = "field " ++ field ++ " not on type " ++ show typ
   fieldTname <- lift $ note errMsg (lookup field fieldTypes)
-  getType fieldTname
+  return fieldTname
 
 getStructFields :: Type -> TSState [(String, TypeRef)]
-getStructFields (Struct _ fields) =
+getStructFields (Struct fields) =
   return fields
 getStructFields t =
   err $ "Can't access field on a value of type " ++ show t
