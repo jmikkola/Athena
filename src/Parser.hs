@@ -10,8 +10,8 @@ import AST.Expression (Expression, BinOp, UnaryOp, Value)
 import qualified AST.Expression as E
 import AST.Statement (Statement)
 import qualified AST.Statement as S
-import Type (Type)
-import qualified Type as T
+import AST.Type (Type, TypeDecl)
+import qualified AST.Type as T
 
 parseFile :: String -> Either String File
 parseFile content = applyLeft show $ parse fileParser "<input>" content
@@ -56,7 +56,7 @@ funcDeclaration = do
     _ <- any1LinearWhitespace
     return typ
   body <- blockStatement
-  let typ = T.Function (map snd args) (unwrapOr retType T.Nil)
+  let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
   return $ D.Function name typ (map fst args) body
 
 typeDeclaration :: Parser Declaration
@@ -65,7 +65,7 @@ typeDeclaration = do
   _ <- any1LinearWhitespace
   name <- typeName
   _ <- any1LinearWhitespace
-  typ <- typeParser
+  typ <- typeDefParser
   return $ D.TypeDef name typ
 
 funcArgDecl :: Parser [(String, Type)]
@@ -431,20 +431,20 @@ unaryOpParser =
   choices [ ("~", E.BitInvert)
           , ("!", E.BoolNot) ]
 
----- Type parsers ----
+---- AST.Type parsers ----
+
+nilType :: TypeDecl
+nilType = T.TypeName "()"
 
 typeParser :: Parser Type
-typeParser = enumTypeParser <|> structTypeParser <|> choices types <|> namedType
+typeParser = do
+  name <- string "()" <|> typeName
+  return name -- return $ Type name
 
-types :: [(String, Type)]
-types = [ ("String", T.String)
-        , ("Float", T.Float)
-        , ("Int", T.Int)
-        , ("Bool", T.Bool)
-        , ("()", T.Nil)
-        ]
+typeDefParser :: Parser TypeDecl
+typeDefParser = enumTypeParser <|> structTypeParser <|> namedType
 
-enumTypeParser :: Parser Type
+enumTypeParser :: Parser TypeDecl
 enumTypeParser = do
   _ <- string "enum"
   _ <- any1LinearWhitespace
@@ -454,7 +454,7 @@ enumTypeParser = do
   _ <- string "}"
   return $ T.Enum options
 
-enumField :: Parser (String, [(String, Type)])
+enumField :: Parser (String, T.EnumOption)
 enumField = do
   name <- typeName
   fields <- optionMaybe $ try $ do
@@ -462,14 +462,14 @@ enumField = do
     structTypeBody
   return (name, unwrapOr fields [])
 
-structTypeParser :: Parser Type
+structTypeParser :: Parser TypeDecl
 structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
   fields <- structTypeBody
   return $ T.Struct fields
 
-structTypeBody :: Parser [(String, Type)]
+structTypeBody :: Parser [(String, TypeDecl)]
 structTypeBody = do
   _ <- string "{"
   _ <- statementSep
@@ -477,17 +477,17 @@ structTypeBody = do
   _ <- string "}"
   return fields
 
-structField :: Parser (String, Type)
+structField :: Parser (String, TypeDecl)
 structField = do
   name <- valueName
   _ <- any1LinearWhitespace
   typ <- typeParser
-  return (name, typ)
+  return (name, T.TypeName typ)
 
-namedType :: Parser Type
+namedType :: Parser TypeDecl
 namedType = do
-  name <- typeName
-  return $ T.TypeName name
+  t <- typeParser
+  return $ T.TypeName t
 
 ---- Helper functions ----
 

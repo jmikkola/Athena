@@ -4,7 +4,7 @@ import AST.Expression
   ( UnaryOp (..)
   , BinOp (..)
   )
-import Type (Type)
+import Type (Type, TypeRef)
 import qualified Type as T
 
 data Decl
@@ -15,42 +15,42 @@ data Decl
 data Statement
   = Return (Maybe Expression)
     -- Let handles both variable and function declarations
-  | Let String Type Expression
+  | Let String TypeRef Expression
   | Assign [String] Expression
-  | Block (Maybe Type) [Statement]
+  | Block (Maybe TypeRef) [Statement]
   | Expr Expression
   | If Expression Statement (Maybe Statement)
   | While Expression Statement
   deriving (Eq, Show)
 
 class Typeable a where
-  typeOf :: a -> Type
+  typeOf :: a -> TypeRef
 
 data Value
   = StrVal String
   | BoolVal Bool
   | IntVal Int
   | FloatVal Float
-  | StructVal String [(String, Expression)]
+  | StructVal TypeRef [(String, Expression)]
   deriving (Eq, Show)
 
 instance Typeable Value where
-  typeOf (StrVal _)      = T.String
-  typeOf (BoolVal _)     = T.Bool
-  typeOf (IntVal _)      = T.Int
-  typeOf (FloatVal _)    = T.Float
-  typeOf (StructVal n _) = T.TypeName n
+  typeOf (StrVal _)      = "String"
+  typeOf (BoolVal _)     = "Bool"
+  typeOf (IntVal _)      = "Int"
+  typeOf (FloatVal _)    = "Float"
+  typeOf (StructVal t _) = t
 
 data Expression
-  = Paren Expression Type
+  = Paren Expression TypeRef
   | Val Value
-  | Unary Type UnaryOp Expression
-  | Binary Type BinOp Expression Expression
-  | Call Type Expression [Expression]
-  | Cast Type Expression
-  | Var Type String
-  | Access Type Expression String
-  | Lambda Type [String] Statement
+  | Unary TypeRef UnaryOp Expression
+  | Binary TypeRef BinOp Expression Expression
+  | Call TypeRef Expression [Expression]
+  | Cast TypeRef Expression
+  | Var TypeRef String
+  | Access TypeRef Expression String
+  | Lambda TypeRef [String] Statement
   deriving (Eq, Show)
 
 instance Typeable Expression where
