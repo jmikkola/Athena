@@ -132,7 +132,7 @@ getType name = do
    Nothing  -> err $ "undefined type: " ++ name
 
 addSubtype :: TypeRef -> TypeRef -> TSState ()
-addSubtype sub super = updateSubtypes addSub
+addSubtype super sub = updateSubtypes addSub
   where addSub subtypes =
           let newSupers = case Map.lookup sub subtypes of
                 Nothing     -> Set.singleton super
@@ -205,7 +205,14 @@ declareType name t = case t of
     addType name (Type.Struct typedFields)
   T.Enum options -> do
     typedOptions <- mapMSnd ensureOptionAdded options
+    optionNames <- mapM addOptionType typedOptions
+    _ <- mapM (addSubtype name) optionNames
     addType name (Type.Enum typedOptions)
+
+addOptionType :: (String, [(String, TypeRef)]) -> TSState TypeRef
+addOptionType (name, fields) = do
+  addType name $ Type.Struct fields
+  return name
 
 ensureAdded :: T.TypeDecl -> TSState TypeRef
 ensureAdded t = case t of
