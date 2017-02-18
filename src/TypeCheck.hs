@@ -377,6 +377,31 @@ checkStatement retType stmt = case stmt of
     endScope
 
     return $ While typedTest blk
+  (S.Match expr cases) -> do
+    typedExpr <- exprToTyped expr
+    typedCases <- mapM (caseToTyped retType (typeOf typedExpr)) cases
+    return $ Match typedExpr typedCases
+
+caseToTyped :: TypeRef -> TypeRef -> S.MatchCase
+caseToTyped retType matchedType (S.MatchCase match body)
+caseToTyped = do
+  beginScope
+  typedMatch <- checkMatch matchType match
+  typedBody <- checkStatement retType body
+  endScope
+  return $ MatchCase typedMatch typedBody
+
+checkMatch TypeRef -> S.MatchExpression
+checkMatch matchedType matchExpr = case matchExpr of
+  S.MatchAnything -> return MatchAnything
+  S.MatchVariable name -> do
+    -- TODO: introduce variable, typed matchedTYpe
+    return MatchVariable string
+  S.MatchStructure typeName fields -> do
+    -- TODO: ensure typeName is a subtype (?) of matchedType
+    -- TODO: zip the field expressions with the fields of matchedType
+    typedFields <- map (\(t,f) -> checkMatch t f) (zip fieldTypes fields)
+    return $ S.MatchStructure typeRef typedFields
 
 checkBlock :: TypeRef -> [S.Statement] -> TSState Statement
 checkBlock retType stmts = blkStmts stmts []

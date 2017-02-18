@@ -21,6 +21,17 @@ data Statement
   | Expr Expression
   | If Expression Statement (Maybe Statement)
   | While Expression Statement
+  | Match Expression [MatchCase]
+  deriving (Eq, Show)
+
+data MatchCase
+  = MatchCase MatchExpression Statement
+  deriving (Eq, Show)
+
+data MatchExpression
+  = MatchAnything
+  | MatchVariable String
+  | MatchStructure TypeRef [MatchExpression]
   deriving (Eq, Show)
 
 class Typeable a where
