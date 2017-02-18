@@ -398,6 +398,9 @@ checkMatch matchedType matchExpr = case matchExpr of
     return $ MatchVariable name
   S.MatchStructure typeName fields -> do
     typ <- getType typeName
+    -- TODO: this isn't quite right (e.g. this shouldn't allow matching Pair<1,1> if the
+    -- matched expression is Pair<a,a>). Fixing this probably requires making enums more of a
+    -- first-class concept.
     _ <- requireSubtype typeName matchedType
     fieldTypes <- getStructFields typ
     typedFields <- mapM (\((_,t),f) -> checkMatch t f) (zip fieldTypes fields)
