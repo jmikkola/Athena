@@ -152,7 +152,7 @@ testParsingMatch =
       case1 = S.MatchCase S.MatchAnything (ret 1)
       case2 = S.MatchCase (S.MatchStructure "Link" [S.MatchAnything, S.MatchVariable "next"]) (ret 2)
       expected = S.Match (E.Var "x") [case1, case2]
-  in expectParses matchStatement text expected
+  in expectParses statementParser text expected
 
 testParsingFunc :: IO Bool
 testParsingFunc =
