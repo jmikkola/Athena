@@ -1,0 +1,39 @@
+type LinkedList {
+  End
+  Link {
+    value String
+    next LinkedList
+  }
+}
+
+fn length(l LinkedList) Int {
+  return length_(l, 0)
+}
+
+fn length_(l LinkedList, size Int) Int {
+  match l {
+    End {
+      return size
+    }
+    Link(_, next) {
+      return length_(next, 1 + size)
+    }
+  }
+}
+
+fn main() {
+  let a1 = Link{
+    value: "last",
+    next: End{},
+  }
+  let a2 = Link{
+    value: "middle",
+    next: a1,
+  }
+  let a3 = Link{
+    value: "first",
+    next: a2,
+  }
+
+  print(String(length(a3)))
+}
