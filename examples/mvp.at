@@ -6,7 +6,7 @@ fn main() {
     // Only one size of integer and floating types
     let b Float = 345.234
     // Strings are also allowed
-    let c String = "a quoted string \"escaped quote\" \\ \n"
+    let c String = "a quoted string \"escaped quote\" \\ newline->\n"
     // As are booleans.
     let d Bool = False
 

@@ -34,10 +34,13 @@ main :: IO ()
 main = do
   testMain
   args <- getArgs
-  content <- readFile (args !! 0)
-  compileResult <- runExceptT $ compile content
-  case compileResult of
-   Left err ->
-     putStrLn $ err
-   Right exitCode ->
-     exitWith exitCode
+  if length args < 1
+    then putStrLn "usage: athena <file.at>"
+    else do
+    content <- readFile (args !! 0)
+    compileResult <- runExceptT $ compile content
+    case compileResult of
+     Left err ->
+       putStrLn $ err
+     Right exitCode ->
+       exitWith exitCode
