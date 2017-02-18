@@ -3,7 +3,7 @@ module Main where
 import Control.Monad.Except
 import System.Environment ( getArgs )
 import System.Process ( rawSystem )
-import System.Exit ( exitWith, ExitCode )
+import System.Exit ( exitWith, ExitCode(..) )
 
 import Parser ( parseFile )
 import ParserTest ( testMain )
@@ -32,15 +32,17 @@ compile content = do
 
 main :: IO ()
 main = do
-  testMain
   args <- getArgs
-  if length args < 1
-    then putStrLn "usage: athena <file.at>"
-    else do
-    content <- readFile (args !! 0)
-    compileResult <- runExceptT $ compile content
-    case compileResult of
-     Left err ->
-       putStrLn $ err
-     Right exitCode ->
-       exitWith exitCode
+  case args of
+   ["--test"] -> testMain
+   [fileName] -> do
+     content <- readFile fileName
+     compileResult <- runExceptT $ compile content
+     case compileResult of
+      Left err       -> do
+        putStrLn $ err
+        exitWith $ ExitFailure 1
+      Right exitCode -> exitWith exitCode
+   _ -> do
+     putStrLn "usage: athena <file.at>"
+     exitWith $ ExitFailure 1
