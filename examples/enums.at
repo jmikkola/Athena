@@ -11,9 +11,14 @@ type ASTIsh enum {
   }
 }
 
+fn printEnum(a ASTIsh) {
+    print(String(a))
+}
+
 fn main() {
   let a ASTIsh = TNamed{
     name: "some name",
   }
   print(String(a))
+  printEnum(a)
 }
