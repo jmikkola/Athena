@@ -109,6 +109,7 @@ tests =
   -- blocks and larger
   , testParsingBlock
   , testParsingIf
+  , testParsingMatch
   , testParsingFunc
   , testParsingFunc2
   , testParsingTypeDecl
@@ -143,6 +144,15 @@ testParsingIf =
       body = [S.Return $ Just $ E.Var "a"]
       expected = S.If test body Nothing
   in expectParses ifStatement text expected
+
+testParsingMatch :: IO Bool
+testParsingMatch =
+  let text = "match x {\n  _ {\nreturn 1\n}\n  Link(_, next) {\n return 2\n}\n}"
+      ret n = S.Block [S.Return $ Just $ E.Val $ E.IntVal n]
+      case1 = S.MatchCase S.MatchAnything (ret 1)
+      case2 = S.MatchCase (S.MatchStructure "Link" [S.MatchAnything, S.MatchVariable "next"]) (ret 2)
+      expected = S.Match (E.Var "x") [case1, case2]
+  in expectParses matchStatement text expected
 
 testParsingFunc :: IO Bool
 testParsingFunc =

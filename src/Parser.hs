@@ -95,8 +95,8 @@ nextArgDecl = do
 
 statementParser :: Parser Statement
 statementParser = choice $ map try [
-  returnStatement, letStatement, ifStatement, whileStatement, blockStatement,
-  assignStatement, exprStatement]
+  returnStatement, letStatement, ifStatement, whileStatement, matchStatement,
+  blockStatement, assignStatement, exprStatement]
 
 returnStatement :: Parser Statement
 returnStatement = do
@@ -152,7 +152,7 @@ nextStatement = do
   rest <- blockStatements
   return $ stmt : rest
 
-endBlock :: Parser [Statement]
+endBlock :: Parser [a]
 endBlock = do
   _ <- char '}'
   return []
@@ -196,6 +196,71 @@ whileStatement = do
   body <- blockStatement
   return $ let (S.Block stmts) = body
            in S.While test stmts
+
+matchStatement :: Parser Statement
+matchStatement = do
+  _ <- string "match"
+  _ <- any1Whitespace
+  value <- expressionParser
+  _ <- anyWhitespace
+  cases <- matchCases
+  return $ S.Match value cases
+
+matchCases :: Parser [S.MatchCase]
+matchCases = do
+  _ <- char '{'
+  _ <- statementSep
+  matchCaseBlock
+
+matchCaseBlock :: Parser [S.MatchCase]
+matchCaseBlock = endBlock <|> nextMatchCase
+
+nextMatchCase :: Parser [S.MatchCase]
+nextMatchCase = do
+  matchCase <- matchCaseParser
+  _ <- statementSep
+  rest <- matchCaseBlock
+  return $ matchCase : rest
+
+matchCaseParser :: Parser S.MatchCase
+matchCaseParser = do
+  e <- matchExpression
+  _ <- any1Whitespace
+  body <- blockStatement
+  return $ S.MatchCase e body
+
+matchExpression :: Parser S.MatchExpression
+matchExpression = matchAnything <|> matchVariable <|> matchStructure
+
+matchAnything :: Parser S.MatchExpression
+matchAnything = do
+  _ <- string "_"
+  return S.MatchAnything
+
+matchVariable :: Parser S.MatchExpression
+matchVariable = liftM S.MatchVariable $ valueName
+
+matchStructure :: Parser S.MatchExpression
+matchStructure = do
+  structType <- typeParser
+  -- TODO: Make parens optional
+  _ <- char '('
+  _ <- anyWhitespace
+  inner <- choice [matchExpressions, argsEnd]
+  return $ S.MatchStructure structType inner
+
+matchExpressions :: Parser [S.MatchExpression]
+matchExpressions = do
+  e <- matchExpression
+  _ <- anyWhitespace
+  rest <- choice [matchExpressionsNext, argsEnd]
+  return $ e : rest
+
+matchExpressionsNext :: Parser [S.MatchExpression]
+matchExpressionsNext = do
+  _ <- char ','
+  _ <- anyWhitespace
+  matchExpressions
 
 ---- AST.Expression parsers ----
 
@@ -304,7 +369,7 @@ fnCallNextArg = do
   _ <- anyWhitespace
   fnCallArg
 
-argsEnd :: Parser [Expression]
+argsEnd :: Parser [a]
 argsEnd = do
   _ <- char ')'
   return []
