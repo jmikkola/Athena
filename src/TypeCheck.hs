@@ -24,12 +24,14 @@ type Result = Either String
 type Scope = Map String TypeRef
 type TypeScope = [Scope]
 type Subtypes = Map TypeRef (Set TypeRef)
+type EnumVariants = Map TypeRef (Set TypeRef)
 type TypeMap = Map TypeRef Type
 data TypeCheckState
   = TypeCheckState
     { varScope :: [Scope]
     , types :: TypeMap
     , subtypes :: Subtypes
+    , enumVariants :: EnumVariants
     }
 type TSState = StateT TypeCheckState Result
 
@@ -46,6 +48,9 @@ getVarScope = liftM varScope $ get
 getTypes :: TSState (TypeMap)
 getTypes = liftM types $ get
 
+getEnumVariants :: TSState (EnumVariants)
+getEnumVariants = liftM enumVariants $ get
+
 getSubtypes :: TSState Subtypes
 getSubtypes = liftM subtypes $ get
 
@@ -58,6 +63,9 @@ putTypes typs = modify (\s -> s { types = typs })
 putSubtypes :: Subtypes -> TSState ()
 putSubtypes subs = modify (\s -> s { subtypes = subs })
 
+putEnumVariants :: EnumVariants -> TSState ()
+putEnumVariants variants = modify (\s -> s { enumVariants = variants })
+
 updateVarScope :: (TypeScope -> TypeScope) -> TSState ()
 updateVarScope f = do
   ts <- getVarScope
@@ -67,6 +75,11 @@ updateSubtypes :: (Subtypes -> Subtypes) -> TSState ()
 updateSubtypes f = do
   subs <- getSubtypes
   putSubtypes (f subs)
+
+updateEnumVariants :: (EnumVariants -> EnumVariants) -> TSState ()
+updateEnumVariants f = do
+  variants <- getEnumVariants
+  putEnumVariants (f variants)
 
 -- Scaffolding functions --
 
@@ -140,6 +153,13 @@ addSubtype super sub = updateSubtypes addSub
                 (Just sups) -> Set.insert super sups
           in Map.insert sub newSupers subtypes
 
+addEnumVariant :: TypeRef -> TypeRef -> TSState ()
+addEnumVariant enumName optionName = updateEnumVariants addVariant
+  where addVariant variants =
+          let existing = fromMaybe Set.empty $ Map.lookup enumName variants
+              new = Set.insert optionName existing
+          in Map.insert enumName new variants
+
 getSuperTypesOf :: TypeRef -> TSState (Set TypeRef)
 getSuperTypesOf sub = do
   subs <- getSubtypes
@@ -208,6 +228,7 @@ declareType name t = case t of
     typedOptions <- mapMSnd ensureOptionAdded options
     optionNames <- mapM addOptionType typedOptions
     _ <- mapM (addSubtype name) optionNames
+    _ <- mapM (addEnumVariant name) optionNames
     addType name (Type.Enum typedOptions)
 
 addOptionType :: (String, [(String, TypeRef)]) -> TSState TypeRef

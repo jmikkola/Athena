@@ -5,7 +5,7 @@ import qualified Data.Map as Map
 import Control.Monad (foldM)
 
 import IR
-import Type
+--import Type
 
 data Coverage
   = TotalCoverage
