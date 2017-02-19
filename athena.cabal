@@ -61,6 +61,7 @@ executable athena
                 Backends.Go.Syntax,
                 Type,
                 IR,
+                Matching,
                 Parser,
                 ParserTest,
                 TypeCheck

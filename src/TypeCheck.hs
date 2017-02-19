@@ -16,6 +16,7 @@ import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Type as T
 import Type
+import Matching
 
 type TypeName = String
 
