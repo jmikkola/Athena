@@ -1,6 +1,7 @@
 module Backends.Go.Convert where
 
-import Control.Monad (liftM)
+import Control.Monad (liftM, foldM)
+import Data.Foldable (toList)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -120,7 +121,7 @@ convertStmt types stmt = case stmt of
              Syntax.VarStmt "_" (Just t') (Syntax.Var s)]
   IR.Assign fs e -> do
     e' <- convertExpr types e
-    return [Syntax.Assign fs e']
+    return [Syntax.Assign [fs] e']
   IR.Block _ _ -> do
     blk <- convertBlock types stmt
     return [blk]
@@ -131,11 +132,64 @@ convertStmt types stmt = case stmt of
     e' <- convertExpr types e
     st' <- convertBlock types st
     melse' <- mapM (convertBlock types) melse
-    return [Syntax.If e' st' melse']
+    return [Syntax.If Nothing e' st' melse']
   IR.While e st -> do
     e' <- convertExpr types e
     st' <- convertBlock types st
     return [Syntax.For1 e' st']
+  IR.Match e cases -> do
+    e' <- convertExpr types e
+    let varName = "match_var"
+    let varStmt = Syntax.VarStmt varName Nothing e'
+    --cases' <- mapM (convertMatchCase types varName) cases
+    cases' <- foldM (\prev c -> fmap Just $ convertMatchCase types varName c prev) Nothing (reverse cases)
+    return [Syntax.Block $ varStmt : (toList cases')]
+
+convertMatchCase :: Map TypeRef Type -> String -> IR.MatchCase -> Maybe Syntax.Statement
+                 -> Result Syntax.Statement
+convertMatchCase types varName (IR.MatchCase matchExpr body) nextCase = do
+  (mAssign, test, assignments) <- convertMatchExpr types varName matchExpr
+  body' <- convertStmt types body
+  let bodyStmts = case body' of
+        [Syntax.Block stmts] -> stmts
+        _                    -> body'
+  let ifCase = Syntax.Block $ assignments ++ bodyStmts
+  return $ Syntax.If mAssign test ifCase nextCase
+
+convertMatchExpr :: Map TypeRef Type -> String -> IR.MatchExpression
+                 -> Result (Maybe Syntax.Statement, Syntax.Expression, [Syntax.Statement])
+convertMatchExpr types varName matchExpr = case matchExpr of
+  IR.MatchAnything ->
+    return (Nothing, Syntax.BoolVal True, [])
+  IR.MatchVariable name ->
+    return (Nothing, Syntax.BoolVal True, [Syntax.VarStmt name Nothing $ Syntax.Var varName])
+  IR.MatchStructure typeRef fields -> do
+    let typeCastExpr = Syntax.InterfaceCast (Syntax.GoStruct typeRef) (Syntax.Var varName)
+    let assignment = Syntax.Let [["matched"], ["ok"]] typeCastExpr
+    let test = Syntax.Var "ok"
+
+    fieldNames <- getFieldNames types typeRef
+    -- TODO: add support for nested match expressions
+    fieldVarNames <- mapM requireMatchVar fields
+    let varStmts =
+          [ Syntax.VarStmt fieldVar Nothing (Syntax.FieldAccess (Syntax.Var "matched") fieldName)
+          | (fieldVar, fieldName) <- zip fieldVarNames fieldNames, fieldVar /= "_" ]
+    let useMatchVar = Syntax.Assign [["_"]] $ Syntax.Var "matched"
+    return (Just assignment, test, useMatchVar : varStmts)
+
+requireMatchVar :: IR.MatchExpression -> Result String
+requireMatchVar (IR.MatchAnything) = return "_"
+requireMatchVar (IR.MatchVariable v) = return v
+requireMatchVar (IR.MatchStructure _ _) = fail "TODO: support nested match expressions"
+
+getFieldNames :: Map TypeRef Type -> TypeRef -> Result [String]
+getFieldNames types typeRef = case Map.lookup typeRef types of
+  Nothing -> fail $ "Compiler bug: can't find type named " ++ show typeRef
+  Just t  -> case t of
+    T.Struct fields ->
+      return $ map fst fields
+    _ ->
+      fail $ "Compiler bug: can't access fields of non-struct type: " ++ show t
 
 convertValue :: Map TypeRef Type -> IR.Value -> Result Syntax.Expression
 convertValue types val = case val of

@@ -248,14 +248,27 @@ emitStatementNoIndent stmt = case stmt of
       emitExpression ex
   Assign names ex
     -> do
-      intersperse (write ".") (map write names)
+      intersperse (write ", ") $ map (\parts -> intersperse (write ".") (map write parts)) names
       write " = "
+      emitExpression ex
+  Let names ex
+    -> do
+      intersperse (write ", ") $ map (\parts -> intersperse (write ".") (map write parts)) names
+      write " := "
       emitExpression ex
   Expr ex
     -> emitExpression ex
-  If test body mElse
+  If mStmt test body mElse
     -> do
       write "if "
+      case mStmt of
+        Nothing ->
+          return ()
+        Just l@(Let _ _) -> do
+          emitStatementNoIndent l
+          write "; "
+        _ ->
+          error "Non-let statement in if condition"
       emitExpression test
       write " "
       emitStatementNoIndent body
@@ -293,7 +306,7 @@ emitElse els = case els of
   Just st -> do
     write " else "
     case st of
-     Block [elseif@(If _ _ _)] ->
+     Block [elseif@(If _ _ _ _)] ->
        emitStatementNoIndent elseif
      _ ->
        emitStatementNoIndent st

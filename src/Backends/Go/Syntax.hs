@@ -38,9 +38,10 @@ data Statement
   = JustReturn
   | Return Expression
   | VarStmt String (Maybe Type) Expression
-  | Assign [String] Expression
+  | Assign [[String]] Expression
+  | Let [[String]] Expression
   | Expr Expression
-  | If Expression Statement (Maybe Statement)
+  | If (Maybe Statement) Expression Statement (Maybe Statement)
   | Loop Statement
   | For1 Expression Statement
   | For3 (Maybe Statement) Expression (Maybe Statement) Statement
