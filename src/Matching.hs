@@ -2,7 +2,10 @@ module Matching where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Control.Monad (foldM)
+import Control.Monad.State
 
 import IR
 --import Type
@@ -22,11 +25,33 @@ type MatchResult = Either MatchError
 
 checkMatchExpressions :: [IR.MatchExpression] -> Maybe MatchError
 checkMatchExpressions exprs =
-  let coverageResult = foldM addCoverage noCoverage exprs
+  let coverageResult = checkExpressions exprs
   in case coverageResult of
       Left err -> Just err
       Right (Partial _) -> Just Incomplete
       Right TotalCoverage -> Nothing
+
+checkExpressions :: [IR.MatchExpression] -> MatchResult Coverage
+checkExpressions exprs = do
+  _ <- mapM (\e -> evalStateT (duplicatesCheck e) Set.empty) exprs
+  foldM addCoverage noCoverage exprs
+
+type VarUseState = StateT (Set String) MatchResult
+
+duplicatesCheck :: IR.MatchExpression -> VarUseState ()
+duplicatesCheck matchExpr = case matchExpr of
+  MatchAnything -> return ()
+  MatchVariable v -> addVar v
+  MatchStructure _ fields -> do
+    _ <- mapM duplicatesCheck fields
+    return ()
+
+addVar :: String -> VarUseState ()
+addVar v = do
+  existing <- get
+  if Set.member v existing
+    then lift . Left . DuplicateName $ "variable name used twice in the same match case: " ++ v
+    else put $ Set.insert v existing
 
 noCoverage :: Coverage
 noCoverage = Partial Map.empty
