@@ -4,15 +4,14 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Control.Monad (foldM)
 import Control.Monad.State
 
 import IR
---import Type
+import Type
 
 data Coverage
   = TotalCoverage
-  | Partial (Map (String, String) Coverage)
+  | Partial (Map String Coverage)
   deriving (Eq, Show)
 
 data MatchError
@@ -22,6 +21,8 @@ data MatchError
   deriving (Eq, Show)
 
 type MatchResult = Either MatchError
+
+type EnumOption = (String, [(String, TypeRef)])
 
 checkMatchExpressions :: [IR.MatchExpression] -> Maybe MatchError
 checkMatchExpressions exprs =
@@ -59,23 +60,39 @@ noCoverage = Partial Map.empty
 unreachable :: String -> MatchResult a
 unreachable = Left . Unreachable
 
-addCoverage :: Coverage -> IR.MatchExpression -> MatchResult Coverage
-addCoverage TotalCoverage expr =
+-- TODO: take a mapping from enum name to options, not just options
+addCoverage :: [EnumOption] -> Coverage -> IR.MatchExpression -> MatchResult Coverage
+addCoverage _ TotalCoverage expr =
   unreachable $ "unreachable branch: " ++ show expr
-addCoverage partial expr = case expr of
+addCoverage options partial expr = case expr of
   MatchAnything ->
     return TotalCoverage
   MatchVariable _ ->
     return TotalCoverage
   MatchStructure name fields -> do
-    additionalCoverage <- genTree name fields
+    additionalCoverage <- genTree options fields
     let newCoverage = mergeCoverage additionalCoverage partial
     if newCoverage == partial
        then unreachable $ "case does not match anything new: " ++ show expr
        else return newCoverage
 
-genTree :: String -> [IR.MatchExpression] -> MatchResult Coverage
-genTree = undefined -- TODO: get information about the enum options and the field names of each
+
+genTree :: [EnumOption] -> [IR.MatchExpression] -> MatchResult Coverage
+genTree options exprs = undefined
+
+partialForEnum :: [EnumOption] -> Coverage
+partialForEnum options =
+  merge $ map (uncurry partialForVariant) options
+
+partialForVariant :: String -> [(String, TypeRef)] -> Coverage
+partialForVariant enumName fields =
+  Partial $ Map.singleton enumName $ merge $ map partialForField $ map fst fields
+
+partialForField :: String -> Coverage
+partialForField name = Partial $ Map.singleton name noCoverage
+
+merge :: [Coverage] -> Coverage
+merge = foldl mergeCoverage noCoverage
 
 mergeCoverage :: Coverage -> Coverage -> Coverage
 mergeCoverage _ TotalCoverage = TotalCoverage
