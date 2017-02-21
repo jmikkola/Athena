@@ -24,16 +24,16 @@ type MatchResult = Either MatchError
 
 type EnumOption = (String, [(String, TypeRef)])
 
-checkMatchExpressions :: [IR.MatchExpression] -> Maybe MatchError
-checkMatchExpressions exprs = case checkExpressions exprs of
+checkMatchExpressions :: TypeCheckState -> [IR.MatchExpression] -> Maybe MatchError
+checkMatchExpressions types exprs = case checkExpressions types exprs of
   Left  err           -> Just err
   Right (Partial _)   -> Just Incomplete
   Right TotalCoverage -> Nothing
 
-checkExpressions :: [IR.MatchExpression] -> MatchResult Coverage
-checkExpressions exprs = do
+checkExpressions :: TypeCheckState -> [IR.MatchExpression] -> MatchResult Coverage
+checkExpressions types exprs = do
   _ <- mapM (\e -> evalStateT (duplicatesCheck e) Set.empty) exprs
-  foldM addCoverage noCoverage exprs
+  foldM (addCoverage types) noCoverage exprs
 
 type VarUseState = StateT (Set String) MatchResult
 
@@ -60,9 +60,10 @@ noCoverage = Partial Map.empty
 unreachable :: String -> MatchResult a
 unreachable = Left . Unreachable
 
--- addCoverage :: TypeMap -> EnumVariants -> Coverage -> IR.MatchExpression -> MatchResult Coverage
-addCoverage types variants coverage expr =
-  mustAddCoverage coverage (genTree types variants expr)
+addCoverage :: TypeCheckState -> Coverage -> IR.MatchExpression -> MatchResult Coverage
+addCoverage types coverage expr = do
+  exprCoverage <- genTree types expr
+  mustAddCoverage coverage exprCoverage
 
 mustAddCoverage :: Coverage -> Coverage -> MatchResult Coverage
 mustAddCoverage existing new =
@@ -71,25 +72,25 @@ mustAddCoverage existing new =
      then unreachable $ show new
      else return merged
 
---genTree :: TypeMap -> EnumVariants -> MatchExpression
-genTree types variants expr = case expr of
+genTree :: TypeCheckState -> IR.MatchExpression -> MatchResult Coverage
+genTree types expr = case expr of
   MatchAnything   ->
     return TotalCoverage
   MatchVariable _ ->
     return TotalCoverage
   MatchStructure typ fields -> do
-    -- TODO: get options fieldnames
-    options <- case Map.lookup typ variants of -- TODO: get parents rather than the variants of the individual structure
-      Nothing   -> fail $ "Comppiler bug: can't find type called " ++ typ
-      Just opts -> return opts
-    fieldNames <- case Map.lookup typ types of
-      Nothing   -> fail $ "Comppiler bug: can't find type called " ++ typ
-      Just _ -> undefined  -- TODO verify that this is a structure type and grab the field names
+    fieldNames <- getStructFieldNames typ
+    enumType <- getEnumFromOption typ
+    options <- getEnumOptions enumType
 
-    fieldTrees <- mapM (genTree types variants) fields
+    fieldTrees <- mapM (genTree types) fields
     let fieldCoverage = Partial $ Map.fromList $ zip fieldNames fieldTrees
     let emptyTree = partialForEnum options
-    return $ mergeCoverage emptyTree (partialOf typ namedFieldTrees)
+    return $ mergeCoverage emptyTree fieldCoverage
+
+getStructFieldNames = undefined
+getEnumFromOption = undefined
+getEnumOptions = undefined
 
 partialForEnum :: [EnumOption] -> Coverage
 partialForEnum options =
@@ -103,7 +104,7 @@ partialForField :: String -> Coverage
 partialForField name = partialOf name noCoverage
 
 partialOf :: String -> Coverage -> Coverage
-partialOf = Partial . Map.singleton
+partialOf s c = Partial $ Map.singleton s c
 
 merge :: [Coverage] -> Coverage
 merge = foldl mergeCoverage noCoverage

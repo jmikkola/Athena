@@ -21,18 +21,6 @@ import Matching
 type TypeName = String
 
 type Result = Either String
-type Scope = Map String TypeRef
-type TypeScope = [Scope]
-type Subtypes = Map TypeRef (Set TypeRef)
-type EnumVariants = Map TypeRef (Set TypeRef)
-type TypeMap = Map TypeRef Type
-data TypeCheckState
-  = TypeCheckState
-    { varScope :: [Scope]
-    , types :: TypeMap
-    , subtypes :: Subtypes
-    , enumVariants :: EnumVariants
-    }
 type TSState = StateT TypeCheckState Result
 
 -- types

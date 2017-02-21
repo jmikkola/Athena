@@ -1,6 +1,8 @@
 module Type where
 
 import Data.List (intercalate)
+import Data.Map (Map)
+import Data.Set (Set)
 
 data Type
   = String
@@ -14,6 +16,19 @@ data Type
   deriving (Eq, Ord, Show)
 
 type TypeRef = String -- name of a type
+
+type Scope = Map String TypeRef
+type TypeScope = [Scope]
+type Subtypes = Map TypeRef (Set TypeRef)
+type EnumVariants = Map TypeRef (Set TypeRef)
+type TypeMap = Map TypeRef Type
+data TypeCheckState
+  = TypeCheckState
+    { varScope :: [Scope]
+    , types :: TypeMap
+    , subtypes :: Subtypes
+    , enumVariants :: EnumVariants
+    }
 
 genName :: Type -> String
 genName t = case t of
