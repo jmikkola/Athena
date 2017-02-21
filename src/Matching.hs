@@ -25,12 +25,10 @@ type MatchResult = Either MatchError
 type EnumOption = (String, [(String, TypeRef)])
 
 checkMatchExpressions :: [IR.MatchExpression] -> Maybe MatchError
-checkMatchExpressions exprs =
-  let coverageResult = checkExpressions exprs
-  in case coverageResult of
-      Left err -> Just err
-      Right (Partial _) -> Just Incomplete
-      Right TotalCoverage -> Nothing
+checkMatchExpressions exprs = case checkExpressions exprs of
+  Left  err           -> Just err
+  Right (Partial _)   -> Just Incomplete
+  Right TotalCoverage -> Nothing
 
 checkExpressions :: [IR.MatchExpression] -> MatchResult Coverage
 checkExpressions exprs = do
@@ -39,14 +37,16 @@ checkExpressions exprs = do
 
 type VarUseState = StateT (Set String) MatchResult
 
+-- Check for duplicate names
 duplicatesCheck :: IR.MatchExpression -> VarUseState ()
 duplicatesCheck matchExpr = case matchExpr of
-  MatchAnything -> return ()
-  MatchVariable v -> addVar v
+  MatchAnything           -> return ()
+  MatchVariable v         -> addVar v
   MatchStructure _ fields -> do
     _ <- mapM duplicatesCheck fields
     return ()
 
+-- Mark a variable as used, failing if it has already been used
 addVar :: String -> VarUseState ()
 addVar v = do
   existing <- get
@@ -60,25 +60,36 @@ noCoverage = Partial Map.empty
 unreachable :: String -> MatchResult a
 unreachable = Left . Unreachable
 
--- TODO: take a mapping from enum name to options, not just options
-addCoverage :: [EnumOption] -> Coverage -> IR.MatchExpression -> MatchResult Coverage
-addCoverage _ TotalCoverage expr =
-  unreachable $ "unreachable branch: " ++ show expr
-addCoverage options partial expr = case expr of
-  MatchAnything ->
+-- addCoverage :: TypeMap -> EnumVariants -> Coverage -> IR.MatchExpression -> MatchResult Coverage
+addCoverage types variants coverage expr =
+  mustAddCoverage coverage (genTree types variants expr)
+
+mustAddCoverage :: Coverage -> Coverage -> MatchResult Coverage
+mustAddCoverage existing new =
+  let merged = mergeCoverage existing new
+  in if merged == existing
+     then unreachable $ show new
+     else return merged
+
+--genTree :: TypeMap -> EnumVariants -> MatchExpression
+genTree types variants expr = case expr of
+  MatchAnything   ->
     return TotalCoverage
   MatchVariable _ ->
     return TotalCoverage
-  MatchStructure name fields -> do
-    additionalCoverage <- genTree options fields
-    let newCoverage = mergeCoverage additionalCoverage partial
-    if newCoverage == partial
-       then unreachable $ "case does not match anything new: " ++ show expr
-       else return newCoverage
+  MatchStructure typ fields -> do
+    -- TODO: get options fieldnames
+    options <- case Map.lookup typ variants of -- TODO: get parents rather than the variants of the individual structure
+      Nothing   -> fail $ "Comppiler bug: can't find type called " ++ typ
+      Just opts -> return opts
+    fieldNames <- case Map.lookup typ types of
+      Nothing   -> fail $ "Comppiler bug: can't find type called " ++ typ
+      Just _ -> undefined  -- TODO verify that this is a structure type and grab the field names
 
-
-genTree :: [EnumOption] -> [IR.MatchExpression] -> MatchResult Coverage
-genTree options exprs = undefined
+    fieldTrees <- mapM (genTree types variants) fields
+    let fieldCoverage = Partial $ Map.fromList $ zip fieldNames fieldTrees
+    let emptyTree = partialForEnum options
+    return $ mergeCoverage emptyTree (partialOf typ namedFieldTrees)
 
 partialForEnum :: [EnumOption] -> Coverage
 partialForEnum options =
@@ -86,10 +97,13 @@ partialForEnum options =
 
 partialForVariant :: String -> [(String, TypeRef)] -> Coverage
 partialForVariant enumName fields =
-  Partial $ Map.singleton enumName $ merge $ map partialForField $ map fst fields
+  partialOf enumName $ merge $ map partialForField $ map fst fields
 
 partialForField :: String -> Coverage
-partialForField name = Partial $ Map.singleton name noCoverage
+partialForField name = partialOf name noCoverage
+
+partialOf :: String -> Coverage -> Coverage
+partialOf = Partial . Map.singleton
 
 merge :: [Coverage] -> Coverage
 merge = foldl mergeCoverage noCoverage
