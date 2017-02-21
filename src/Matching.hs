@@ -84,9 +84,21 @@ genTree types expr = case expr of
     options <- getEnumOptions types enumType
 
     fieldTrees <- mapM (genTree types) fields
-    let fieldCoverage = Partial $ Map.fromList $ zip fieldNames fieldTrees
+    let fieldCoverage = case fieldNames of
+          [] -> TotalCoverage
+          _  -> merge $ zipWith partialOf fieldNames fieldTrees
     let emptyTree = partialForEnum options
-    return $ mergeCoverage emptyTree fieldCoverage
+    return $ mergeCoverage emptyTree (partialOf typ fieldCoverage)
+
+foldTotals :: Coverage -> Coverage
+foldTotals coverage = case coverage of
+  TotalCoverage  -> TotalCoverage
+  Partial fields ->
+    let foldedFields = Map.map foldTotals fields
+    in if allTotal foldedFields then TotalCoverage else Partial foldedFields
+
+allTotal :: Map String Coverage -> Bool
+allTotal fields = all (== TotalCoverage) (Map.elems fields)
 
 getStructFieldNames :: TypeCheckState -> TypeRef -> MatchResult [String]
 getStructFieldNames tcs typ = case Map.lookup typ (types tcs) of
@@ -102,14 +114,14 @@ getEnumFromOption tcs typ = case Map.lookup typ (enumParents tcs) of
   Just t  -> return t
 
 getEnumOptions :: TypeCheckState -> TypeRef -> MatchResult [EnumOption]
-getEnumOptions tcs typ = case lookupEnumOptions tcs typ of
-  Nothing   -> fail "error in getEnumOptions"
-  Just opts -> return opts
-
-lookupEnumOptions :: TypeCheckState -> TypeRef -> Maybe [EnumOption]
-lookupEnumOptions tcs typ = do
-  variants <- Map.lookup typ (enumVariants tcs)
-  mapM (\t -> Map.lookup t (types tcs)) (Set.toList variants)
+getEnumOptions tcs typ = case Map.lookup typ (types tcs) of
+  Nothing   ->
+    fail "unknown enum type name in getEnumOptions"
+  Just opts -> case opts of
+    Enum namedOptions ->
+      return namedOptions
+    _ ->
+      fail "invalid enum type in getEnumOptions"
 
 partialForEnum :: [EnumOption] -> Coverage
 partialForEnum options =
@@ -132,4 +144,4 @@ mergeCoverage :: Coverage -> Coverage -> Coverage
 mergeCoverage _ TotalCoverage = TotalCoverage
 mergeCoverage TotalCoverage _ = TotalCoverage
 mergeCoverage (Partial m1) (Partial m2) =
-  Partial $ Map.unionWith mergeCoverage m1 m2
+  foldTotals $ Partial $ Map.unionWith mergeCoverage m1 m2

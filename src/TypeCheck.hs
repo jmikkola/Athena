@@ -190,6 +190,8 @@ startingState =
                , ("Bool", Type.Bool)
                ]
      , subtypes = Map.empty
+     , enumVariants = Map.empty
+     , enumParents = Map.empty
      }
 
 checkFileM :: D.File -> TSState (TypeMap, [Decl])
@@ -407,6 +409,10 @@ checkStatement retType stmt = case stmt of
     -- TODO: Make sure all cases are covered
     -- TODO: disallow duplicate match var names in a given case
     typedCases <- mapM (caseToTyped retType (typeOf typedExpr)) cases
+    types <- get
+    case checkMatchExpressions types (map caseExpression typedCases) of
+     Nothing -> return ()
+     Just e  -> err $ show e
     return $ Match typedExpr typedCases
 
 caseToTyped :: TypeRef -> TypeRef -> S.MatchCase -> TSState MatchCase
@@ -425,10 +431,7 @@ checkMatch matchedType matchExpr = case matchExpr of
     return $ MatchVariable name
   S.MatchStructure typeName fields -> do
     typ <- getType typeName
-    -- TODO: this isn't quite right (e.g. this shouldn't allow matching Pair<1,1> if the
-    -- matched expression is Pair<a,a>). Fixing this probably requires making enums more of a
-    -- first-class concept.
-    _ <- requireSubtype typeName matchedType
+    _ <- requireEnumVariant typeName matchedType
     fieldTypes <- getStructFields typ
     typedFields <- mapM (\((_,t),f) -> checkMatch t f) (zip fieldTypes fields)
     return $ MatchStructure typeName typedFields
@@ -579,6 +582,17 @@ requireEqual t1 t2 =
   if t1 == t2 then return t1
   else err ("Expected types to be the same: " ++
             t1 ++ ", " ++ t2)
+
+requireEnumVariant :: TypeRef -> TypeRef -> TSState TypeRef
+requireEnumVariant variant enum = do
+  parents <- getEnumParents
+  case Map.lookup variant parents of
+   Nothing  ->
+     err $ "unkown enum variant name: " ++ variant
+   Just parent ->
+     if parent == enum
+     then return enum
+     else err $ "type " ++ variant ++ " is not a variant of enum " ++ enum
 
 requireSubtype :: TypeRef -> TypeRef -> TSState TypeRef
 requireSubtype sub super = do

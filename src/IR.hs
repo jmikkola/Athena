@@ -28,6 +28,9 @@ data MatchCase
   = MatchCase MatchExpression Statement
   deriving (Eq, Show)
 
+caseExpression :: MatchCase -> MatchExpression
+caseExpression (MatchCase expr _) = expr
+
 data MatchExpression
   = MatchAnything
   | MatchVariable String
