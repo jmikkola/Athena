@@ -21,6 +21,7 @@ type Scope = Map String TypeRef
 type TypeScope = [Scope]
 type Subtypes = Map TypeRef (Set TypeRef)
 type EnumVariants = Map TypeRef (Set TypeRef)
+type EnumParents = Map TypeRef TypeRef
 type TypeMap = Map TypeRef Type
 data TypeCheckState
   = TypeCheckState
@@ -28,6 +29,7 @@ data TypeCheckState
     , types :: TypeMap
     , subtypes :: Subtypes
     , enumVariants :: EnumVariants
+    , enumParents :: EnumParents
     }
 
 genName :: Type -> String

@@ -33,11 +33,14 @@ nilT = "()"
 getVarScope :: TSState TypeScope
 getVarScope = liftM varScope $ get
 
-getTypes :: TSState (TypeMap)
+getTypes :: TSState TypeMap
 getTypes = liftM types $ get
 
-getEnumVariants :: TSState (EnumVariants)
+getEnumVariants :: TSState EnumVariants
 getEnumVariants = liftM enumVariants $ get
+
+getEnumParents :: TSState EnumParents
+getEnumParents = liftM enumParents $ get
 
 getSubtypes :: TSState Subtypes
 getSubtypes = liftM subtypes $ get
@@ -54,6 +57,9 @@ putSubtypes subs = modify (\s -> s { subtypes = subs })
 putEnumVariants :: EnumVariants -> TSState ()
 putEnumVariants variants = modify (\s -> s { enumVariants = variants })
 
+putEnumParents :: EnumParents -> TSState ()
+putEnumParents parents = modify (\s -> s { enumParents = parents})
+
 updateVarScope :: (TypeScope -> TypeScope) -> TSState ()
 updateVarScope f = do
   ts <- getVarScope
@@ -68,6 +74,11 @@ updateEnumVariants :: (EnumVariants -> EnumVariants) -> TSState ()
 updateEnumVariants f = do
   variants <- getEnumVariants
   putEnumVariants (f variants)
+
+updateEnumParents :: (EnumParents -> EnumParents) -> TSState ()
+updateEnumParents f = do
+  parents <- getEnumParents
+  putEnumParents (f parents)
 
 -- Scaffolding functions --
 
@@ -142,11 +153,14 @@ addSubtype super sub = updateSubtypes addSub
           in Map.insert sub newSupers subtypes
 
 addEnumVariant :: TypeRef -> TypeRef -> TSState ()
-addEnumVariant enumName optionName = updateEnumVariants addVariant
+addEnumVariant enumName optionName = do
+  updateEnumVariants addVariant
+  updateEnumParents addParent
   where addVariant variants =
           let existing = fromMaybe Set.empty $ Map.lookup enumName variants
               new = Set.insert optionName existing
           in Map.insert enumName new variants
+        addParent = Map.insert optionName enumName
 
 getSuperTypesOf :: TypeRef -> TSState (Set TypeRef)
 getSuperTypesOf sub = do

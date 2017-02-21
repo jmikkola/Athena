@@ -79,18 +79,37 @@ genTree types expr = case expr of
   MatchVariable _ ->
     return TotalCoverage
   MatchStructure typ fields -> do
-    fieldNames <- getStructFieldNames typ
-    enumType <- getEnumFromOption typ
-    options <- getEnumOptions enumType
+    fieldNames <- getStructFieldNames types typ
+    enumType <- getEnumFromOption types typ
+    options <- getEnumOptions types enumType
 
     fieldTrees <- mapM (genTree types) fields
     let fieldCoverage = Partial $ Map.fromList $ zip fieldNames fieldTrees
     let emptyTree = partialForEnum options
     return $ mergeCoverage emptyTree fieldCoverage
 
-getStructFieldNames = undefined
-getEnumFromOption = undefined
-getEnumOptions = undefined
+getStructFieldNames :: TypeCheckState -> TypeRef -> MatchResult [String]
+getStructFieldNames tcs typ = case Map.lookup typ (types tcs) of
+  Nothing -> fail "uknown type in getStructFieldNames"
+  Just t  -> case t of
+    Struct fields -> return $ map fst fields
+    _             -> fail "invalid type in getStructFieldNames"
+
+
+getEnumFromOption :: TypeCheckState -> TypeRef -> MatchResult TypeRef
+getEnumFromOption tcs typ = case Map.lookup typ (enumParents tcs) of
+  Nothing -> fail "unknown enum variant in getEnumFromOption"
+  Just t  -> return t
+
+getEnumOptions :: TypeCheckState -> TypeRef -> MatchResult [EnumOption]
+getEnumOptions tcs typ = case lookupEnumOptions tcs typ of
+  Nothing   -> fail "error in getEnumOptions"
+  Just opts -> return opts
+
+lookupEnumOptions :: TypeCheckState -> TypeRef -> Maybe [EnumOption]
+lookupEnumOptions tcs typ = do
+  variants <- Map.lookup typ (enumVariants tcs)
+  mapM (\t -> Map.lookup t (types tcs)) (Set.toList variants)
 
 partialForEnum :: [EnumOption] -> Coverage
 partialForEnum options =
