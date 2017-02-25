@@ -405,11 +405,10 @@ checkStatement retType stmt = case stmt of
     return $ While typedTest blk
   (S.Match expr cases) -> do
     typedExpr <- exprToTyped expr
-    -- TODO: Make sure cases don't shadow each other
-    -- TODO: Make sure all cases are covered
-    -- TODO: disallow duplicate match var names in a given case
     typedCases <- mapM (caseToTyped retType (typeOf typedExpr)) cases
     types <- get
+    -- TODO: allow incomplete matches when used as a statement
+    -- TODO: determine if the statement ever/always returns
     case checkMatchExpressions types (map caseExpression typedCases) of
      Nothing -> return ()
      Just e  -> err $ show e

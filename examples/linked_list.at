@@ -15,6 +15,9 @@ fn length_(l LinkedList, size Int) Int {
     End() {
       return size
     }
+    Link(_, End()) {
+      return 1 + size
+    }
     Link(_, next) {
       return length_(next, 1 + size)
     }
