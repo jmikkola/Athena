@@ -2,6 +2,7 @@ module Backends.Go.Convert where
 
 import Control.Monad (liftM, foldM)
 import Data.Foldable (toList)
+import Data.List (elemIndex)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -81,7 +82,8 @@ makeStructure types name (optName, fields) = do
   strMethod <- makeStringMethod optName fields'
   let structDef = Syntax.Structure optName fields'
   let recvType = Syntax.TypeName optName
-  let returnStmt = Syntax.Return $ Syntax.IntVal 1 -- TODO: Get actual value
+  optionNumber <- getOptionNumber types name
+  let returnStmt = Syntax.Return $ Syntax.IntVal optionNumber
   let methodDef = Syntax.Method ("self", recvType) (enumMethodName name)
                   enumTagMethodDecl (Syntax.Block [returnStmt])
   return [structDef, methodDef, strMethod]
@@ -179,9 +181,11 @@ createMatchTest types varName expr = do
         IR.MatchAnything -> return []
         IR.MatchVariable v -> return []
         IR.MatchStructure t fields -> do
-          let fieldNumber = 1  -- TODO!!!
-          let typeCall = Syntax.Call (Syntax.FieldAccess path "TODO_ENUM_FUN_NAME") []
-          let test = Syntax.Binary Syntax.Eq typeCall (Syntax.IntVal fieldNumber)
+          optionNumber <- getOptionNumber types t
+          let enumType = undefined
+          let methodName = enumMethodName enumType
+          let typeCall = Syntax.Call (Syntax.FieldAccess path methodName) []
+          let test = Syntax.Binary Syntax.Eq typeCall (Syntax.IntVal optionNumber)
 
           let castValue = Syntax.InterfaceCast (Syntax.GoStruct t) path
           fieldNames <- getFieldNames types t
@@ -205,6 +209,9 @@ gatherAssignments types varName matchExpr =
           return $ concat assignmentLists
       startingPath = Syntax.Var varName
   in gather' startingPath matchExpr
+
+getOptionNumber :: Map TypeRef Type -> TypeRef -> Result Int
+getOptionNumber types typeRef = return 1 -- TODO
 
 getFieldNames :: Map TypeRef Type -> TypeRef -> Result [String]
 getFieldNames types typeRef = case Map.lookup typeRef types of
