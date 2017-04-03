@@ -5,7 +5,7 @@ import AST.Expression
   , BinOp (..)
   )
 import Type (Type, TypeRef)
-import qualified Type as T
+--import qualified Type as T
 
 data Decl
   = StmtDecl Statement
@@ -46,14 +46,18 @@ data Value
   | IntVal Int
   | FloatVal Float
   | StructVal TypeRef [(String, Expression)]
+  | LambdaVal TypeRef [String] Statement
+  | EmptyValue
   deriving (Eq, Show)
 
 instance Typeable Value where
-  typeOf (StrVal _)      = "String"
-  typeOf (BoolVal _)     = "Bool"
-  typeOf (IntVal _)      = "Int"
-  typeOf (FloatVal _)    = "Float"
-  typeOf (StructVal t _) = t
+  typeOf (StrVal _)        = "String"
+  typeOf (BoolVal _)       = "Bool"
+  typeOf (IntVal _)        = "Int"
+  typeOf (FloatVal _)      = "Float"
+  typeOf (StructVal t _)   = t
+  typeOf (LambdaVal t _ _) = t
+  typeOf EmptyValue        = "()"
 
 data Expression
   = Paren Expression TypeRef
