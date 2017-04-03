@@ -154,13 +154,16 @@ evalExpr scopes expr = case expr of
     lambda <- evalExpr scopes fexp
     argVals <- mapM (evalExpr scopes) argExps
     applyLambda scopes lambda argVals
-  (Cast t e) ->
-    error "TODO: cast"
+  (Cast t e) -> do
+    v <- evalExpr scopes e
+    cast v t
   (Var _ name) -> case Scope.get scopes name of
     Left err  -> Left (show err)
     Right val -> return val
-  (Access _ e s) ->
-    error "TODO: access expression"
+  (Access _ e field) -> do
+    v <- evalExpr scopes e
+    fieldExpr <- accessField v field
+    evalExpr scopes fieldExpr
   (Lambda t a s) ->
     return $ LambdaVal t a s
 
@@ -181,6 +184,34 @@ applyLambda scopes lambda argValues = case lambda of
       stmtResult <- evalStmt fnScope stmt
       return $ stmtResult2Value stmtResult
   _ -> error $ "Compiler bug: expected a lambda, got " ++ show lambda
+
+cast :: IR.Value -> TypeRef -> ValueResult
+cast val t = case t of
+  "String" ->
+    return $ IR.StrVal $ show val
+  "Int" -> case val of
+    IR.IntVal i ->
+      return $ IR.IntVal i
+    IR.FloatVal f ->
+      return $ IR.IntVal $ floor f
+    _ ->
+      error $ "Compiler bug: can't cast to Int: " ++ show val
+  "Float" -> case val of
+    IR.IntVal i ->
+      return $ IR.FloatVal $ fromIntegral i
+    IR.FloatVal f ->
+      return $ IR.FloatVal f
+    _ ->
+      error $ "Compiler bug: can't cast to Int: " ++ show val
+  _ ->
+    error $ "Compiler bug: can't cast to " ++ show t
+
+accessField :: IR.Value -> String -> EvalResult IR.Expression
+accessField val name = case val of
+  (IR.StructVal _ fields) -> case lookup name fields of
+    Nothing -> error "Compiler bug in accessField: missing field name"
+    Just ex -> return ex
+  _ -> error "Compiler bug in accessField: not a struct"
 
 stmtResult2Value :: StmtOutput -> IR.Value
 stmtResult2Value (Continuing _) = IR.EmptyValue
