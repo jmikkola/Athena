@@ -168,10 +168,46 @@ evalExpr scopes expr = case expr of
     return $ LambdaVal t a s
 
 applyUop :: UnaryOp -> IR.Value -> ValueResult
-applyUop op val = error "TODO: applyUop"
+applyUop op val = case val of
+  (IR.IntVal i) -> do
+    result <- doNumUop op i
+    return $ IR.IntVal result
+  (IR.FloatVal f) -> do
+    result <- doNumUop op f
+    return $ IR.FloatVal result
+  (IR.BoolVal b) -> do
+    result <- doBoolUop op b
+    return $ IR.BoolVal result
+  _ -> error "Compiler bug: non number for uop"
 
 applyBop :: BinOp -> IR.Value -> IR.Value -> ValueResult
-applyBop op l r = error "TODO: applyBop"
+applyBop Eq l r = undefined -- TODO
+applyBop op l r = case (l, r) of
+  (IR.IntVal li, IR.IntVal ri) -> do
+    result <- doNumBop op li ri
+    return $ IR.IntVal result
+  (IR.FloatVal lf, IR.FloatVal rf) -> do
+    result <- doNumBop op lf rf
+    return $ IR.FloatVal result
+  (IR.Bool lb, IR.Bool rb) -> do
+    result <- doBoolBop op l r
+    return $ IR.Bool result
+  _ ->
+    error "Compiler bug: wrong types for applyBop"
+
+doNumUop :: (Num n) -> UnaryOp -> n -> EvalResult n
+doNumUop BitInvert _ = error "TODO: bit invert"
+doNumUop BoolNot   _ = Left "compiler bug: can't apply BoolNot to number"
+
+doBoolUop :: UnaryOp -> Bool -> EvalResult Bool
+doBoolUop BitInvert _ = Left "compiler bug: can't apply BitInvert to bool"
+doBoolUop BoolNot   b = return $ not b
+
+doNumBop :: (Num n) => BinaryOp -> n -> n -> EvalResult n
+doNumBop op l r = undefined
+
+doBoolBop :: BinaryOp -> Bool -> Bool -> EvalResult Bool
+
 
 applyLambda :: Scopes -> IR.Value -> [IR.Value] -> ValueResult
 applyLambda scopes lambda argValues = case lambda of
