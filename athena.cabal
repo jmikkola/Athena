@@ -59,6 +59,8 @@ executable athena
                 Backends.Go.Convert,
                 Backends.Go.Emit,
                 Backends.Go.Syntax,
+                Backends.Interpreter.Interpreter,
+                Backends.Interpreter.Scope,
                 Type,
                 IR,
                 Matching,

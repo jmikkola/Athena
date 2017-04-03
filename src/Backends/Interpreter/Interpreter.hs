@@ -27,7 +27,41 @@ type StmtResult = EvalResult StmtOutput
 run :: Map TypeRef Type -> [IR.Decl] -> IO ExitCode
 run types file = do
   putStrLn "todo"
-  return ExitSuccess
+  case runResult types file of
+   Left err -> do
+     putStrLn $ "error: " ++ show err
+     return $ ExitFailure 1
+   Right _ ->
+     return ExitSuccess
+
+runResult types file = do
+  scopes <- buildRootScope file
+  main <- scopeErr2Result $ Scope.get scopes "main"
+  evalExpr scopes (IR.Call mainT (lambda2expr main) [])
+
+lambda2expr :: IR.Value -> IR.Expression
+lambda2expr (IR.LambdaVal t args stmt) = IR.Lambda t args stmt
+lambda2expr v = error $ "Compiler error: not a lambda value: " ++ show v
+
+mainT = "FN" -- TODO
+
+buildRootScope :: [IR.Decl] -> EvalResult Scopes
+buildRootScope decls =
+  let bindings = getBindings decls
+  in scopeErr2Result $ Scope.declareAll Scope.empty bindings
+
+getBindings :: [IR.Decl] -> [(String, IR.Value)]
+getBindings decls = f decls []
+  where f dcs rest = case dcs of
+          [] -> rest
+          (TypeDecl _ _:xs) -> f xs rest
+          (StmtDecl st :xs) -> f xs (getBinding st : rest)
+
+getBinding :: IR.Statement -> (String, IR.Value)
+getBinding (Let name _ (Lambda t args body)) =
+  (name, IR.LambdaVal t args body)
+getBinding decl =
+  error $ "Compiler error: non-function top-level binding: " ++ show decl
 
 evalStmt :: Scopes -> IR.Statement -> StmtResult
 evalStmt scopes stmt = case stmt of
@@ -42,10 +76,9 @@ evalStmt scopes stmt = case stmt of
     return $ Continuing scopes'
   (Assign names expr) -> do
     v <- evalExpr scopes expr
-    undefined
-  (Block _ stmts) -> do
-    let scopes' = Scope.new scopes
-    undefined
+    updateNames scopes names v
+  (Block _ stmts) ->
+    evalBlock (Scope.new scopes) stmts
   (Expr e) -> do
     _ <- evalExpr scopes e
     return $ Continuing scopes
@@ -70,6 +103,39 @@ evalStmt scopes stmt = case stmt of
   (Match expr cases) -> do
     testVal <- evalExpr scopes expr
     Left "TODO: Match expressions"
+
+updateNames :: Scopes -> [String] -> IR.Value -> StmtResult
+updateNames scopes names value = do
+  existingRoot <- scopeGet scopes (head names)
+  newRoot <- updateField (tail names) existingRoot value
+  newScopes <- scopeUpdate scopes (head names) newRoot
+  return $ Continuing newScopes
+
+updateField :: [String] -> IR.Value -> IR.Value -> ValueResult
+updateField []     _    val = return val
+updateField (f:fs) root val = case root of
+  (StructVal t fields) -> case lookup f fields of
+    Nothing -> Left $ "Compiler error: missing field name " ++ f
+    Just (IR.Val ch) -> do
+      ch' <- updateField fs ch val
+      return $ StructVal t (setField f (IR.Val ch') fields)
+    _ -> error "Compiler bug: can't walk non-value expression"
+  _ -> error "Compiler bug in updateField"
+
+setField :: (Eq a) => a -> b -> [(a, b)] -> [(a, b)]
+setField key value mapping = case mapping of
+  ((a, b):rs) -> if key == a then (key, value) : rs
+                 else (a, b) : setField key value rs
+  []          -> [(key, value)]
+
+evalBlock :: Scopes -> [IR.Statement] -> StmtResult
+evalBlock scopes [] =
+  return $ Continuing scopes
+evalBlock scopes (st:sts) = do
+  stResult <- evalStmt scopes st
+  case stResult of
+   Continuing scopes' -> evalBlock scopes' sts
+   Returned val       -> return $ Returned val
 
 evalExpr :: Scopes -> IR.Expression -> ValueResult
 evalExpr scopes expr = case expr of
@@ -122,6 +188,12 @@ stmtResult2Value (Returned val) = val
 
 scopeErr2Result :: Either Scope.ScopeError a -> EvalResult a
 scopeErr2Result = mapLeft show
+
+scopeGet :: (Scope.Scopes a) -> String -> EvalResult a
+scopeGet s n = scopeErr2Result $ Scope.get s n
+
+scopeUpdate :: (Scope.Scopes a) -> String -> a -> EvalResult (Scope.Scopes a)
+scopeUpdate s n v = scopeErr2Result $ Scope.update s n v
 
 mapLeft :: (a -> c) -> Either a b -> Either c b
 mapLeft _ (Right r) = Right r
