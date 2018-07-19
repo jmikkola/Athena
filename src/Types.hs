@@ -7,6 +7,9 @@ import qualified Data.Set as Set
 
 -- TODO: Add kinds to TCon and TVar
 
+-- Type is the internal representation of a type as used by the type system.
+-- Types that a user types in (no pun intended) are mapped to this sort of
+-- type before anything useful happens.
 data Type
   = TCon String [Type]
   | TFunc [Type] Type
@@ -17,11 +20,22 @@ data Type
 tcon0 :: String -> Type
 tcon0 name = TCon name []
 
+tInt :: Type
 tInt    = tcon0 "Int"
+
+tFloat :: Type
 tFloat  = tcon0 "Float"
+
+tBool :: Type
 tBool   = tcon0 "Bool"
+
+tChar :: Type
 tChar   = tcon0 "Char"
+
+tString :: Type
 tString = tcon0 "String"
+
+tUnit :: Type
 tUnit   = tcon0 "()"
 
 
@@ -54,7 +68,7 @@ instance Types Type where
   apply _   (TGen n) =
     TGen n
 
-  freeTypeVars (TCon con ts) =
+  freeTypeVars (TCon _ ts) =
     freeTypeVars ts
   freeTypeVars (TFunc args ret) =
     Set.union (freeTypeVars args) (freeTypeVars ret)
