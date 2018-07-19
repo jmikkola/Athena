@@ -69,57 +69,7 @@ instance (Types a) => Types [a] where
   freeTypeVars ts = foldl Set.union Set.empty (map freeTypeVars ts)
 
 
-data TypeError
-  = Mismatch Type Type
-  | InfiniteType String
-  | CompilerBug String
-  deriving (Show, Eq)
-
-mismatch :: Type -> Type -> Either TypeError a
-mismatch t1 t2 = Left $ Mismatch t1 t2
-
-
-mgu :: Type -> Type -> Either TypeError Substitution
-mgu t1 t2 = case (t1, t2) of
-  (TGen _, _) ->
-    Left $ CompilerBug "A generic variable should have been instantiated"
-  (_, TGen _) ->
-    Left $ CompilerBug "A generic variable should have been instantiated"
-
-  (TCon ac ats, TCon bc bts) | ac == bc && length ats == length bts ->
-    mguList emptySubstitution (zip ats bts)
-
-  (TFunc aargs aret, TFunc bargs bret) | length aargs == length bargs -> do
-    sub <- mguList emptySubstitution (zip aargs bargs)
-    sub2 <- mgu (apply sub aret) (apply sub bret)
-    return $ composeSubs sub sub2
-
-  (TVar var, other) ->
-    varBind var other
-
-  (other, TVar var) ->
-    varBind var other
-
-  _ ->
-    mismatch t1 t2
-
-varBind :: String -> Type -> Either TypeError Substitution
-varBind var other
-  | other == TVar var =
-    return emptySubstitution
-  | Set.member var (freeTypeVars other) =
-    Left $ InfiniteType var
-  | otherwise =
-    return $ Map.singleton var other
--- TODO: check kinds in varBind
-
-mguList :: Substitution -> [(Type, Type)] -> Either TypeError Substitution
-mguList sub [] = return sub
-mguList sub ((t1,t2):ts) = do
-  sub2 <- mgu (apply sub t1) (apply sub t2)
-  mguList (composeSubs sub sub2) ts
-
-
+-- TODO: Add kinds to Scheme
 data Scheme
   = Scheme Type
   deriving (Eq, Show)
