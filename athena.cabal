@@ -56,17 +56,8 @@ executable athena
                 AST.Expression,
                 AST.Statement,
                 AST.Type,
-                Backends.Go.Convert,
-                Backends.Go.Emit,
-                Backends.Go.Syntax,
-                Backends.Interpreter.Interpreter,
-                Backends.Interpreter.Scope,
-                Type,
-                IR,
-                Matching,
                 Parser,
-                ParserTest,
-                TypeCheck
+                ParserTest
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

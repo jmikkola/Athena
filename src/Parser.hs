@@ -95,7 +95,8 @@ nextArgDecl = do
 
 statementParser :: Parser Statement
 statementParser = choice $ map try [
-  returnStatement, letStatement, ifStatement, whileStatement, matchStatement,
+  returnStatement, letStatement, ifStatement, whileStatement,
+  -- matchStatement,
   blockStatement, assignStatement, exprStatement]
 
 returnStatement :: Parser Statement
@@ -197,6 +198,7 @@ whileStatement = do
   return $ let (S.Block stmts) = body
            in S.While test stmts
 
+{-  
 matchStatement :: Parser Statement
 matchStatement = do
   _ <- string "match"
@@ -261,6 +263,7 @@ matchExpressionsNext = do
   _ <- char ','
   _ <- anyWhitespace
   matchExpressions
+-}
 
 ---- AST.Expression parsers ----
 
