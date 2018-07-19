@@ -57,7 +57,8 @@ executable athena
                 AST.Statement,
                 AST.Type,
                 Parser,
-                ParserTest
+                ParserTest,
+                Types
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

@@ -7,6 +7,7 @@ import System.IO (stderr, hPutStrLn, hFlush)
 
 import Parser ( parseFile )
 import ParserTest ( testMain )
+import Types
 
 type ExitCodeResult = ExceptT String IO ExitCode
 
