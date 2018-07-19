@@ -14,19 +14,15 @@ import Types
   , composeSubs
   , emptySubstitution
   , freeTypeVars )
+import Errors
+  ( Error(..)
+  , Result )
 
-
-data TypeError
-  = Mismatch Type Type
-  | InfiniteType String
-  | CompilerBug String
-  deriving (Show, Eq)
-
-mismatch :: Type -> Type -> Either TypeError a
+mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2
 
 
-mgu :: Type -> Type -> Either TypeError Substitution
+mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
   (TGen _, _) ->
     Left $ CompilerBug "A generic variable should have been instantiated"
@@ -50,7 +46,7 @@ mgu t1 t2 = case (t1, t2) of
   _ ->
     mismatch t1 t2
 
-varBind :: String -> Type -> Either TypeError Substitution
+varBind :: String -> Type -> Result Substitution
 varBind var other
   | other == TVar var =
     return emptySubstitution
@@ -60,7 +56,7 @@ varBind var other
     return $ Map.singleton var other
 -- TODO: check kinds in varBind
 
-mguList :: Substitution -> [(Type, Type)] -> Either TypeError Substitution
+mguList :: Substitution -> [(Type, Type)] -> Result Substitution
 mguList sub [] = return sub
 mguList sub ((t1,t2):ts) = do
   sub2 <- mgu (apply sub t1) (apply sub t2)
