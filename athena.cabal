@@ -60,7 +60,8 @@ executable athena
                 ParserTest,
                 Types,
                 Inference,
-                Errors
+                Errors,
+                FirstPass
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

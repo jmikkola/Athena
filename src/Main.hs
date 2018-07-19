@@ -8,6 +8,7 @@ import System.IO (stderr, hPutStrLn, hFlush)
 import Parser ( parseFile )
 import ParserTest ( testMain )
 import Inference
+import FirstPass
 
 type ExitCodeResult = ExceptT String IO ExitCode
 
