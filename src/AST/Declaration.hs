@@ -10,4 +10,9 @@ data Declaration
   | TypeDef String TypeDecl
   deriving (Eq, Show)
 
+getDeclaredName :: Declaration -> String
+getDeclaredName (Let name _ _)        = name
+getDeclaredName (Function name _ _ _) = name
+getDeclaredName (TypeDef name _)      = name
+
 type File = [Declaration]
