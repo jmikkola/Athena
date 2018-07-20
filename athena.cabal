@@ -56,6 +56,7 @@ executable athena
                 AST.Expression,
                 AST.Statement,
                 AST.Type,
+                Compiler,
                 Parser,
                 ParserTest,
                 Types,

@@ -19,6 +19,7 @@ data Module =
   { bindings :: Map String Declaration
   , types :: Map String TypeDecl
   }
+  deriving (Show)
 
 -- firstPass is the first thing run after parsing.
 -- It prepares data for type inference.

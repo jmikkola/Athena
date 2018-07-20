@@ -5,10 +5,8 @@ import System.Environment ( getArgs )
 import System.Exit ( exitWith, ExitCode(..) )
 import System.IO (stderr, hPutStrLn, hFlush)
 
-import Parser ( parseFile )
 import ParserTest ( testMain )
-import Inference
-import FirstPass
+import Compiler ( compile )
 
 type ExitCodeResult = ExceptT String IO ExitCode
 
@@ -29,11 +27,11 @@ main = do
 
 interpret :: String -> IO ()
 interpret content =
-  case parseFile content of
+  case compile content of
    Left err ->
-     exitError err
-   Right ast -> do
-     putStrLn $ show ast
+     exitError $ show err
+   Right result -> do
+     putStrLn $ show result
      exitWith ExitSuccess
 
 

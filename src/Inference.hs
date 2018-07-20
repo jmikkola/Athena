@@ -1,15 +1,13 @@
 module Inference where
 
-import Data.Map (Map)
+-- import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Set (Set)
+-- import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Types
-  ( Scheme
-  , Substitution
+  ( Substitution
   , Type(..)
-  , Types
   , apply
   , composeSubs
   , emptySubstitution
@@ -17,10 +15,14 @@ import Types
 import Errors
   ( Error(..)
   , Result )
+import FirstPass
+  ( Module )
+
+inferModule :: Module -> Result Module
+inferModule m = return m -- TODO
 
 mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2
-
 
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of

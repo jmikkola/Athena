@@ -10,6 +10,7 @@ data Error
   | InfiniteType String -- a type variable
   | CompilerBug String
   | DuplicateBinding String -- binding name
+  | ParseError String
   deriving (Show, Eq)
 
 type Result a = Either Error a
