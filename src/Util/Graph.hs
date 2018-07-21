@@ -105,7 +105,7 @@ connectChildren (c:cs) node graph = do
 gatherComponent :: (Ord a) => a -> State (SCCState a) ()
 gatherComponent node = do
   index <- Map.lookup node <$> sccIndexes <$> get
-  lowlink <- Map.lookup node <$> sccIndexes <$> get
+  lowlink <- Map.lookup node <$> sccLowlinks <$> get
   if lowlink == index
     then do
       component <- popComponent node
@@ -164,6 +164,7 @@ fromJust (Just a) = a
 
 test :: IO ()
 test = do
+  testExample
   quickCheck propNoEmptyGroups
   quickCheck propSameCardnality
   quickCheck propDisjoint
@@ -216,3 +217,15 @@ fixupGraph :: (Ord a) => Graph a -> Graph a
 fixupGraph graph = Map.union graph empties
   where chs = Set.toList $ foldl Set.union Set.empty $ map Set.fromList $ map snd $ Map.toList graph
         empties = Map.fromList $ zip chs (repeat [])
+
+assertEq :: (Eq a, Show a) => a -> a -> IO ()
+assertEq x y =
+  if x == y
+  then putStrLn "passed"
+  else putStrLn (show x ++ " does not equal " ++ show y)
+
+testExample :: IO ()
+testExample =
+  let graph = Map.fromList [('a', "b"), ('b', "ecf"), ('c', "dg"), ('d', "ch"), ('e', "af"), ('f', "g"), ('g', "f"), ('h', "gd")]
+      expected = reverse $ map reverse ["fg", "cdh", "abe"]
+  in assertEq expected (components graph)
