@@ -8,6 +8,8 @@ import System.IO (stderr, hPutStrLn, hFlush)
 import ParserTest ( testMain )
 import Compiler ( compile )
 
+import Util.Graph
+
 type ExitCodeResult = ExceptT String IO ExitCode
 
 

@@ -62,7 +62,8 @@ executable athena
                 Types,
                 Inference,
                 Errors,
-                FirstPass
+                FirstPass,
+                Util.Graph
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
