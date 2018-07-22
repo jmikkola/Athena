@@ -161,6 +161,7 @@ getLowlink node sccs = fromJust $ Map.lookup node $ sccLowlinks sccs
 
 fromJust :: Maybe a -> a
 fromJust (Just a) = a
+fromJust Nothing  = error "unexpected Nothing"
 
 test :: IO ()
 test = do
@@ -192,8 +193,8 @@ propAllReachableInGroups :: Graph Char -> Bool
 propAllReachableInGroups graph =
   let g = fixupGraph graph
       cmps = components g
-      allReachable nodes node = let seen = reachable node g in all (\n -> Set.member n seen) nodes
-      mutuallyReachable nodes = all (allReachable nodes) nodes
+      allReachable ns node = let seen = reachable node g in all (\n -> Set.member n seen) ns
+      mutuallyReachable ns = all (allReachable ns) ns
   in all mutuallyReachable cmps
 
 propTopological :: Graph Char -> Bool
