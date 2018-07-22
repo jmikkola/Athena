@@ -5,7 +5,7 @@ import FirstPass ( Module, firstPass )
 import Inference ( inferModule )
 import Parser ( parseFile )
 
-compile :: String -> Result Module
+compile :: String -> Result (Module ())
 compile text = do
   file <- mapLeft ParseError $ parseFile text
   m <- firstPass file

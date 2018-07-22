@@ -2,23 +2,23 @@ module AST.Expression where
 
 import AST.Type (Type)
 
-data Value
-  = StrVal String
-  | BoolVal Bool
-  | IntVal Int
-  | FloatVal Float
-  | StructVal String [(String, Expression)]
+data Value a
+  = StrVal     a String
+  | BoolVal    a Bool
+  | IntVal     a Int
+  | FloatVal   a Float
+  | StructVal  a String [(String, Expression a)]
   deriving (Eq, Show)
 
-data Expression
-  = Paren Expression
-  | Val Value
-  | Unary UnaryOp Expression
-  | Binary BinOp Expression Expression
-  | Call Expression [Expression]
-  | Cast Type Expression
-  | Var String
-  | Access Expression String
+data Expression a
+  = Paren   a (Expression a)
+  | Val     a (Value a)
+  | Unary   a UnaryOp (Expression a)
+  | Binary  a BinOp (Expression a) (Expression a)
+  | Call    a (Expression a) [(Expression a)]
+  | Cast    a Type (Expression a)
+  | Var     a String
+  | Access  a (Expression a) String
   deriving (Eq, Show)
 
 data UnaryOp

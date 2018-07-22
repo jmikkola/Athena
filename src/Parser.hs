@@ -4,14 +4,18 @@ import Control.Monad ( liftM )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
-import AST.Declaration (Declaration, File)
 import qualified AST.Declaration as D
-import AST.Expression (Expression, BinOp, UnaryOp, Value)
+import AST.Expression (BinOp, UnaryOp)
 import qualified AST.Expression as E
-import AST.Statement (Statement)
 import qualified AST.Statement as S
 import AST.Type (Type, TypeDecl)
 import qualified AST.Type as T
+
+type File = D.File ()
+type Declaration = D.Declaration ()
+type Statement = S.Statement ()
+type Expression = E.Expression ()
+type Value = E.Value ()
 
 parseFile :: String -> Either String File
 parseFile content = applyLeft show $ parse fileParser "<input>" content
@@ -40,7 +44,7 @@ letDeclaration = do
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ D.Let name typ val
+  return $ D.Let () name typ val
 
 funcDeclaration :: Parser Declaration
 funcDeclaration = do
@@ -57,7 +61,7 @@ funcDeclaration = do
     return typ
   body <- blockStatement
   let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
-  return $ D.Function name typ (map fst args) body
+  return $ D.Function () name typ (map fst args) body
 
 typeDeclaration :: Parser Declaration
 typeDeclaration = do
@@ -66,7 +70,7 @@ typeDeclaration = do
   name <- typeName
   _ <- any1LinearWhitespace
   typ <- typeDefParser
-  return $ D.TypeDef name typ
+  return $ D.TypeDef () name typ
 
 funcArgDecl :: Parser [(String, Type)]
 funcArgDecl = argDeclEnd <|> argDecl
@@ -105,7 +109,7 @@ returnStatement = do
   e <- optionMaybe $ do
     _ <- any1Whitespace
     expressionParser
-  return $ S.Return e
+  return $ S.Return () e
 
 letStatement :: Parser Statement
 letStatement = do
@@ -118,7 +122,7 @@ letStatement = do
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ S.Let name typ val
+  return $ S.Let () name typ val
 
 assignStatement :: Parser Statement
 assignStatement = do
@@ -128,7 +132,7 @@ assignStatement = do
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ S.Assign names val
+  return $ S.Assign () names val
 
 assignFields :: [String] -> Parser [String]
 assignFields lefts = do
@@ -141,7 +145,7 @@ blockStatement :: Parser Statement
 blockStatement = do
   _ <- char '{'
   _ <- statementSep
-  liftM S.Block $ blockStatements
+  liftM (S.Block ()) $ blockStatements
 
 blockStatements :: Parser [Statement]
 blockStatements = endBlock <|> nextStatement
@@ -168,7 +172,7 @@ statementSep = do
 exprStatement :: Parser Statement
 exprStatement = do
   e <- expressionParser
-  return $ S.Expr e
+  return $ S.Expr () e
 
 ifStatement :: Parser Statement
 ifStatement = do
@@ -178,8 +182,8 @@ ifStatement = do
   _ <- anyWhitespace
   body <- blockStatement
   elsePart <- optionMaybe $ try elseBlock
-  return $ let (S.Block stmts) = body
-           in S.If test stmts elsePart
+  return $ let (S.Block () stmts) = body
+           in S.If () test stmts elsePart
 
 elseBlock :: Parser Statement
 elseBlock = do
@@ -195,10 +199,10 @@ whileStatement = do
   test <- expressionParser
   _ <- anyWhitespace
   body <- blockStatement
-  return $ let (S.Block stmts) = body
-           in S.While test stmts
+  return $ let (S.Block () stmts) = body
+           in S.While () test stmts
 
-{-  
+{-
 matchStatement :: Parser Statement
 matchStatement = do
   _ <- string "match"
@@ -300,7 +304,7 @@ unfoldOps (left, parts) ops = case parts of
   ((op, right):pts) ->
     let (applied, rest) = unfoldOps (right, pts) ops
     in if elem op ops
-       then (E.Binary op left applied, rest)
+       then (E.Binary () op left applied, rest)
        else (left, (op, applied) : rest)
 
 precOrder :: [[BinOp]]
@@ -327,7 +331,7 @@ accessExpr :: Expression -> Parser Expression
 accessExpr left = do
   _ <- char '.'
   right <- valueName
-  let e = E.Access left right
+  let e = E.Access () left right
   try (accessExpr e) <|> return e
 
 parenExpr :: Parser Expression
@@ -337,19 +341,19 @@ parenExpr = do
   ex <- expressionParser
   _ <- anyWhitespace
   _ <- char ')'
-  return $ E.Paren ex
+  return $ E.Paren () ex
 
 valueExpr :: Parser Expression
 valueExpr = do
   val <- valueParser
-  return $ E.Val val
+  return $ E.Val () val
 
 unaryExpr :: Parser Expression
 unaryExpr = do
   op <- unaryOpParser
   _ <- anyWhitespace
   ex <- expressionParser
-  return $ E.Unary op ex
+  return $ E.Unary () op ex
 
 callExpr :: Parser Expression
 callExpr = do
@@ -357,7 +361,7 @@ callExpr = do
   _ <- char '('
   _ <- anyWhitespace
   args <- choice [fnCallArg, argsEnd]
-  return $ E.Call fn args
+  return $ E.Call () fn args
 
 fnCallArg :: Parser [Expression]
 fnCallArg = do
@@ -385,12 +389,12 @@ castExpr = do
   ex <- expressionParser
   _ <- anyWhitespace
   _ <- char ')'
-  return $ E.Cast typ ex
+  return $ E.Cast () typ ex
 
 varExpr :: Parser Expression
 varExpr = do
   name <- valueName
-  return $ E.Var name
+  return $ E.Var () name
 
 --- parse values
 
@@ -404,7 +408,7 @@ structValueParser = do
   _ <- statementSep
   fields <- sepEndBy structFieldValue statementSep
   _ <- string "}"
-  return $ E.StructVal typ fields
+  return $ E.StructVal () typ fields
 
 structFieldValue :: Parser (String, Expression)
 structFieldValue = do
@@ -418,12 +422,12 @@ structFieldValue = do
 stringParser :: Parser Value
 stringParser = do
   s <- doubleQuotedString
-  return $ E.StrVal s
+  return $ E.StrVal () s
 
 boolParser :: Parser Value
 boolParser = do
   b <- choices [("False", False), ("True", True)]
-  return $ E.BoolVal b
+  return $ E.BoolVal () b
 
 --- parse floating and integer numbers
 
@@ -435,7 +439,7 @@ numberParser = do
 float :: String -> Parser Value
 float start = do
   fp <- floatingPart
-  return $ E.FloatVal (read (start ++ fp))
+  return $ E.FloatVal () (read (start ++ fp))
 
 floatingPart :: Parser String
 floatingPart = do
@@ -463,7 +467,7 @@ _digit = do
   digit
 
 integer :: String -> Parser Value
-integer start = return $ E.IntVal (read start)
+integer start = return $ E.IntVal () (read start)
 
 --- parse operators
 

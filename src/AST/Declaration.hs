@@ -4,15 +4,15 @@ import AST.Expression (Expression)
 import AST.Statement (Statement)
 import AST.Type (Type, TypeDecl)
 
-data Declaration
-  = Let String Type Expression
-  | Function String TypeDecl [String] Statement
-  | TypeDef String TypeDecl
+data Declaration a
+  = Let a String Type (Expression a)
+  | Function a String TypeDecl [String] (Statement a)
+  | TypeDef a String TypeDecl
   deriving (Eq, Show)
 
-getDeclaredName :: Declaration -> String
-getDeclaredName (Let name _ _)        = name
-getDeclaredName (Function name _ _ _) = name
-getDeclaredName (TypeDef name _)      = name
+getDeclaredName :: Declaration a -> String
+getDeclaredName (Let _ name _ _)        = name
+getDeclaredName (Function _ name _ _ _) = name
+getDeclaredName (TypeDef _ name _)      = name
 
-type File = [Declaration]
+type File a = [Declaration a]

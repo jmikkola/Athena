@@ -18,7 +18,7 @@ import Errors
 import FirstPass
   ( Module )
 
-inferModule :: Module -> Result Module
+inferModule :: Module a -> Result (Module a)
 inferModule m = return m -- TODO
 
 mismatch :: Type -> Type -> Result a

@@ -14,9 +14,9 @@ import Errors
   , Result )
 
 
-data Module =
+data Module a =
   Module
-  { bindings :: Map String Declaration
+  { bindings :: Map String (Declaration a)
   , types :: Map String TypeDecl
   }
   deriving (Show)
@@ -32,23 +32,23 @@ data Module =
 -- * (TODO) Lowers the syntax somewhat (e.g. StructVal -> Call)
 -- * (TODO) Check that all types referred to actually exist
 -- * (TODO) Check that variable declarations are unique in a given block
-firstPass :: File -> Result Module
+firstPass :: File a -> Result (Module a)
 firstPass file = do
   typesFound <- gatherTypeDecls file
   binds <- gatherBindings file
   return $ Module { bindings=binds, types=typesFound }
 
 -- select and deduplicate type declarations
-gatherTypeDecls :: File -> Result (Map String TypeDecl)
+gatherTypeDecls :: File a -> Result (Map String TypeDecl)
 gatherTypeDecls file =
-  let typeDecls = [(name, t) | TypeDef name t <- file]
+  let typeDecls = [(name, t) | TypeDef _ name t <- file]
       addDecl ds (name, t) = case Map.lookup name ds of
         Nothing -> return $ Map.insert name t ds
         Just _  -> duplicateName name
   in foldM addDecl Map.empty typeDecls
 
 -- selet and deduplicate function and let bindings
-gatherBindings :: File -> Result (Map String Declaration)
+gatherBindings :: File a -> Result (Map String (Declaration a))
 gatherBindings file =
   let binds = filter (not . isTypeDecl) file
       addBinding bs decl =
@@ -58,9 +58,9 @@ gatherBindings file =
             Just _  -> duplicateName name
   in foldM addBinding Map.empty binds
 
-isTypeDecl :: Declaration -> Bool
-isTypeDecl (TypeDef _ _) = True
-isTypeDecl _             = False
+isTypeDecl :: Declaration a -> Bool
+isTypeDecl (TypeDef _ _ _) = True
+isTypeDecl _               = False
 
 -- TODO: add the ability to combine multiple files into a module,
 --   but check imports on a per-file basis
