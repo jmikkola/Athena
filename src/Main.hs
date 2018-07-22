@@ -8,7 +8,7 @@ import System.IO (stderr, hPutStrLn, hFlush)
 import ParserTest ( testMain )
 import Compiler ( compile )
 
-import Util.Graph
+import qualified Util.Graph as Graph
 
 type ExitCodeResult = ExceptT String IO ExitCode
 
@@ -19,6 +19,7 @@ main = do
   case args of
    ["--test"] -> do
      testMain
+     Graph.test
 
    [fileName] -> do
      content <- readFile fileName
