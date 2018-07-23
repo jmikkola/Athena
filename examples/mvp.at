@@ -12,12 +12,12 @@ fn main() {
 
     // Print is a temporary function to be replaced by standard library
     // functions later.
-    print(c)
+    // TODO print(c)
 
     // Numbers can be cast to strings
-    print(String(b) + " " + String(a))
+    // TODO print(String(b) + " " + String(a))
 
-    print(do_stuff())
+    // TODO print(do_stuff())
 }
 
 fn do_stuff() String {
@@ -35,14 +35,14 @@ fn do_stuff() String {
 
    // Boolean operators also exist
    if 1 == 1 && 2 < 3 {
-      print(recursive(10, 4))
+      // TODO print(recursive(10, 4))
    } else if False {
      x = !!False
    }
 
    let i Int = 0
    while i < 10 {
-         print(String(i))
+         // TODO print(String(i))
          i = i + 1
    }
    return "foo"
