@@ -5,12 +5,15 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
+
 import AST.Expression as E
 import AST.Statement as S
 import AST.Declaration as D
 
 import Types
   ( Substitution
+  , Scheme(..)
   , Type(..)
   , apply
   , composeSubs
@@ -131,6 +134,18 @@ instance Depencencies (E.Value a) where
       concat $ map (findDependencies bound . snd) fields
     _ ->
       []
+
+data InferState
+  = InferState
+    { nextVarN :: Int
+    , currentSub :: Substitution }
+  deriving (Show)
+
+-- `Either Error` = `Result`, but somehow that
+-- type synonym isn't allowed here.
+type InferM = StateT InferState (Either Error)
+
+type Environment = Map String Scheme
 
 inferGroups :: [BindGroup a] -> Result [(String, D.Declaration (Type, a))]
 inferGroups []     = return []
@@ -282,10 +297,6 @@ mustLookup :: (Ord k, Show k) => k -> Map k v -> v
 mustLookup key m = case Map.lookup key m of
   Just val -> val
   Nothing  -> error $ "nothing bound for " ++ show key
-
-fromJust :: Maybe a -> a
-fromJust (Just a) = a
-fromJust Nothing  = error "unexpected Nothing"
 
 fromMaybe :: a -> Maybe a -> a
 fromMaybe _ (Just x) = x
