@@ -52,6 +52,7 @@ executable athena
 
   -- Modules included in this executable, other than Main.
   other-modules:
+                AST.Annotation,
                 AST.Declaration,
                 AST.Expression,
                 AST.Statement,

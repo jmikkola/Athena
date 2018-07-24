@@ -1,5 +1,6 @@
 module AST.Expression where
 
+import AST.Annotation (Annotated, getAnnotation)
 import AST.Type (Type)
 
 data Value a
@@ -48,3 +49,22 @@ data BinOp
   | RShift
   | RRShift
   deriving (Eq, Show)
+
+instance Annotated Value where
+  getAnnotation val = case val of
+    StrVal    a _   -> a
+    BoolVal   a _   -> a
+    IntVal    a _   -> a
+    FloatVal  a _   -> a
+    StructVal a _ _ -> a
+
+instance Annotated Expression where
+  getAnnotation expr = case expr of
+    Paren   a _     -> a
+    Val     a _     -> a
+    Unary   a _ _   -> a
+    Binary  a _ _ _ -> a
+    Call    a _ _   -> a
+    Cast    a _ _   -> a
+    Var     a _     -> a
+    Access  a _ _   -> a

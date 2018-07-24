@@ -7,6 +7,7 @@ import qualified Data.Set as Set
 
 import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
 
+import AST.Annotation (Annotated, getAnnotation)
 import AST.Expression as E
 import AST.Statement as S
 import AST.Declaration as D
@@ -33,10 +34,10 @@ data BindGroup a
     -- TODO: Add explicit bindings
 
 -- (Type, a) adds a type to whatever the original annotation was
-inferModule :: Module a -> Result (Module (Type, a))
+inferModule :: Module a -> Result (Module (Scheme, a))
 inferModule m = do
   let bindGroups = makeBindGroups m
-  binds <- inferGroups bindGroups
+  binds <- inferGroups bindGroups startingEnv
   return $ Module { bindings=Map.fromList binds, types=(types m) }
 
 makeBindGroups :: Module a -> [BindGroup a]
@@ -147,26 +148,36 @@ type InferM = StateT InferState (Either Error)
 
 type Environment = Map String Scheme
 
-inferGroups :: [BindGroup a] -> Result [(String, D.Declaration (Type, a))]
-inferGroups []     = return []
-inferGroups (g:gs) = do
-  binds <- inferGroup g
-  -- TODO: Need to pass type environment between these
-  rest <- inferGroups gs
-  return $ binds ++ rest
+-- TODO: this should also start with prelude and imported names
+startingEnv :: Environment
+startingEnv = Map.empty
 
-inferGroup :: BindGroup a -> Result [(String, D.Declaration (Type, a))]
-inferGroup (BindGroup impl) = mapM addType' impl
+inferGroups :: [BindGroup a] -> Environment -> Result [(String, D.Declaration (Scheme, a))]
+inferGroups []     _   =
+  return []
+inferGroups (g:gs) env = do
+  typed <- inferGroup g env
+  -- TODO: Need to pass type environment between these
+  let bindings = toBindings typed
+  let env' = Map.union (Map.fromList bindings) env
+  rest <- inferGroups gs env'
+  return $ typed ++ rest
+
+inferGroup :: BindGroup a -> Environment -> Result [(String, D.Declaration (Scheme, a))]
+inferGroup (BindGroup impl) env = mapM addType' impl
   -- TODO: replace this with a real implementation
   where addType' (n, d) = do
           d' <- addType d
           return (n, d')
 
-todoType :: Type
-todoType = TCon "TODO" []
+todoType :: Scheme
+todoType = Scheme $ TCon "TODO" []
+
+toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
+toBindings typed = mapSnd getScheme typed
 
 -- TODO: Replace with actual type inference
-addType :: D.Declaration a -> Result (D.Declaration (Type, a))
+addType :: D.Declaration a -> Result (D.Declaration (Scheme, a))
 addType (D.Let a name t expr) = do
   expr' <- addTypeE expr
   return $ D.Let (todoType, a) name t expr'
@@ -176,7 +187,7 @@ addType (D.Function a name t args stmt) = do
 addType (TypeDef _ name td) =
   Left $ CompilerBug $ show $ TypeDef () name td
 
-addTypeE :: E.Expression a -> Result (E.Expression (Type, a))
+addTypeE :: E.Expression a -> Result (E.Expression (Scheme, a))
 addTypeE expr = case expr of
   Paren   a e -> do
     e' <- addTypeE e
@@ -204,7 +215,7 @@ addTypeE expr = case expr of
     e' <- addTypeE e
     return $ Access (todoType, a) e' field
 
-addTypeS :: S.Statement a -> Result (S.Statement (Type, a))
+addTypeS :: S.Statement a -> Result (S.Statement (Scheme, a))
 addTypeS stmt = case stmt of
   Return a mexp -> do
     e <- case mexp of
@@ -235,7 +246,7 @@ addTypeS stmt = case stmt of
     ss' <- mapM addTypeS ss
     return $ While (todoType, a) e' ss'
 
-addTypeV :: E.Value a -> Result (E.Value (Type, a))
+addTypeV :: E.Value a -> Result (E.Value (Scheme, a))
 addTypeV val = case val of
   StrVal     a name ->
     return $ StrVal (todoType, a) name
@@ -292,6 +303,8 @@ mguList sub ((t1,t2):ts) = do
   sub2 <- mgu (apply sub t1) (apply sub t2)
   mguList (composeSubs sub sub2) ts
 
+getScheme :: (Annotated a) => a (Scheme, b) -> Scheme
+getScheme node = fst $ getAnnotation node
 
 mustLookup :: (Ord k, Show k) => k -> Map k v -> v
 mustLookup key m = case Map.lookup key m of
@@ -301,3 +314,7 @@ mustLookup key m = case Map.lookup key m of
 fromMaybe :: a -> Maybe a -> a
 fromMaybe _ (Just x) = x
 fromMaybe d Nothing  = d
+
+mapSnd :: (a -> b) -> [(x, a)] -> [(x, b)]
+mapSnd f []         = []
+mapSnd f ((x,a):xs) = (x, f a) : mapSnd f xs
