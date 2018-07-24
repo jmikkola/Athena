@@ -37,7 +37,7 @@ data BindGroup a
 inferModule :: Module a -> Result (Module (Scheme, a))
 inferModule m = do
   let bindGroups = makeBindGroups m
-  binds <- inferGroups bindGroups startingEnv
+  binds <- runInfer $ inferGroups bindGroups startingEnv
   return $ Module { bindings=Map.fromList binds, types=(types m) }
 
 makeBindGroups :: Module a -> [BindGroup a]
@@ -142,6 +142,10 @@ data InferState
     , currentSub :: Substitution }
   deriving (Show)
 
+startingInferState :: InferState
+startingInferState =
+  InferState { nextVarN = 0, currentSub = Map.empty }
+
 -- `Either Error` = `Result`, but somehow that
 -- type synonym isn't allowed here.
 type InferM = StateT InferState (Either Error)
@@ -152,7 +156,9 @@ type Environment = Map String Scheme
 startingEnv :: Environment
 startingEnv = Map.empty
 
-inferGroups :: [BindGroup a] -> Environment -> Result [(String, D.Declaration (Scheme, a))]
+runInfer f = evalStateT f startingInferState
+
+inferGroups :: [BindGroup a] -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
 inferGroups []     _   =
   return []
 inferGroups (g:gs) env = do
@@ -163,7 +169,7 @@ inferGroups (g:gs) env = do
   rest <- inferGroups gs env'
   return $ typed ++ rest
 
-inferGroup :: BindGroup a -> Environment -> Result [(String, D.Declaration (Scheme, a))]
+inferGroup :: BindGroup a -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
 inferGroup (BindGroup impl) env = mapM addType' impl
   -- TODO: replace this with a real implementation
   where addType' (n, d) = do
@@ -177,7 +183,7 @@ toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
 toBindings typed = mapSnd getScheme typed
 
 -- TODO: Replace with actual type inference
-addType :: D.Declaration a -> Result (D.Declaration (Scheme, a))
+addType :: D.Declaration a -> InferM (D.Declaration (Scheme, a))
 addType (D.Let a name t expr) = do
   expr' <- addTypeE expr
   return $ D.Let (todoType, a) name t expr'
@@ -185,9 +191,9 @@ addType (D.Function a name t args stmt) = do
   stmt' <- addTypeS stmt
   return $ D.Function (todoType, a) name t args stmt'
 addType (TypeDef _ name td) =
-  Left $ CompilerBug $ show $ TypeDef () name td
+  lift $ Left $ CompilerBug $ show $ TypeDef () name td
 
-addTypeE :: E.Expression a -> Result (E.Expression (Scheme, a))
+addTypeE :: E.Expression a -> InferM (E.Expression (Scheme, a))
 addTypeE expr = case expr of
   Paren   a e -> do
     e' <- addTypeE e
@@ -215,7 +221,7 @@ addTypeE expr = case expr of
     e' <- addTypeE e
     return $ Access (todoType, a) e' field
 
-addTypeS :: S.Statement a -> Result (S.Statement (Scheme, a))
+addTypeS :: S.Statement a -> InferM (S.Statement (Scheme, a))
 addTypeS stmt = case stmt of
   Return a mexp -> do
     e <- case mexp of
@@ -246,7 +252,7 @@ addTypeS stmt = case stmt of
     ss' <- mapM addTypeS ss
     return $ While (todoType, a) e' ss'
 
-addTypeV :: E.Value a -> Result (E.Value (Scheme, a))
+addTypeV :: E.Value a -> InferM (E.Value (Scheme, a))
 addTypeV val = case val of
   StrVal     a name ->
     return $ StrVal (todoType, a) name
@@ -316,5 +322,5 @@ fromMaybe _ (Just x) = x
 fromMaybe d Nothing  = d
 
 mapSnd :: (a -> b) -> [(x, a)] -> [(x, b)]
-mapSnd f []         = []
+mapSnd _ []         = []
 mapSnd f ((x,a):xs) = (x, f a) : mapSnd f xs
