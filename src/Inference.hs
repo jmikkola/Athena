@@ -176,6 +176,14 @@ inferGroup (BindGroup impl) env = mapM addType' impl
           d' <- addType d
           return (n, d')
 
+generalize :: Environment -> Type -> Scheme
+generalize env t =
+  let envVars = foldl Set.union Set.empty $ map (freeTypeVars . snd) $ Map.toList env
+      freeVars = Set.toList $ Set.difference (freeTypeVars t) envVars
+      genVars = map TGen [1..]
+      sub = Map.fromList $ zip freeVars genVars
+  in Scheme $ apply sub t
+
 todoType :: Scheme
 todoType = Scheme $ TCon "TODO" []
 

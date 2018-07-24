@@ -87,3 +87,11 @@ instance (Types a) => Types [a] where
 data Scheme
   = Scheme Type
   deriving (Eq, Show)
+
+instance Types Scheme where
+  apply sub (Scheme t) = Scheme (apply sub t)
+  freeTypeVars (Scheme t) = freeTypeVars t
+
+isGeneric :: Type -> Bool
+isGeneric (TGen _) = True
+isGeneric _        = False
