@@ -44,12 +44,15 @@ makeBindGroups m = --return [BindGroup $ Map.toList $ bindings m]
       getBinding name = (name, mustLookup name declarations)
   in map BindGroup $ map (map getBinding) topoOrder
 
+-- TODO: extend this into prelude (plus imported names)
+startingDependencies = Set.fromList ["print"]
+
 -- This walks each declaration to find out what the
 -- dependency graph looks like.
 -- This assumes that all the variables are defined (TODO: that's
 -- never checked at the moment)
 gatherGraph :: Map String (D.Declaration a) -> Map String [String]
-gatherGraph decls = Map.map (unique . findDependencies Set.empty) decls
+gatherGraph decls = Map.map (unique . findDependencies startingDependencies) decls
 
 unique :: (Ord a) => [a] -> [a]
 unique = Set.toList . Set.fromList
