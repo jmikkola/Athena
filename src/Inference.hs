@@ -8,6 +8,7 @@ import qualified Data.Set as Set
 import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
 
 import AST.Annotation (Annotated, getAnnotation)
+import AST.Expression (UnaryOp, BinOp)
 import AST.Expression as E
 import AST.Statement as S
 import AST.Declaration as D
@@ -220,13 +221,25 @@ inferExpr env expr = case expr of
 
   Unary a op exp -> do
     resultT <- newTypeVar
-    let fnT = getUnaryFnType op
     exp' <- inferExpr env exp
     expT <- instantiate $ getScheme exp' --TODO: Switch back to storing types instead of schemes?
-    sub <- lift $ mgu fnT (TFunc [expT] resultT)
+    let fnT = getUnaryFnType op
+    sub <- lift $ mgu fnT (TFunc [expT] resultT) -- TODO: these should update the current substitution
     let t = apply sub resultT
     let sch = generalize env t
     return $ Unary (sch, a) op exp'
+
+  Binary a op l r -> do
+    resultT <- newTypeVar
+    l' <- inferExpr env l
+    r' <- inferExpr env r
+    lt <- instantiate $ getScheme l'
+    rt <- instantiate $ getScheme r'
+    let fnT = getBinaryFnType op
+    sub <- lift $ mgu fnT (TFunc [lt, rt] resultT)
+    let t = apply sub resultT
+    let sch = generalize env t
+    return $ Binary (sch, a) op l' r'
 
   _ -> error "TODO: should this be returning the type as well? And why are these schemes?"
 
@@ -245,6 +258,36 @@ getUnaryFnType :: UnaryOp -> Type
 getUnaryFnType op = case op of
   BitInvert -> TFunc [tInt] tInt
   BoolNot   -> TFunc [tBool] tBool
+
+getBinaryFnType :: BinOp -> Type
+getBinaryFnType op
+  | op `elem` intBinaryFuncs =
+    TFunc [tInt, tInt] tInt
+  | op `elem` numBinaryFuncs =
+    TFunc [tInt, tInt] tInt -- TODO: fix this once there are typeclasses
+  | op `elem` boolBinaryFuncs =
+    TFunc [tBool, tBool] tBool
+  | op `elem` equalityFuncs =
+    TFunc [tInt, tInt] tBool -- TODO: fix this once there are typeclasses
+  | op `elem` ordFuncs =
+    TFunc [tInt, tInt] tBool -- TODO: fix this once there are typeclasses
+  | otherwise =
+    error $ "getBinaryFnType missing a case for " ++ show op
+
+intBinaryFuncs :: [BinOp]
+intBinaryFuncs = [Mod, BitAnd, BitOr, BitXor, LShift, RShift, RRShift]
+
+numBinaryFuncs :: [BinOp]
+numBinaryFuncs = [Plus, Minus, Times, Divide, Power]
+
+boolBinaryFuncs :: [BinOp]
+boolBinaryFuncs = [BoolAnd, BoolOr]
+
+equalityFuncs :: [BinOp]
+equalityFuncs = [Eq, NotEq]
+
+ordFuncs :: [BinOp]
+ordFuncs = [Less, LessEq, Greater, GreaterEq]
 
 todoType :: Scheme
 todoType = Scheme 0 $ TCon "TODO" []
