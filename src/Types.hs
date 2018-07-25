@@ -15,7 +15,7 @@ data Type
   | TFunc [Type] Type
   | TVar String
   | TGen Int
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 tcon0 :: String -> Type
 tcon0 name = TCon name []
@@ -39,7 +39,7 @@ tUnit :: Type
 tUnit   = tcon0 "()"
 
 
-type Substitution = Map String Type
+type Substitution = Map Type Type
 
 emptySubstitution :: Substitution
 emptySubstitution = Map.empty
@@ -61,12 +61,10 @@ instance Types Type where
     TCon con (apply sub ts)
   apply sub (TFunc args ret) =
     TFunc (apply sub args) (apply sub ret)
-  apply sub (TVar tv) =
-    case Map.lookup tv sub of
-     Nothing -> TVar tv
-     Just t' -> t'
-  apply _   (TGen n) =
-    TGen n
+  apply sub tv@(TVar _) =
+    fromMaybe tv $ Map.lookup tv sub
+  apply sub tg@(TGen _) =
+    fromMaybe tg $ Map.lookup tg sub
 
   freeTypeVars (TCon _ ts) =
     freeTypeVars ts
@@ -96,3 +94,7 @@ instance Types Scheme where
 isGeneric :: Type -> Bool
 isGeneric (TGen _) = True
 isGeneric _        = False
+
+fromMaybe :: a -> Maybe a -> a
+fromMaybe _ (Just x) = x
+fromMaybe d Nothing  = d

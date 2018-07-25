@@ -186,10 +186,18 @@ inferGroup (BindGroup impl) env = mapM addType' impl
 generalize :: Environment -> Type -> Scheme
 generalize env t =
   let envVars = foldl Set.union Set.empty $ map (freeTypeVars . snd) $ Map.toList env
-      freeVars = Set.toList $ Set.difference (freeTypeVars t) envVars
+      freeVars = map TVar $ Set.toList $ Set.difference (freeTypeVars t) envVars
       genVars = map TGen [1..]
       sub = Map.fromList $ zip freeVars genVars
   in Scheme (length freeVars) (apply sub t)
+
+
+instantiate :: Scheme -> InferM Type
+instantiate (Scheme n t) = do
+  newVars <- mapM (\_ -> newTypeVar) [1..n]
+  let genVars = map TGen [1..n]
+  let sub = Map.fromList $ zip genVars (map TVar newVars)
+  return $ apply sub t
 
 todoType :: Scheme
 todoType = Scheme 0 $ TCon "TODO" []
@@ -315,7 +323,7 @@ varBind var other
   | Set.member var (freeTypeVars other) =
     Left $ InfiniteType var
   | otherwise =
-    return $ Map.singleton var other
+    return $ Map.singleton (TVar var) other
 -- TODO: check kinds in varBind
 
 mguList :: Substitution -> [(Type, Type)] -> Result Substitution
