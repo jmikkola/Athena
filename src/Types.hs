@@ -91,6 +91,9 @@ instance Types Scheme where
   apply sub (Scheme nvars t) = Scheme nvars (apply sub t)
   freeTypeVars (Scheme _ t) = freeTypeVars t
 
+asScheme :: Type -> Scheme
+asScheme t = Scheme 0 t
+
 isGeneric :: Type -> Bool
 isGeneric (TGen _) = True
 isGeneric _        = False

@@ -16,7 +16,14 @@ import Types
   ( Substitution
   , Scheme(..)
   , Type(..)
+  , tInt
+  , tFloat
+  , tBool
+  , tChar
+  , tString
+  , tUnit
   , apply
+  , asScheme
   , composeSubs
   , emptySubstitution
   , freeTypeVars )
@@ -198,6 +205,21 @@ instantiate (Scheme n t) = do
   let genVars = map TGen [1..n]
   let sub = Map.fromList $ zip genVars (map TVar newVars)
   return $ apply sub t
+
+inferExpr :: Expression a -> InferM (Expression (Scheme, a))
+inferExpr expr = case expr of
+  _ -> error "TODO: should this be returning the type as well? And why are these schemes?"
+
+inferValue :: Value a -> InferM (Value (Scheme, a))
+inferValue val = case val of
+  StrVal a str ->
+    return $ StrVal (asScheme tString, a) str
+  BoolVal a b ->
+    return $ BoolVal (asScheme tBool, a) b
+  FloatVal a f ->
+    return $ FloatVal (asScheme tFloat, a) f
+  _ ->
+    error "TODO: Infer for StructVal"
 
 todoType :: Scheme
 todoType = Scheme 0 $ TCon "TODO" []
