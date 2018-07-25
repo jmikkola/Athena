@@ -158,6 +158,13 @@ startingEnv = Map.empty
 
 runInfer f = evalStateT f startingInferState
 
+newTypeVar :: InferM String
+newTypeVar = do
+  st <- get
+  let n = nextVarN st
+  put $ st { nextVarN = 1 + n }
+  return $ show n
+
 inferGroups :: [BindGroup a] -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
 inferGroups []     _   =
   return []
