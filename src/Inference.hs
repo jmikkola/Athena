@@ -232,14 +232,26 @@ inferExpr env expr = case expr of
   Binary a op l r -> do
     resultT <- newTypeVar
     l' <- inferExpr env l
-    r' <- inferExpr env r
     lt <- instantiate $ getScheme l'
+    r' <- inferExpr env r
     rt <- instantiate $ getScheme r'
     let fnT = getBinaryFnType op
     sub <- lift $ mgu fnT (TFunc [lt, rt] resultT)
     let t = apply sub resultT
     let sch = generalize env t
     return $ Binary (sch, a) op l' r'
+
+  Call a fexp args -> do
+    resultT <- newTypeVar
+    fexp' <- inferExpr env fexp
+    ft <- instantiate $ getScheme fexp'
+    -- Here's why keeping the substitution in the state is important:
+    args' <- mapM (inferExpr env) args
+    argTs <- mapM (instantiate . getScheme) args'
+    sub <- lift $ mgu ft (TFunc argTs resultT)
+    let t = apply sub resultT
+    let sch = generalize env t
+    return $ Call (sch, a) fexp' args'
 
   _ -> error "TODO: should this be returning the type as well? And why are these schemes?"
 
