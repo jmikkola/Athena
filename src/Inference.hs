@@ -165,12 +165,12 @@ startingEnv = Map.empty
 
 runInfer f = evalStateT f startingInferState
 
-newTypeVar :: InferM String
+newTypeVar :: InferM Type
 newTypeVar = do
   st <- get
   let n = nextVarN st
   put $ st { nextVarN = 1 + n }
-  return $ "_v" ++ show n
+  return $ TVar $ "_v" ++ show n
 
 inferGroups :: [BindGroup a] -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
 inferGroups []     _   =
@@ -203,15 +203,35 @@ instantiate :: Scheme -> InferM Type
 instantiate (Scheme n t) = do
   newVars <- mapM (\_ -> newTypeVar) [1..n]
   let genVars = map TGen [1..n]
-  let sub = Map.fromList $ zip genVars (map TVar newVars)
+  let sub = Map.fromList $ zip genVars newVars
   return $ apply sub t
 
-inferExpr :: Expression a -> InferM (Expression (Scheme, a))
-inferExpr expr = case expr of
+inferExpr :: Environment -> Expression a -> InferM (Expression (Scheme, a))
+inferExpr env expr = case expr of
+  Paren a e -> do
+    e' <- inferExpr env e
+    let sch = getScheme e'
+    return $ Paren (sch, a) e'
+
+  Val a val -> do
+    val' <- inferValue env val
+    let sch = getScheme val'
+    return $ Val (sch, a) val'
+
+  Unary a op exp -> do
+    resultT <- newTypeVar
+    let fnT = getUnaryFnType op
+    exp' <- inferExpr env exp
+    expT <- instantiate $ getScheme exp' --TODO: Switch back to storing types instead of schemes?
+    sub <- lift $ mgu fnT (TFunc [expT] resultT)
+    let t = apply sub resultT
+    let sch = generalize env t
+    return $ Unary (sch, a) op exp'
+
   _ -> error "TODO: should this be returning the type as well? And why are these schemes?"
 
-inferValue :: Value a -> InferM (Value (Scheme, a))
-inferValue val = case val of
+inferValue :: Environment -> Value a -> InferM (Value (Scheme, a))
+inferValue env val = case val of
   StrVal a str ->
     return $ StrVal (asScheme tString, a) str
   BoolVal a b ->
@@ -220,6 +240,11 @@ inferValue val = case val of
     return $ FloatVal (asScheme tFloat, a) f
   _ ->
     error "TODO: Infer for StructVal"
+
+getUnaryFnType :: UnaryOp -> Type
+getUnaryFnType op = case op of
+  BitInvert -> TFunc [tInt] tInt
+  BoolNot   -> TFunc [tBool] tBool
 
 todoType :: Scheme
 todoType = Scheme 0 $ TCon "TODO" []
