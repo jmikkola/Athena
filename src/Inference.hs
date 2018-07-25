@@ -163,7 +163,7 @@ newTypeVar = do
   st <- get
   let n = nextVarN st
   put $ st { nextVarN = 1 + n }
-  return $ show n
+  return $ "_v" ++ show n
 
 inferGroups :: [BindGroup a] -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
 inferGroups []     _   =
@@ -189,10 +189,10 @@ generalize env t =
       freeVars = Set.toList $ Set.difference (freeTypeVars t) envVars
       genVars = map TGen [1..]
       sub = Map.fromList $ zip freeVars genVars
-  in Scheme $ apply sub t
+  in Scheme (length freeVars) (apply sub t)
 
 todoType :: Scheme
-todoType = Scheme $ TCon "TODO" []
+todoType = Scheme 0 $ TCon "TODO" []
 
 toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
 toBindings typed = mapSnd getScheme typed

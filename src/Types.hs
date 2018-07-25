@@ -84,13 +84,14 @@ instance (Types a) => Types [a] where
 
 
 -- TODO: Add kinds to Scheme
+-- The number is how many generic variables the scheme has
 data Scheme
-  = Scheme Type
+  = Scheme Int Type
   deriving (Eq, Show)
 
 instance Types Scheme where
-  apply sub (Scheme t) = Scheme (apply sub t)
-  freeTypeVars (Scheme t) = freeTypeVars t
+  apply sub (Scheme nvars t) = Scheme nvars (apply sub t)
+  freeTypeVars (Scheme _ t) = freeTypeVars t
 
 isGeneric :: Type -> Bool
 isGeneric (TGen _) = True
