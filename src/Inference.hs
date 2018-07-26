@@ -177,6 +177,15 @@ newTypeVar = do
   put $ st { nextVarN = 1 + n }
   return $ TVar $ "_v" ++ show n
 
+getSub :: InferM Substitution
+getSub = currentSub <$> get
+
+extendSub :: Substitution -> InferM ()
+extendSub sub = do
+  s1 <- getSub
+  let s = composeSubs sub s1
+  modify (\st -> st { currentSub=s })
+
 inferGroups :: [BindGroup a] -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
 inferGroups []     _   =
   return []
@@ -228,7 +237,8 @@ inferExpr env expr = case expr of
     exp' <- inferExpr env exp
     expT <- instantiate $ getScheme exp' --TODO: Switch back to storing types instead of schemes?
     let fnT = getUnaryFnType op
-    sub <- lift $ mgu fnT (TFunc [expT] resultT) -- TODO: these should update the current substitution
+    unify fnT (TFunc [expT] resultT)
+    sub <- getSub
     let t = apply sub resultT
     let sch = generalize env t
     return $ E.Unary (sch, a) op exp'
@@ -240,7 +250,8 @@ inferExpr env expr = case expr of
     r' <- inferExpr env r
     rt <- instantiate $ getScheme r'
     let fnT = getBinaryFnType op
-    sub <- lift $ mgu fnT (TFunc [lt, rt] resultT)
+    unify fnT (TFunc [lt, rt] resultT)
+    sub <- getSub
     let t = apply sub resultT
     let sch = generalize env t
     return $ E.Binary (sch, a) op l' r'
@@ -249,10 +260,10 @@ inferExpr env expr = case expr of
     resultT <- newTypeVar
     fexp' <- inferExpr env fexp
     ft <- instantiate $ getScheme fexp'
-    -- Here's why keeping the substitution in the state is important:
     args' <- mapM (inferExpr env) args
     argTs <- mapM (instantiate . getScheme) args'
-    sub <- lift $ mgu ft (TFunc argTs resultT)
+    unify ft (TFunc argTs resultT)
+    sub <- getSub
     let t = apply sub resultT
     let sch = generalize env t
     return $ E.Call (sch, a) fexp' args'
@@ -263,7 +274,18 @@ inferExpr env expr = case expr of
     sch <- attemptCast t expT
     return $ E.Cast (sch, a) t exp'
 
-  _ -> error "TODO: should this be returning the type as well? And why are these schemes?"
+  E.Var a name -> do
+    sch <- lookupName name env
+    -- instantiate here so that the returned scheme is just
+    -- the type wrapped in a scheme
+    t <- instantiate sch
+    -- re-wrap in a scheme for returning
+    return $ E.Var (asScheme t, a) name
+
+  E.Access a exp field -> do
+    exp' <- inferExpr env exp
+    t <- instantiate $ getScheme exp'
+    return $ error "TODO: Infer for Access"
 
 inferValue :: Environment -> E.Value a -> InferM (E.Value (Scheme, a))
 inferValue env val = case val of
@@ -275,6 +297,12 @@ inferValue env val = case val of
     return $ E.FloatVal (asScheme tFloat, a) f
   _ ->
     error "TODO: Infer for StructVal"
+
+
+lookupName :: String -> Environment -> InferM Scheme
+lookupName name env = case Map.lookup name env of
+  Nothing  -> inferErr $ UndefinedVar name
+  Just sch -> return sch
 
 attemptCast :: String -> Type -> InferM Scheme
 attemptCast toTypeName fromType =
@@ -414,6 +442,12 @@ addTypeV val = case val of
   E.StructVal  a name fields -> do
     fields' <- mapM (\(n,e) -> do { e' <- addTypeE e; return (n,e') }) fields
     return $ E.StructVal (todoType, a) name fields'
+
+unify :: Type -> Type -> InferM ()
+unify t1 t2 = do
+  s <- getSub
+  s2 <- lift $ mgu (apply s t1) (apply s t2)
+  extendSub s2
 
 mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2

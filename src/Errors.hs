@@ -12,6 +12,7 @@ data Error
   | DuplicateBinding String -- binding name
   | ParseError String
   | CannotCast String -- a message
+  | UndefinedVar String -- variable name
   deriving (Show, Eq)
 
 type Result a = Either Error a
