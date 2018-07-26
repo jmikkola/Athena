@@ -32,6 +32,7 @@ data Module a =
 -- * (TODO) Lowers the syntax somewhat (e.g. StructVal -> Call)
 -- * (TODO) Check that all types referred to actually exist
 -- * (TODO) Check that variable declarations are unique in a given block
+-- * (TODO) Check for variables that are defined and never referenced
 firstPass :: File a -> Result (Module a)
 firstPass file = do
   typesFound <- gatherTypeDecls file

@@ -220,6 +220,27 @@ instantiate (Scheme n t) = do
   let sub = Map.fromList $ zip genVars newVars
   return $ apply sub t
 
+
+inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Scheme, a))
+inferDecl env decl = case decl of
+  D.Let a name _ expr -> do
+    expr' <- inferExpr env expr
+    return undefined -- TODO
+
+inferStmt :: Environment -> S.Statement a -> InferM (S.Statement (Scheme, a))
+inferStmt = undefined -- TODO
+
+inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Scheme, a)]
+inferBlock _   []     = return []
+inferBlock env (s:ss) = do
+  s' <- inferStmt env s
+  let env' = case s' of
+        S.Let _ name _ _ -> Map.insert name (getScheme s') env
+        _                -> env
+  ss' <- inferBlock env' ss
+  return $ s' : ss'
+
+
 inferExpr :: Environment -> E.Expression a -> InferM (E.Expression (Scheme, a))
 inferExpr env expr = case expr of
   E.Paren a e -> do
