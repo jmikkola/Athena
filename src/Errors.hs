@@ -11,6 +11,7 @@ data Error
   | CompilerBug String
   | DuplicateBinding String -- binding name
   | ParseError String
+  | CannotCast String -- a message
   deriving (Show, Eq)
 
 type Result a = Either Error a

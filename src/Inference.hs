@@ -8,10 +8,11 @@ import qualified Data.Set as Set
 import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
 
 import AST.Annotation (Annotated, getAnnotation)
-import AST.Expression (UnaryOp, BinOp)
-import AST.Expression as E
-import AST.Statement as S
-import AST.Declaration as D
+import AST.Expression (UnaryOp(..), BinOp(..))
+import qualified AST.Expression as E
+import qualified AST.Statement as S
+import qualified AST.Declaration as D
+import qualified AST.Type as T
 
 import Types
   ( Substitution
@@ -166,6 +167,9 @@ startingEnv = Map.empty
 
 runInfer f = evalStateT f startingInferState
 
+inferErr :: Error -> InferM a
+inferErr err = lift $ Left err
+
 newTypeVar :: InferM Type
 newTypeVar = do
   st <- get
@@ -207,19 +211,19 @@ instantiate (Scheme n t) = do
   let sub = Map.fromList $ zip genVars newVars
   return $ apply sub t
 
-inferExpr :: Environment -> Expression a -> InferM (Expression (Scheme, a))
+inferExpr :: Environment -> E.Expression a -> InferM (E.Expression (Scheme, a))
 inferExpr env expr = case expr of
-  Paren a e -> do
+  E.Paren a e -> do
     e' <- inferExpr env e
     let sch = getScheme e'
-    return $ Paren (sch, a) e'
+    return $ E.Paren (sch, a) e'
 
-  Val a val -> do
+  E.Val a val -> do
     val' <- inferValue env val
     let sch = getScheme val'
-    return $ Val (sch, a) val'
+    return $ E.Val (sch, a) val'
 
-  Unary a op exp -> do
+  E.Unary a op exp -> do
     resultT <- newTypeVar
     exp' <- inferExpr env exp
     expT <- instantiate $ getScheme exp' --TODO: Switch back to storing types instead of schemes?
@@ -227,9 +231,9 @@ inferExpr env expr = case expr of
     sub <- lift $ mgu fnT (TFunc [expT] resultT) -- TODO: these should update the current substitution
     let t = apply sub resultT
     let sch = generalize env t
-    return $ Unary (sch, a) op exp'
+    return $ E.Unary (sch, a) op exp'
 
-  Binary a op l r -> do
+  E.Binary a op l r -> do
     resultT <- newTypeVar
     l' <- inferExpr env l
     lt <- instantiate $ getScheme l'
@@ -239,9 +243,9 @@ inferExpr env expr = case expr of
     sub <- lift $ mgu fnT (TFunc [lt, rt] resultT)
     let t = apply sub resultT
     let sch = generalize env t
-    return $ Binary (sch, a) op l' r'
+    return $ E.Binary (sch, a) op l' r'
 
-  Call a fexp args -> do
+  E.Call a fexp args -> do
     resultT <- newTypeVar
     fexp' <- inferExpr env fexp
     ft <- instantiate $ getScheme fexp'
@@ -251,20 +255,40 @@ inferExpr env expr = case expr of
     sub <- lift $ mgu ft (TFunc argTs resultT)
     let t = apply sub resultT
     let sch = generalize env t
-    return $ Call (sch, a) fexp' args'
+    return $ E.Call (sch, a) fexp' args'
+
+  E.Cast a t exp -> do
+    exp' <- inferExpr env exp
+    expT <- instantiate $ getScheme exp'
+    sch <- attemptCast t expT
+    return $ E.Cast (sch, a) t exp'
 
   _ -> error "TODO: should this be returning the type as well? And why are these schemes?"
 
-inferValue :: Environment -> Value a -> InferM (Value (Scheme, a))
+inferValue :: Environment -> E.Value a -> InferM (E.Value (Scheme, a))
 inferValue env val = case val of
-  StrVal a str ->
-    return $ StrVal (asScheme tString, a) str
-  BoolVal a b ->
-    return $ BoolVal (asScheme tBool, a) b
-  FloatVal a f ->
-    return $ FloatVal (asScheme tFloat, a) f
+  E.StrVal a str ->
+    return $ E.StrVal (asScheme tString, a) str
+  E.BoolVal a b ->
+    return $ E.BoolVal (asScheme tBool, a) b
+  E.FloatVal a f ->
+    return $ E.FloatVal (asScheme tFloat, a) f
   _ ->
     error "TODO: Infer for StructVal"
+
+attemptCast :: String -> Type -> InferM Scheme
+attemptCast toTypeName fromType =
+  let toType = TCon toTypeName []
+  in if canCast fromType toType
+     then return $ asScheme toType
+     else inferErr $ CannotCast $ "cannot cast " ++ show fromType ++ " to " ++ toTypeName
+
+canCast :: Type -> Type -> Bool
+canCast t1 t2
+  | t1 == tInt && t2 == tFloat = True
+  | t1 == tFloat && t2 == tInt = True
+  | otherwise = False
+-- TODO: add casts to string
 
 getUnaryFnType :: UnaryOp -> Type
 getUnaryFnType op = case op of
@@ -315,81 +339,81 @@ addType (D.Let a name t expr) = do
 addType (D.Function a name t args stmt) = do
   stmt' <- addTypeS stmt
   return $ D.Function (todoType, a) name t args stmt'
-addType (TypeDef _ name td) =
-  lift $ Left $ CompilerBug $ show $ TypeDef () name td
+addType (D.TypeDef _ name td) =
+  lift $ Left $ CompilerBug $ show $ D.TypeDef () name td
 
 addTypeE :: E.Expression a -> InferM (E.Expression (Scheme, a))
 addTypeE expr = case expr of
-  Paren   a e -> do
+  E.Paren   a e -> do
     e' <- addTypeE e
-    return $ Paren (todoType, a) e'
-  Val     a val -> do
+    return $ E.Paren (todoType, a) e'
+  E.Val     a val -> do
     val' <- addTypeV val
-    return $ Val (todoType, a) val'
-  Unary   a op e -> do
+    return $ E.Val (todoType, a) val'
+  E.Unary   a op e -> do
     e' <- addTypeE e
-    return $ Unary (todoType, a) op e'
-  Binary  a op l r -> do
+    return $ E.Unary (todoType, a) op e'
+  E.Binary  a op l r -> do
     l' <- addTypeE l
     r' <- addTypeE r
-    return $ Binary (todoType, a) op l' r'
-  Call    a fn es -> do
+    return $ E.Binary (todoType, a) op l' r'
+  E.Call    a fn es -> do
     fn' <- addTypeE fn
     es' <- mapM addTypeE es
-    return $ Call (todoType, a) fn' es'
-  Cast    a t e -> do
+    return $ E.Call (todoType, a) fn' es'
+  E.Cast    a t e -> do
     e' <- addTypeE e
-    return $ Cast (todoType, a) t e'
-  Var     a name -> do
-    return $ Var (todoType, a) name
-  Access  a e field -> do
+    return $ E.Cast (todoType, a) t e'
+  E.Var     a name -> do
+    return $ E.Var (todoType, a) name
+  E.Access  a e field -> do
     e' <- addTypeE e
-    return $ Access (todoType, a) e' field
+    return $ E.Access (todoType, a) e' field
 
 addTypeS :: S.Statement a -> InferM (S.Statement (Scheme, a))
 addTypeS stmt = case stmt of
-  Return a mexp -> do
+  S.Return a mexp -> do
     e <- case mexp of
       Nothing -> return Nothing
       Just e  -> Just <$> addTypeE e
-    return $ Return (todoType, a) e
+    return $ S.Return (todoType, a) e
   S.Let a name t e -> do
     e' <- addTypeE e
     return $ S.Let (todoType, a) name t e'
-  Assign a path e -> do
+  S.Assign a path e -> do
     e' <- addTypeE e
-    return $ Assign (todoType, a) path e'
-  Block a stmts -> do
+    return $ S.Assign (todoType, a) path e'
+  S.Block a stmts -> do
     stmts' <- mapM addTypeS stmts
-    return $ Block (todoType, a) stmts'
-  Expr a e -> do
+    return $ S.Block (todoType, a) stmts'
+  S.Expr a e -> do
     e' <- addTypeE e
-    return $ Expr (todoType, a) e'
-  If a t st est -> do
+    return $ S.Expr (todoType, a) e'
+  S.If a t st est -> do
     t' <- addTypeE t
     st' <- mapM addTypeS st
     est' <- case est of
       Nothing -> return Nothing
       Just ss -> Just <$> addTypeS ss
-    return $ If (todoType, a) t' st' est'
-  While a e ss -> do
+    return $ S.If (todoType, a) t' st' est'
+  S.While a e ss -> do
     e' <- addTypeE e
     ss' <- mapM addTypeS ss
-    return $ While (todoType, a) e' ss'
+    return $ S.While (todoType, a) e' ss'
 
 addTypeV :: E.Value a -> InferM (E.Value (Scheme, a))
 addTypeV val = case val of
-  StrVal     a name ->
-    return $ StrVal (todoType, a) name
-  BoolVal    a b ->
-    return $ BoolVal (todoType, a) b
-  IntVal     a i ->
-    return $ IntVal (todoType, a) i
-  FloatVal   a f ->
-    return $ FloatVal (todoType, a) f
-  StructVal  a name fields -> do
+  E.StrVal     a name ->
+    return $ E.StrVal (todoType, a) name
+  E.BoolVal    a b ->
+    return $ E.BoolVal (todoType, a) b
+  E.IntVal     a i ->
+    return $ E.IntVal (todoType, a) i
+  E.FloatVal   a f ->
+    return $ E.FloatVal (todoType, a) f
+  E.StructVal  a name fields -> do
     fields' <- mapM (\(n,e) -> do { e' <- addTypeE e; return (n,e') }) fields
-    return $ StructVal (todoType, a) name fields'
+    return $ E.StructVal (todoType, a) name fields'
 
 mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2
