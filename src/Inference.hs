@@ -50,7 +50,7 @@ inferModule m = do
   return $ Module { bindings=Map.fromList binds, types=(types m) }
 
 makeBindGroups :: Module a -> [BindGroup a]
-makeBindGroups m = --return [BindGroup $ Map.toList $ bindings m]
+makeBindGroups m =
   let declarations = bindings m
       graph = gatherGraph declarations
       topoOrder = reverse $ components graph
@@ -191,18 +191,13 @@ inferGroups []     _   =
   return []
 inferGroups (g:gs) env = do
   typed <- inferGroup g env
-  -- TODO: Need to pass type environment between these
   let bindings = toBindings typed
   let env' = Map.union (Map.fromList bindings) env
   rest <- inferGroups gs env'
   return $ typed ++ rest
 
 inferGroup :: BindGroup a -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
-inferGroup (BindGroup impl) env = mapM addType' impl
-  -- TODO: replace this with a real implementation
-  where addType' (n, d) = do
-          d' <- addType d
-          return (n, d')
+inferGroup (BindGroup impls) env = undefined -- TODO!
 
 generalize :: Environment -> Type -> Scheme
 generalize env t =
@@ -221,101 +216,97 @@ instantiate (Scheme n t) = do
   return $ apply sub t
 
 
-inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Scheme, a))
+inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
 inferDecl env decl = case decl of
   D.Let a name _ expr -> do
     expr' <- inferExpr env expr
     return undefined -- TODO
 
-inferStmt :: Environment -> S.Statement a -> InferM (S.Statement (Scheme, a))
+inferStmt :: Environment -> S.Statement a -> InferM (S.Statement (Type, a))
 inferStmt = undefined -- TODO
 
-inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Scheme, a)]
+inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Type, a)]
 inferBlock _   []     = return []
 inferBlock env (s:ss) = do
   s' <- inferStmt env s
   let env' = case s' of
-        S.Let _ name _ _ -> Map.insert name (getScheme s') env
+        S.Let _ name _ _ ->
+          let sch = generalize env (getType s')
+          in Map.insert name sch env
         _                -> env
   ss' <- inferBlock env' ss
   return $ s' : ss'
 
 
-inferExpr :: Environment -> E.Expression a -> InferM (E.Expression (Scheme, a))
+inferExpr :: Environment -> E.Expression a -> InferM (E.Expression (Type, a))
 inferExpr env expr = case expr of
   E.Paren a e -> do
     e' <- inferExpr env e
-    let sch = getScheme e'
-    return $ E.Paren (sch, a) e'
+    let t = getType e'
+    return $ E.Paren (t, a) e'
 
   E.Val a val -> do
     val' <- inferValue env val
-    let sch = getScheme val'
-    return $ E.Val (sch, a) val'
+    let t = getType val'
+    return $ E.Val (t, a) val'
 
   E.Unary a op exp -> do
     resultT <- newTypeVar
     exp' <- inferExpr env exp
-    expT <- instantiate $ getScheme exp' --TODO: Switch back to storing types instead of schemes?
+    let expT = getType exp'
     let fnT = getUnaryFnType op
     unify fnT (TFunc [expT] resultT)
     sub <- getSub
     let t = apply sub resultT
-    let sch = generalize env t
-    return $ E.Unary (sch, a) op exp'
+    return $ E.Unary (t, a) op exp'
 
   E.Binary a op l r -> do
     resultT <- newTypeVar
     l' <- inferExpr env l
-    lt <- instantiate $ getScheme l'
+    let lt = getType l'
     r' <- inferExpr env r
-    rt <- instantiate $ getScheme r'
+    let rt = getType r'
     let fnT = getBinaryFnType op
     unify fnT (TFunc [lt, rt] resultT)
     sub <- getSub
     let t = apply sub resultT
-    let sch = generalize env t
-    return $ E.Binary (sch, a) op l' r'
+    return $ E.Binary (t, a) op l' r'
 
   E.Call a fexp args -> do
     resultT <- newTypeVar
     fexp' <- inferExpr env fexp
-    ft <- instantiate $ getScheme fexp'
+    let ft = getType fexp'
     args' <- mapM (inferExpr env) args
-    argTs <- mapM (instantiate . getScheme) args'
+    let argTs = map getType args'
     unify ft (TFunc argTs resultT)
     sub <- getSub
     let t = apply sub resultT
-    let sch = generalize env t
-    return $ E.Call (sch, a) fexp' args'
+    return $ E.Call (t, a) fexp' args'
 
   E.Cast a t exp -> do
     exp' <- inferExpr env exp
-    expT <- instantiate $ getScheme exp'
+    let expT = getType exp'
     sch <- attemptCast t expT
     return $ E.Cast (sch, a) t exp'
 
   E.Var a name -> do
     sch <- lookupName name env
-    -- instantiate here so that the returned scheme is just
-    -- the type wrapped in a scheme
     t <- instantiate sch
-    -- re-wrap in a scheme for returning
-    return $ E.Var (asScheme t, a) name
+    return $ E.Var (t, a) name
 
   E.Access a exp field -> do
     exp' <- inferExpr env exp
-    t <- instantiate $ getScheme exp'
+    let t = getType exp'
     return $ error "TODO: Infer for Access"
 
-inferValue :: Environment -> E.Value a -> InferM (E.Value (Scheme, a))
+inferValue :: Environment -> E.Value a -> InferM (E.Value (Type, a))
 inferValue env val = case val of
   E.StrVal a str ->
-    return $ E.StrVal (asScheme tString, a) str
+    return $ E.StrVal (tString, a) str
   E.BoolVal a b ->
-    return $ E.BoolVal (asScheme tBool, a) b
+    return $ E.BoolVal (tBool, a) b
   E.FloatVal a f ->
-    return $ E.FloatVal (asScheme tFloat, a) f
+    return $ E.FloatVal (tFloat, a) f
   _ ->
     error "TODO: Infer for StructVal"
 
@@ -325,11 +316,11 @@ lookupName name env = case Map.lookup name env of
   Nothing  -> inferErr $ UndefinedVar name
   Just sch -> return sch
 
-attemptCast :: String -> Type -> InferM Scheme
+attemptCast :: String -> Type -> InferM Type
 attemptCast toTypeName fromType =
   let toType = TCon toTypeName []
   in if canCast fromType toType
-     then return $ asScheme toType
+     then return toType
      else inferErr $ CannotCast $ "cannot cast " ++ show fromType ++ " to " ++ toTypeName
 
 canCast :: Type -> Type -> Bool
@@ -374,14 +365,14 @@ equalityFuncs = [Eq, NotEq]
 ordFuncs :: [BinOp]
 ordFuncs = [Less, LessEq, Greater, GreaterEq]
 
-todoType :: Scheme
-todoType = Scheme 0 $ TCon "TODO" []
+todoType :: Type
+todoType = TCon "TODO" []
 
 toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
-toBindings typed = mapSnd getScheme typed
+toBindings typed  = mapSnd getType typed
 
 -- TODO: Replace with actual type inference
-addType :: D.Declaration a -> InferM (D.Declaration (Scheme, a))
+addType :: D.Declaration a -> InferM (D.Declaration (Type, a))
 addType (D.Let a name t expr) = do
   expr' <- addTypeE expr
   return $ D.Let (todoType, a) name t expr'
@@ -391,7 +382,7 @@ addType (D.Function a name t args stmt) = do
 addType (D.TypeDef _ name td) =
   lift $ Left $ CompilerBug $ show $ D.TypeDef () name td
 
-addTypeE :: E.Expression a -> InferM (E.Expression (Scheme, a))
+addTypeE :: E.Expression a -> InferM (E.Expression (Type, a))
 addTypeE expr = case expr of
   E.Paren   a e -> do
     e' <- addTypeE e
@@ -419,7 +410,7 @@ addTypeE expr = case expr of
     e' <- addTypeE e
     return $ E.Access (todoType, a) e' field
 
-addTypeS :: S.Statement a -> InferM (S.Statement (Scheme, a))
+addTypeS :: S.Statement a -> InferM (S.Statement (Type, a))
 addTypeS stmt = case stmt of
   S.Return a mexp -> do
     e <- case mexp of
@@ -450,7 +441,7 @@ addTypeS stmt = case stmt of
     ss' <- mapM addTypeS ss
     return $ S.While (todoType, a) e' ss'
 
-addTypeV :: E.Value a -> InferM (E.Value (Scheme, a))
+addTypeV :: E.Value a -> InferM (E.Value (Type, a))
 addTypeV val = case val of
   E.StrVal     a name ->
     return $ E.StrVal (todoType, a) name
@@ -513,8 +504,8 @@ mguList sub ((t1,t2):ts) = do
   sub2 <- mgu (apply sub t1) (apply sub t2)
   mguList (composeSubs sub sub2) ts
 
-getScheme :: (Annotated a) => a (Scheme, b) -> Scheme
-getScheme node = fst $ getAnnotation node
+getType :: (Annotated a) => a (b, c) -> b
+getType node = fst $ getAnnotation node
 
 mustLookup :: (Ord k, Show k) => k -> Map k v -> v
 mustLookup key m = case Map.lookup key m of
