@@ -42,12 +42,20 @@ data BindGroup a
     { implicitBindings :: [(String, D.Declaration a)] }
     -- TODO: Add explicit bindings
 
+type TypedDecls a = [(String, D.Declaration (Type, a))]
+
+data InferResult a
+  = InferResult
+    { topLevelBindings :: TypedDecls a
+    , topLevelEnv      :: Environment }
+  deriving (Show)
+
 -- (Type, a) adds a type to whatever the original annotation was
-inferModule :: Module a -> Result (Module (Scheme, a))
+inferModule :: Module a -> Result (InferResult a)
 inferModule m = do
   let bindGroups = makeBindGroups m
-  binds <- runInfer $ inferGroups bindGroups startingEnv
-  return $ Module { bindings=Map.fromList binds, types=(types m) }
+  (binds, env) <- runInfer $ inferGroups bindGroups startingEnv
+  return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
 
 makeBindGroups :: Module a -> [BindGroup a]
 makeBindGroups m =
@@ -186,18 +194,42 @@ extendSub sub = do
   let s = composeSubs sub s1
   modify (\st -> st { currentSub=s })
 
-inferGroups :: [BindGroup a] -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
+inferGroups :: [BindGroup a] -> Environment -> InferM (TypedDecls a, Environment)
 inferGroups []     _   =
-  return []
+  return ([], Map.empty)
 inferGroups (g:gs) env = do
-  typed <- inferGroup g env
-  let bindings = toBindings typed
-  let env' = Map.union (Map.fromList bindings) env
-  rest <- inferGroups gs env'
-  return $ typed ++ rest
+  (typed, env1) <- inferGroup g env
+--  let bindings = toBindings typed
+--  let env' = Map.union (Map.fromList bindings) env
+  (rest, env2) <- inferGroups gs env1
+  return (typed ++ rest, Map.union env1 env2)
 
-inferGroup :: BindGroup a -> Environment -> InferM [(String, D.Declaration (Scheme, a))]
-inferGroup (BindGroup impls) env = undefined -- TODO!
+inferGroup :: BindGroup a -> Environment -> InferM (TypedDecls a, Environment)
+inferGroup (BindGroup impls) env = do
+  -- Map each binding to a new type variable while recursively typing these bindings
+  ts <- mapM (\_ -> newTypeVar) impls
+  let bindingNames = map fst impls
+  let bindingSchemes = map asScheme ts
+  let groupBindings = Map.fromList $ zip bindingNames bindingSchemes
+  let groupEnv = Map.union groupBindings env
+
+  -- Do the actual inference
+  typedDecls <- inferDecls groupEnv impls
+
+  -- Apply the substitution to all the types and generalize them to schemes
+  sub <- getSub
+  let subbed = map (apply sub) ts
+  -- TODO: This might generalize too much:
+  let schemes = map (generalize groupEnv) subbed
+  let resultEnv = Map.fromList $ zip bindingNames schemes
+
+  return (typedDecls, resultEnv)
+
+inferDecls :: Environment -> [(String, D.Declaration a)] -> InferM (TypedDecls a)
+inferDecls env decls = mapM infer decls
+  where infer (name, decl) = do
+          d <- inferDecl env decl
+          return (name, d)
 
 generalize :: Environment -> Type -> Scheme
 generalize env t =
@@ -215,15 +247,45 @@ instantiate (Scheme n t) = do
   let sub = Map.fromList $ zip genVars newVars
   return $ apply sub t
 
-
 inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
 inferDecl env decl = case decl of
-  D.Let a name _ expr -> do
+  D.Let a name t expr -> do
     expr' <- inferExpr env expr
-    return undefined -- TODO
+    return $ D.Let (getType expr', a) name t expr'
+
+  D.Function a name tdec args stmt -> do
+    argTs <- mapM (\_ -> newTypeVar) args
+    let argEnv = Map.fromList $ zip args (map asScheme argTs)
+    let env' = Map.union argEnv env
+    stmt' <- inferStmt env' stmt
+    let returnT = getType stmt'
+    sub <- getSub
+    let argTypes = map (apply sub) argTs
+    let t = TFunc argTypes returnT
+    return $ D.Function (t, a) name tdec args stmt'
+
+  D.TypeDef _ _ _ ->
+    inferErr $ CompilerBug "TypeDefs are not bindings"
 
 inferStmt :: Environment -> S.Statement a -> InferM (S.Statement (Type, a))
-inferStmt = undefined -- TODO
+inferStmt env stmt = case stmt of
+  S.Return a Nothing ->
+    return $ S.Return (tUnit, a) Nothing
+  S.Return a (Just expr) -> do
+    expr' <- inferExpr env expr
+    let t = getType expr'
+    return $ S.Return (t, a) (Just expr')
+  S.Let a name tdecl expr -> do
+    -- TODO: recursive binding?
+    expr' <- inferExpr env expr
+    let t = getType expr'
+    return $ S.Let (t, a) name tdecl expr'
+  S.Expr a expr -> do
+    expr' <- inferExpr env expr
+    -- Note: S.Expr doesn't evaluate to anything, so the type is just ()
+    return $ S.Expr (tUnit, a) expr'
+  _ ->
+    error  "TODO "
 
 inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Type, a)]
 inferBlock _   []     = return []
