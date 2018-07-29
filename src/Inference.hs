@@ -283,7 +283,18 @@ inferStmt env stmt = case stmt of
     return $ S.Let (tUnit, a) name tdecl expr'
 
   S.Assign a names expr ->
-    error "TODO: Assignment statements"
+    case names of
+     []    -> inferErr $ CompilerBug "assignment to no names"
+     [var] -> do
+       expr' <- inferExpr env expr
+       let exprT = getType expr'
+       sch <- lookupName var env
+       varT <- instantiate sch
+       -- TODO: not quite right, since this may result in too narrow of a type
+       -- getting assigned, but it's good enough for now
+       unify exprT varT
+       return $ S.Assign (tUnit, a) names expr'
+     _     -> error "TODO: Multi-part assignment statements"
 
   S.Block a stmts -> do
     stmts' <- inferBlock env stmts
