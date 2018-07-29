@@ -173,7 +173,7 @@ type Environment = Map String Scheme
 startingEnv :: Environment
 startingEnv =
   Map.fromList
-  [ ("print", Scheme 0 (TFunc [tString] tUnit)) ]
+  [ ("print", Scheme 1 (TFunc [TGen 0] tUnit)) ]
 
 runInfer f = evalStateT f startingInferState
 
@@ -313,8 +313,8 @@ inferBlock _   []     = return []
 inferBlock env (s:ss) = do
   s' <- inferStmt env s
   let env' = case s' of
-        S.Let _ name _ _ ->
-          let sch = generalize env (getType s')
+        S.Let _ name _ expr ->
+          let sch = generalize env (getType expr)
           in Map.insert name sch env
         _                -> env
   ss' <- inferBlock env' ss

@@ -15,7 +15,7 @@ fn main() {
     print(c)
 
     // Numbers can be cast to strings
-    print(String(b) + " " + String(a))
+    // TODO print(String(b) + " " + String(a))
 
     print(do_stuff())
 }
@@ -42,7 +42,7 @@ fn do_stuff() String {
 
    let i Int = 0
    while i < 10 {
-         print(String(i))
+         print(i)
          i = i + 1
    }
    return "foo"
