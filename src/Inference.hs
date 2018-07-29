@@ -5,6 +5,8 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Debug.Trace
+
 import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
 
 import AST.Annotation (Annotated, getAnnotation)
@@ -242,8 +244,9 @@ generalize env t =
 
 instantiate :: Scheme -> InferM Type
 instantiate (Scheme n t) = do
-  newVars <- mapM (\_ -> newTypeVar) [1..n]
-  let genVars = map TGen [1..n]
+  let range = [0..(n-1)]
+  newVars <- mapM (\_ -> newTypeVar) range
+  let genVars = map TGen range
   let sub = Map.fromList $ zip genVars newVars
   return $ apply sub t
 
@@ -468,11 +471,16 @@ toBindings typed  = mapSnd getType typed
 unify :: Type -> Type -> InferM ()
 unify t1 t2 = do
   s <- getSub
-  s2 <- lift $ mgu (apply s t1) (apply s t2)
+  let message = "mgu " ++ (show $ apply s t1) ++ " " ++ (show $ apply s t2)
+  s2 <- lift $ traceErr message $ mgu (apply s t1) (apply s t2)
   extendSub s2
 
 mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2
+
+traceErr :: String -> Result a -> Result a
+traceErr message (Right x) = (Right x)
+traceErr message (Left x) = trace message (Left x)
 
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
