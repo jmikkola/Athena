@@ -3,6 +3,7 @@ athena: Makefile athena.cabal stack.yaml src/*.hs
 
 test: athena
 	stack exec athena -- --test
+	stack test
 
 run:
 	stack build
