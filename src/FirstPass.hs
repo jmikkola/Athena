@@ -8,6 +8,7 @@ import AST.Declaration
   ( Declaration(..)
   , File
   , getDeclaredName )
+import qualified AST.Statement as S
 import AST.Type (TypeDecl)
 import Errors
   ( Error(..)
@@ -37,6 +38,7 @@ firstPass :: File a -> Result (Module a)
 firstPass file = do
   typesFound <- gatherTypeDecls file
   binds <- gatherBindings file
+  _ <- mapM checkReturns binds
   return $ Module { bindings=binds, types=typesFound }
 
 -- select and deduplicate type declarations
@@ -48,7 +50,7 @@ gatherTypeDecls file =
         Just _  -> duplicateName name
   in foldM addDecl Map.empty typeDecls
 
--- selet and deduplicate function and let bindings
+-- select and deduplicate function and let bindings
 gatherBindings :: File a -> Result (Map String (Declaration a))
 gatherBindings file =
   let binds = filter (not . isTypeDecl) file
@@ -58,6 +60,54 @@ gatherBindings file =
             Nothing -> return $ Map.insert name decl bs
             Just _  -> duplicateName name
   in foldM addBinding Map.empty binds
+
+checkReturns :: Declaration a -> Result ()
+checkReturns (TypeDef _ _ _) =
+  return ()
+checkReturns (Let _ _ _ _) =
+  return ()
+checkReturns (Function _ name _ _ stmt) = do
+  _ <- checkStmtsReturn name Never [stmt]
+  return ()
+
+checkStmtsReturn :: String -> DoesReturn -> [S.Statement a] -> Result DoesReturn
+checkStmtsReturn fname prevReturns stmts =
+  case prevReturns of
+   Always -> case stmts of
+     []    -> return Always
+     (_:_) -> Left $ Unreachable fname
+   _ -> case stmts of
+     []     -> return prevReturns
+     (s:ss) -> case s of
+       S.Return _ _ ->
+         checkStmtsReturn fname Always ss
+       S.Block _ blk -> do
+         returns <- checkStmtsReturn fname prevReturns blk
+         checkStmtsReturn fname returns ss
+       S.If _ _ thenCase Nothing -> do
+         returns <- checkStmtsReturn fname prevReturns thenCase
+         let actuallyReturns = if returns == Always then Sometimes else returns
+         checkStmtsReturn fname actuallyReturns ss
+       S.If _ _ thenCase (Just elseCase) -> do
+         thenReturns <- checkStmtsReturn fname prevReturns thenCase
+         elseReturns <- checkStmtsReturn fname prevReturns [elseCase]
+         let actuallyReturns = case (thenReturns, elseReturns) of
+               (Always, Always) -> Always
+               (Never,  Never)  -> Never
+               (_,      _)      -> Sometimes
+         checkStmtsReturn fname actuallyReturns ss
+       S.While _ _ whileBody -> do
+         whileReturns <- checkStmtsReturn fname prevReturns whileBody
+         let actuallyReturns = if whileReturns == Always then Sometimes else whileReturns
+         checkStmtsReturn fname actuallyReturns ss
+       _ -> do
+         checkStmtsReturn fname prevReturns ss
+
+data DoesReturn
+  = Never
+  | Sometimes
+  | Always
+  deriving (Eq, Show)
 
 isTypeDecl :: Declaration a -> Bool
 isTypeDecl (TypeDef _ _ _) = True

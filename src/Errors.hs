@@ -13,6 +13,8 @@ data Error
   | ParseError String
   | CannotCast String -- a message
   | UndefinedVar String -- variable name
+  | Unreachable String -- function name
+  | MissingReturn String -- function name
   deriving (Show, Eq)
 
 type Result a = Either Error a
