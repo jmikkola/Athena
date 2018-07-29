@@ -107,7 +107,7 @@ returnStatement :: Parser Statement
 returnStatement = do
   _ <- string "return"
   e <- optionMaybe $ do
-    _ <- any1Whitespace
+    _ <- any1LinearWhitespace
     expressionParser
   return $ S.Return () e
 
