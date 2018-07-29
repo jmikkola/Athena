@@ -273,19 +273,35 @@ inferStmt env stmt = case stmt of
     return $ S.Return (tUnit, a) Nothing
   S.Return a (Just expr) -> do
     expr' <- inferExpr env expr
-    let t = getType expr'
-    return $ S.Return (t, a) (Just expr')
+    return $ S.Return (tUnit, a) (Just expr')
+
   S.Let a name tdecl expr -> do
     -- TODO: recursive binding?
     expr' <- inferExpr env expr
-    let t = getType expr'
-    return $ S.Let (t, a) name tdecl expr'
+    return $ S.Let (tUnit, a) name tdecl expr'
+
+  S.Assign a names expr ->
+    error "TODO: Assignment statements"
+
+  S.Block a stmts -> do
+    stmts' <- inferBlock env stmts
+    return $ S.Block (tUnit, a) stmts'
+
   S.Expr a expr -> do
     expr' <- inferExpr env expr
-    -- Note: S.Expr doesn't evaluate to anything, so the type is just ()
     return $ S.Expr (tUnit, a) expr'
-  _ ->
-    error  "TODO "
+
+  S.If a test blk els -> do
+    testExpr <- inferExpr env test
+    unify (getType testExpr) tBool
+    blk' <- inferBlock env blk
+    els' <- case els of
+      Nothing   -> return Nothing
+      Just stmt -> Just <$> inferStmt env stmt
+    return $ S.If (tUnit, a) testExpr blk' els'
+
+  S.While a test blk ->
+    error  "TODO: While statements"
 
 inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Type, a)]
 inferBlock _   []     = return []
