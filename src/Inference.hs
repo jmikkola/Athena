@@ -201,8 +201,6 @@ inferGroups []     _   =
   return ([], Map.empty)
 inferGroups (g:gs) env = do
   (typed, env1) <- inferGroup g env
---  let bindings = toBindings typed
---  let env' = Map.union (Map.fromList bindings) env
   (rest, env2) <- inferGroups gs env1
   return (typed ++ rest, Map.union env1 env2)
 
