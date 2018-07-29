@@ -171,7 +171,9 @@ type Environment = Map String Scheme
 
 -- TODO: this should also start with prelude and imported names
 startingEnv :: Environment
-startingEnv = Map.empty
+startingEnv =
+  Map.fromList
+  [ ("print", Scheme 0 (TFunc [tString] tUnit)) ]
 
 runInfer f = evalStateT f startingInferState
 
@@ -300,8 +302,11 @@ inferStmt env stmt = case stmt of
       Just stmt -> Just <$> inferStmt env stmt
     return $ S.If (tUnit, a) testExpr blk' els'
 
-  S.While a test blk ->
-    error  "TODO: While statements"
+  S.While a test blk -> do
+    testExpr <- inferExpr env test
+    unify (getType testExpr) tBool
+    blk' <- inferBlock env blk
+    return $ S.While (tUnit, a) testExpr blk'
 
 inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Type, a)]
 inferBlock _   []     = return []
@@ -383,9 +388,11 @@ inferValue env val = case val of
     return $ E.StrVal (tString, a) str
   E.BoolVal a b ->
     return $ E.BoolVal (tBool, a) b
+  E.IntVal a i ->
+    return $ E.IntVal (tInt, a) i
   E.FloatVal a f ->
     return $ E.FloatVal (tFloat, a) f
-  _ ->
+  E.StructVal _ _ _ ->
     error "TODO: Infer for StructVal"
 
 
