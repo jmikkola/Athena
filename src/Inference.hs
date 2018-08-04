@@ -258,30 +258,34 @@ inferDecl env decl = case decl of
 
   D.Function a name tdec args stmt -> do
     argTs <- mapM (\_ -> newTypeVar) args
+    retT <- newTypeVar
     let argEnv = Map.fromList $ zip args (map asScheme argTs)
     let env' = Map.union argEnv env
-    stmt' <- inferStmt env' stmt
-    let returnT = getType stmt'
+    (stmt', stmtReturns) <- inferStmt env' stmt
+    let funcReturns = toFunctionReturns stmtReturns
+    unifyAll retT funcReturns
     sub <- getSub
     let argTypes = map (apply sub) argTs
+    let returnT = apply sub retT
     let t = TFunc argTypes returnT
     return $ D.Function (t, a) name tdec args stmt'
 
   D.TypeDef _ _ _ ->
     inferErr $ CompilerBug "TypeDefs are not bindings"
 
-inferStmt :: Environment -> S.Statement a -> InferM (S.Statement (Type, a))
+inferStmt :: Environment -> S.Statement a ->
+             InferM (S.Statement (Type, a), DoesReturn)
 inferStmt env stmt = case stmt of
   S.Return a Nothing ->
-    return $ S.Return (tUnit, a) Nothing
+    return (S.Return (tUnit, a) Nothing, AlwaysReturns [tUnit])
   S.Return a (Just expr) -> do
     expr' <- inferExpr env expr
-    return $ S.Return (tUnit, a) (Just expr')
+    return (S.Return (tUnit, a) (Just expr'), AlwaysReturns [getType expr'])
 
   S.Let a name tdecl expr -> do
     -- TODO: recursive binding?
     expr' <- inferExpr env expr
-    return $ S.Let (tUnit, a) name tdecl expr'
+    return (S.Let (tUnit, a) name tdecl expr', NeverReturns)
 
   S.Assign a names expr ->
     case names of
@@ -294,43 +298,82 @@ inferStmt env stmt = case stmt of
        -- TODO: not quite right, since this may result in too narrow of a type
        -- getting assigned, but it's good enough for now
        unify exprT varT
-       return $ S.Assign (tUnit, a) names expr'
+       return (S.Assign (tUnit, a) names expr', NeverReturns)
      _     -> error "TODO: Multi-part assignment statements"
 
   S.Block a stmts -> do
-    stmts' <- inferBlock env stmts
-    return $ S.Block (tUnit, a) stmts'
+    (stmts', retT) <- inferBlock env stmts
+    return (S.Block (tUnit, a) stmts', retT)
 
   S.Expr a expr -> do
     expr' <- inferExpr env expr
-    return $ S.Expr (tUnit, a) expr'
+    return (S.Expr (tUnit, a) expr', NeverReturns)
 
   S.If a test blk els -> do
     testExpr <- inferExpr env test
     unify (getType testExpr) tBool
-    blk' <- inferBlock env blk
-    els' <- case els of
-      Nothing   -> return Nothing
-      Just stmt -> Just <$> inferStmt env stmt
-    return $ S.If (tUnit, a) testExpr blk' els'
+    (blk', blkReturns) <- inferBlock env blk
+    (els', elsReturns) <- case els of
+      Nothing   -> return (Nothing, NeverReturns)
+      Just stmt -> do
+        (stmt', retT) <- inferStmt env stmt
+        return (Just stmt', retT)
+    let ifReturns = combineReturns blkReturns elsReturns
+    return (S.If (tUnit, a) testExpr blk' els', ifReturns)
 
   S.While a test blk -> do
     testExpr <- inferExpr env test
     unify (getType testExpr) tBool
-    blk' <- inferBlock env blk
-    return $ S.While (tUnit, a) testExpr blk'
+    (blk', blkReturns) <- inferBlock env blk
+    let whileReturns = demoteReturns blkReturns
+    return (S.While (tUnit, a) testExpr blk', whileReturns)
 
-inferBlock :: Environment -> [S.Statement a] -> InferM [S.Statement (Type, a)]
-inferBlock _   []     = return []
+inferBlock :: Environment -> [S.Statement a] ->
+              InferM ([S.Statement (Type, a)], DoesReturn)
+inferBlock _   []     = return ([], NeverReturns)
+inferBlock env [stmt] = do
+  (stmt', retT) <- inferStmt env stmt
+  return ([stmt'], retT)
 inferBlock env (s:ss) = do
-  s' <- inferStmt env s
+  (s', _) <- inferStmt env s
   let env' = case s' of
         S.Let _ name _ expr ->
           let sch = generalize env (getType expr)
           in Map.insert name sch env
         _                -> env
-  ss' <- inferBlock env' ss
-  return $ s' : ss'
+  (ss', retT) <- inferBlock env' ss
+  return $ (s' : ss', retT)
+
+data DoesReturn
+  = NeverReturns
+  | SometimesReturns [Type]
+  | AlwaysReturns [Type]
+  deriving (Eq, Show)
+
+combineReturns :: DoesReturn -> DoesReturn -> DoesReturn
+combineReturns r1 r2 = case (r1, r2) of
+  (NeverReturns, NeverReturns) ->
+    NeverReturns
+  (AlwaysReturns t1, AlwaysReturns t2) ->
+    AlwaysReturns $ t1 ++ t2
+  _ ->
+    SometimesReturns $ getReturnTypes r1 ++ getReturnTypes r2
+
+getReturnTypes :: DoesReturn -> [Type]
+getReturnTypes NeverReturns          = []
+getReturnTypes (SometimesReturns ts) = ts
+getReturnTypes (AlwaysReturns ts)    = ts
+
+demoteReturns :: DoesReturn -> DoesReturn
+demoteReturns (AlwaysReturns ts) = SometimesReturns ts
+demoteReturns ds                 = ds
+
+toFunctionReturns :: DoesReturn -> [Type]
+toFunctionReturns (AlwaysReturns ts) = ts
+toFunctionReturns ds                 =
+  -- Add tUnit to handle the case where the execution "fall off" the end of the
+  -- function, since the return statements don't cover every case.
+  tUnit : getReturnTypes ds
 
 
 inferExpr :: Environment -> E.Expression a -> InferM (E.Expression (Type, a))
@@ -467,6 +510,11 @@ todoType = TCon "TODO" []
 
 toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
 toBindings typed  = mapSnd getType typed
+
+unifyAll :: Type -> [Type] -> InferM ()
+unifyAll t ts = do
+  _ <- mapM (unify t) ts
+  return ()
 
 unify :: Type -> Type -> InferM ()
 unify t1 t2 = do
