@@ -59,7 +59,6 @@ executable athena
                 AST.Type,
                 Compiler,
                 Parser,
-                ParserTest,
                 Types,
                 Inference,
                 Errors,
@@ -100,4 +99,28 @@ Test-Suite test-first-pass
                   AST.Type,
                   Types,
                   Errors,
-                  FirstPass
+                  FirstPass,
+                  UnitTest
+
+Test-Suite test-parser
+    type:    exitcode-stdio-1.0
+    main-is: test-Parser.hs
+    build-depends: base, containers, parsec
+    hs-source-dirs:      src
+    other-modules:
+                  AST.Annotation,
+                  AST.Declaration,
+                  AST.Expression,
+                  AST.Statement,
+                  AST.Type,
+                  Parser,
+                  UnitTest
+
+Test-Suite test-graph
+    type:    exitcode-stdio-1.0
+    main-is: Util/test-Graph.hs
+    build-depends: base, containers, mtl, QuickCheck
+    hs-source-dirs:      src
+    other-modules:
+                  Util.Graph,
+                  UnitTest

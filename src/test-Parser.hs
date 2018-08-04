@@ -1,6 +1,5 @@
-module ParserTest where
+module Main where
 
---import Control.Applicative ( (<*) )
 
 import Text.Parsec (eof, parse)
 import Text.Parsec.String (Parser)
@@ -10,6 +9,19 @@ import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Type as T
 import Parser
+
+
+import UnitTest
+  ( Assertion
+  , assertRight
+  , assertLeft
+  , runTests
+  , test )
+
+main = do
+  putStrLn $ "testing parser"
+  testMain -- TODO
+
 
 testMain :: IO ()
 testMain = do

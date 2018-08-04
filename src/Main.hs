@@ -5,10 +5,7 @@ import System.Environment ( getArgs )
 import System.Exit ( exitWith, ExitCode(..) )
 import System.IO (stderr, hPutStrLn, hFlush)
 
-import ParserTest ( testMain )
 import Compiler ( compile )
-
-import qualified Util.Graph as Graph
 
 type ExitCodeResult = ExceptT String IO ExitCode
 
@@ -17,10 +14,6 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-   ["--test"] -> do
-     testMain
-     Graph.test
-
    [fileName] -> do
      content <- readFile fileName
      interpret content
