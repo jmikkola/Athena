@@ -6,6 +6,6 @@ test:
 
 run:
 	stack build
-	stack exec athena -- examples/mvp.at
+	stack exec athena -- examples/fib.at
 
 .PHONY: run athena

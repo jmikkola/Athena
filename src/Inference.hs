@@ -505,9 +505,6 @@ equalityFuncs = [Eq, NotEq]
 ordFuncs :: [BinOp]
 ordFuncs = [Less, LessEq, Greater, GreaterEq]
 
-todoType :: Type
-todoType = TCon "TODO" []
-
 toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
 toBindings typed  = mapSnd getType typed
 
