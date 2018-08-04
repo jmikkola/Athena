@@ -4,4 +4,9 @@
 
 This requires `stack` to be installed.
 
-Simply run `make` to build and test, or run `make run` to run athena.
+Run:
+
+- `make` to build
+- `make test` to run tests
+- `make run` to run an example
+- `stack exec athena -- examples/fib.at` to run a specific file
