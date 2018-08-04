@@ -6,10 +6,18 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Test.QuickCheck
+  ( quickCheck
+  , quickCheckWithResult
+  , stdArgs
+  , Args(..)
+  , Testable
+  , Result(..) )
 
 import Util.Graph
 import UnitTest
   ( Assertion
+  , Test
+  , assertEq
   , assertRight
   , assertLeft
   , runTests
@@ -17,19 +25,33 @@ import UnitTest
 
 
 main = do
-  putStrLn "testing graph"
-  tests
+  putStrLn "Testing Graph"
+  runTests tests
 
 
-tests :: IO ()
-tests = do
-  testExample
-  quickCheck propNoEmptyGroups
-  quickCheck propSameCardnality
-  quickCheck propDisjoint
-  quickCheck propAllReachableInGroups
-  quickCheck propTopological
+tests :: [Test]
+tests =
+  [ test "example graph" testExample
+  , checkProperty "no empty groups" propNoEmptyGroups
+  , checkProperty "same cardnality" propSameCardnality
+  , checkProperty "disjoint" propDisjoint
+  , checkProperty "all reachable in groups" propAllReachableInGroups
+  , checkProperty "topological" propTopological
+  ]
 
+checkProperty :: (Testable prop) => String -> prop -> Test
+checkProperty name property = do
+  let args = stdArgs { maxSuccess = 1000 }
+  result <- quickCheckWithResult args property
+  if isSuccess result
+     then return True
+    else do
+      putStrLn $ "testing " ++ name ++ " failed"
+      return False
+
+isSuccess :: Result -> Bool
+isSuccess Success{} = True
+isSuccess _         = False
 
 propNoEmptyGroups :: Graph Char -> Bool
 propNoEmptyGroups graph =
@@ -77,15 +99,8 @@ fixupGraph graph = Map.union graph empties
   where chs = Set.toList $ foldl Set.union Set.empty $ map Set.fromList $ map snd $ Map.toList graph
         empties = Map.fromList $ zip chs (repeat [])
 
-assertEq :: (Eq a, Show a) => a -> a -> IO ()
-assertEq x y =
-  if x == y
-  then putStrLn "passed"
-  else putStrLn (show x ++ " does not equal " ++ show y)
-
-testExample :: IO ()
+testExample :: IO Assertion
 testExample =
   let graph = Map.fromList [('a', "b"), ('b', "ecf"), ('c', "dg"), ('d', "ch"), ('e', "af"), ('f', "g"), ('g', "f"), ('h', "gd")]
       expected = reverse $ map reverse ["fg", "cdh", "abe"]
   in assertEq expected (components graph)
-
