@@ -17,7 +17,6 @@ import UnitTest
   , test )
 
 main = do
-    putStrLn "\n"
     putStrLn "Testing FirstPass"
     runTests tests
 

@@ -13,22 +13,15 @@ import Parser
 
 import UnitTest
   ( Assertion
+  , Test
   , assertRight
   , assertLeft
   , runTests
   , test )
 
 main = do
-  putStrLn $ "testing parser"
-  testMain -- TODO
-
-
-testMain :: IO ()
-testMain = do
-  passing <- sequence tests
-  let passCount = length [p | p <- passing, p]
-  let totalCount = length passing
-  putStrLn $ show passCount ++ "/" ++ show totalCount ++ " tests passed"
+  putStrLn "Testing Parser"
+  runTests tests
 
 boolT :: T.TypeDecl
 boolT = T.TypeName "Bool"
@@ -79,7 +72,7 @@ sReturn me = S.Return () me
 sAssign :: [String] -> Expr -> Stmt
 sAssign path e = S.Assign () path e
 
-tests :: [IO Bool]
+tests :: [Test]
 tests =
   -- expressions
   [ expectParses numberParser "123.345" (floatVal 123.345)
@@ -167,21 +160,21 @@ tests =
   , testParsingTypeDecl
   ]
 
-testEnumType :: IO Bool
+testEnumType :: Test
 testEnumType =
   let text = "enum {\n Cons {\n item Int \n next List \n } \n End \n }"
       expected = T.Enum [ ("Cons", [("item", intT), ("next", T.TypeName "List")])
                         , ("End", []) ]
   in expectParses typeDefParser text expected
 
-testEnumType2 :: IO Bool
+testEnumType2 :: Test
 testEnumType2 =
   let text = "enum {\n TInt\n TFloat \n }"
       expected = T.Enum [ ("TInt", [])
                         , ("TFloat", []) ]
   in expectParses typeDefParser text expected
 
-testParsingBlock :: IO Bool
+testParsingBlock :: Test
 testParsingBlock =
   let text = "{\n  let a1 Bool = True \n  return a1  \n }"
       expected = sBlock [ sLet "a1" "Bool" (eVal $ boolVal True)
@@ -189,7 +182,7 @@ testParsingBlock =
                          ]
   in expectParses statementParser text expected
 
-testParsingIf :: IO Bool
+testParsingIf :: Test
 testParsingIf =
   let text = "if a == 1 {\nreturn a\n}"
       test = eBinary E.Eq (eVar "a") (eVal $ intVal 1)
@@ -198,7 +191,7 @@ testParsingIf =
   in expectParses ifStatement text expected
 
 {-
-testParsingMatch :: IO Bool
+testParsingMatch :: Test
 testParsingMatch =
   let text = "match x {\n  _ {\nreturn 1\n}\n  Link(_, next) {\n return 2\n}\n}"
       ret n = sBlock [sReturn $ Just $ eVal $ intVal n]
@@ -208,20 +201,20 @@ testParsingMatch =
   in expectParses statementParser text expected
 -}
 
-testParsingFunc :: IO Bool
+testParsingFunc :: Test
 testParsingFunc =
   let text = "fn main() {\n}"
       expected = D.Function () "main" (T.Function [] nilT) [] (sBlock [])
   in expectParses declarationParser text expected
 
-testParsingFunc2 :: IO Bool
+testParsingFunc2 :: Test
 testParsingFunc2 =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
       fnType = T.Function [intT, boolT] boolT
       expected = D.Function () "main" fnType ["a", "b"] (sBlock [])
   in expectParses declarationParser text expected
 
-testParsingTypeDecl :: IO Bool
+testParsingTypeDecl :: Test
 testParsingTypeDecl =
   let text = "type Foo struct {\n  asdf Int\n  xyz Foo\n}"
       declaredType = T.Struct [("asdf", intT), ("xyz", T.TypeName "Foo")]
@@ -230,7 +223,7 @@ testParsingTypeDecl =
 
 ---- Utilities ----
 
-expectParses :: (Eq a, Show a) => Parser a -> String -> a -> IO Bool
+expectParses :: (Eq a, Show a) => Parser a -> String -> a -> Test
 expectParses parser text expected =
   case parse (parser <* eof) "<test>" text of
    (Left err) -> do
@@ -239,7 +232,6 @@ expectParses parser text expected =
    (Right result) ->
      if result == expected
      then do
-       putStrLn $ "pass"
        return True
      else do
        putStrLn $ "failed parsing ''" ++ text ++ "'', expected " ++ show expected ++ ", got " ++ show result
