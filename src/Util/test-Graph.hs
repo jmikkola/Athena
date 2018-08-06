@@ -24,10 +24,7 @@ import UnitTest
   , test )
 
 
-main = do
-  putStrLn "Testing Graph"
-  runTests tests
-
+main = runTests "Graph" tests
 
 tests :: [Test]
 tests =
@@ -99,7 +96,7 @@ fixupGraph graph = Map.union graph empties
   where chs = Set.toList $ foldl Set.union Set.empty $ map Set.fromList $ map snd $ Map.toList graph
         empties = Map.fromList $ zip chs (repeat [])
 
-testExample :: IO Assertion
+testExample :: Assertion
 testExample =
   let graph = Map.fromList [('a', "b"), ('b', "ecf"), ('c', "dg"), ('d', "ch"), ('e', "af"), ('f', "g"), ('g', "f"), ('h', "gd")]
       expected = reverse $ map reverse ["fg", "cdh", "abe"]

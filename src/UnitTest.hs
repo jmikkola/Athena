@@ -7,8 +7,9 @@ import System.Exit
 type Test = IO Bool
 type Assertion = Either String ()
 
-runTests :: [Test] -> IO ()
-runTests ts = do
+runTests :: String -> [Test] -> IO ()
+runTests name ts = do
+  putStrLn $ "\nTesting " ++ name
   (passes, failures) <- getResults ts 0 0
   renderResults passes failures
 
@@ -32,32 +33,31 @@ getResults (t:ts) passes failures = do
     else getResults ts passes (1 + failures)
 
 
-test :: String -> IO Assertion -> Test
+test :: String -> Assertion -> Test
 test name assertion = do
-  result <- assertion
-  case result of
+  case assertion of
    Right _  -> return True
    Left err -> do
      putStrLn $ name ++ " failed: " ++ err
      return False
 
-assertEq :: (Show a, Eq a) => a -> a -> IO Assertion
+assertEq :: (Show a, Eq a) => a -> a -> Assertion
 assertEq x y
   | x == y    = ok
   | otherwise = err $ "not equal: " ++ show x ++ " and " ++ show y
 
-assertLeft :: (Show a) => Either l a -> IO Assertion
+assertLeft :: (Show a) => Either l a -> Assertion
 assertLeft (Left _)  = ok
 assertLeft (Right x) =
   err $ "expected Left, got Right " ++ show x
 
-assertRight :: (Show a) => Either a r -> IO Assertion
+assertRight :: (Show a) => Either a r -> Assertion
 assertRight (Right _) = ok
 assertRight (Left x)  =
   err $ "expected Right, got Left " ++ show x
 
-err :: String -> IO Assertion
-err = return . Left
+err :: String -> Assertion
+err = Left
 
-ok :: IO Assertion
-ok = return $ Right ()
+ok :: Assertion
+ok = return ()

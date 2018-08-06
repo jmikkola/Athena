@@ -44,6 +44,9 @@ type Substitution = Map Type Type
 emptySubstitution :: Substitution
 emptySubstitution = Map.empty
 
+makeSub :: [(Type, Type)] -> Substitution
+makeSub = Map.fromList
+
 -- `apply (composeSubs a b) t`
 -- is equivalent to
 -- `apply b (apply a t)`

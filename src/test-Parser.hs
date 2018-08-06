@@ -19,9 +19,7 @@ import UnitTest
   , runTests
   , test )
 
-main = do
-  putStrLn "Testing Parser"
-  runTests tests
+main = runTests "Parser" tests
 
 boolT :: T.TypeDecl
 boolT = T.TypeName "Bool"

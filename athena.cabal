@@ -124,3 +124,22 @@ Test-Suite test-graph
     other-modules:
                   Util.Graph,
                   UnitTest
+
+
+Test-Suite test-infer
+    type:    exitcode-stdio-1.0
+    main-is: test-Inference.hs
+    build-depends: base, containers, mtl
+    hs-source-dirs:      src
+    other-modules:
+                  AST.Annotation,
+                  AST.Declaration,
+                  AST.Expression,
+                  AST.Statement,
+                  AST.Type,
+                  Types,
+                  Errors,
+                  FirstPass,
+                  Util.Graph,
+                  UnitTest,
+                  Inference

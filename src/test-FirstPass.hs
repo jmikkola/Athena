@@ -1,8 +1,5 @@
 module Main where
 
-import System.Exit
-  ( exitFailure )
-
 import FirstPass
   ( checkReturns )
 import qualified AST.Expression as E
@@ -16,9 +13,7 @@ import UnitTest
   , runTests
   , test )
 
-main = do
-    putStrLn "Testing FirstPass"
-    runTests tests
+main = runTests "FirstPass" tests
 
 tests =
   [ test "empty fn body" testCheckReturns1
@@ -26,12 +21,12 @@ tests =
   ]
 
 
-testCheckReturns1 :: IO Assertion
+testCheckReturns1 :: Assertion
 testCheckReturns1 = do
   let fn = D.Function () "foo" dummyTypeDecl [] (S.Block () [])
   assertRight $ checkReturns fn
 
-testCheckReturns2 :: IO Assertion
+testCheckReturns2 :: Assertion
 testCheckReturns2 = do
   let returnStmt = S.Return () Nothing
   let stmts = [printStmt, returnStmt, printStmt]
