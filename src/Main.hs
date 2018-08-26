@@ -6,6 +6,7 @@ import System.Exit ( exitWith, ExitCode(..) )
 import System.IO (stderr, hPutStrLn, hFlush)
 
 import Compiler ( compile )
+import qualified Interpreter
 
 type ExitCodeResult = ExceptT String IO ExitCode
 
@@ -28,6 +29,7 @@ interpret content =
      exitError $ show err
    Right result -> do
      putStrLn $ show result
+     Interpreter.interpret result
      exitWith ExitSuccess
 
 

@@ -1,4 +1,10 @@
-module Inference (inferModule, mgu) where
+module Inference
+  ( inferModule
+  , mgu
+  , Environment
+  , TypedDecls
+  , InferResult(..)
+  ) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map

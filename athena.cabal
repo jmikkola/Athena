@@ -58,12 +58,13 @@ executable athena
                 AST.Statement,
                 AST.Type,
                 Compiler,
-                Parser,
-                Types,
-                Inference,
                 Errors,
-                Region,
                 FirstPass,
+                Inference,
+                Interpreter,
+                Parser,
+                Region,
+                Types,
                 Util.Graph
 
   -- LANGUAGE extensions used by modules in this package.
