@@ -1,5 +1,7 @@
 module Inference
   ( inferModule
+  , topLevelBindings
+  , topLevelEnv
   , mgu
   , Environment
   , TypedDecls

@@ -1,18 +1,15 @@
-{-# LANGUAGE DeriveFunctor #-}
-
 module Interpreter (interpret) where
 
 
 import System.IO (hFlush, stdout)
 
-import Control.Applicative ( (<|>) )
-import Control.Monad.Free (Free (..))
-
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Inference
-  ( InferResult(..) )
+  ( InferResult(..)
+  , topLevelBindings )
+import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import Types (Type(..), tUnit)
@@ -23,29 +20,69 @@ interpret body =
   let mainT = TFunc [] tUnit
       callMain = E.Call (tUnit, ()) (E.Var (mainT, ()) "main") []
   in do
-    _ <- runOp (interpretExpr body callMain) startingState
+    let scope = startingState body
+    _ <- interpretExpr scope callMain
     return ()
 
 
-startingState :: Scope
-startingState = [Map.empty]
+startingState :: InferResult () -> Scope
+startingState body =
+  let decls = topLevelBindings body
+      -- TODO: Also evaluate constant expression
+      bindings =
+        [ (name, toClosure scope args stmt)
+        | (name, D.Function _ _ _ args stmt) <- decls ]
+      scope = [Map.fromList bindings]
+  in scope
 
-runOp :: Free IOOp Value -> Scope -> IO Value
-runOp = undefined
+interpretExpr :: Scope -> E.Expression AnnT -> IO Value
+interpretExpr scope expr = case expr of
+  E.Paren _ ex ->
+    interpretExpr scope ex
+  E.Val _ val ->
+    convertValue val
+  E.Unary _ uop ex -> do
+    val <- interpretExpr scope ex
+    applyUOp uop val
+  E.Binary _ bop l r -> do
+    lVal <- interpretExpr scope l
+    rVal <- interpretExpr scope r
+    applyBOp bop lVal rVal
+  E.Call _ fnEx argExs -> do
+    fnVal <- interpretExpr scope fnEx
+    argVals <- mapM (interpretExpr scope) argExs
+    callFunction scope fnVal argVals
+  E.Cast _ t ex -> do
+    val <- interpretExpr scope ex
+    castVal t val
+  E.Var _ name -> do
+    lookupVar scope name
+  E.Access _ ex field -> do
+    val <- interpretExpr scope ex
+    accessField val field
 
-interpretExpr :: InferResult () -> E.Expression AnnT -> Free IOOp Value
-interpretExpr = undefined
+
+convertValue :: E.Value a -> IO Value
+convertValue = undefined
 
 
-data IOOp next
-  = ExitSuccess
-  | ExitError
-  | ReadLine (String -> next)
-  | WriteLine String next
-  | GetVar String (Value -> next)
-  | PutVar String Value next
-  | Error String
-  deriving (Functor)
+applyUOp :: E.UnaryOp -> Value -> IO Value
+applyUOp = undefined
+
+applyBOp :: E.BinOp -> Value -> Value -> IO Value
+applyBOp = undefined
+
+callFunction :: Scope -> Value -> [Value] -> IO Value
+callFunction = undefined
+
+castVal :: String -> Value -> IO Value
+castVal t val = undefined
+
+lookupVar :: Scope -> String -> IO Value
+lookupVar = undefined
+
+accessField :: Value -> String -> IO Value
+accessField = undefined
 
 data Value
   = VInt Int
@@ -53,7 +90,7 @@ data Value
   | VString String
   | VBool Bool
   | VList [Value]
-  | VClosure Value Function
+  | VClosure Scope Function
   | VVoid
   deriving (Show)
 
@@ -65,3 +102,8 @@ type Scope = [Map String Value]
 
 -- AnnT is short for "Annotation Type"
 type AnnT = (Type, ())
+
+
+toClosure :: Scope -> [String] -> S.Statement AnnT -> Value
+toClosure scope args stmt =
+  VClosure scope $ Function args stmt
