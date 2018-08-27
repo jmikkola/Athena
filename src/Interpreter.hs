@@ -78,7 +78,9 @@ interpretStmt scope stmt = case stmt of
     return $ Returned VVoid
   S.Let _ name _ expr -> do
     val <- interpretExpr scope expr
-    error "TODO: Let"
+    let (s0:ss) = scope
+    let scope' = (Map.insert name val s0) : ss
+    -- TODO: this won't work without mutable references to maps in the scope
     return $ FellThrough
   S.Assign _ names expr -> do
     val <- interpretExpr scope expr
@@ -130,7 +132,7 @@ applyBOp :: E.BinOp -> Value -> Value -> IO Value
 applyBOp = error "TODO: applyBOp"
 
 callFunction :: Value -> [Value] -> IO Value
-callFunction (VClosure scope (Function names body)) args = do
+callFunction (VClosure (Scoped scope) (Function names body)) args = do
   let fnScope = (Map.fromList $ zip names args) : scope
   result <- interpretStmt fnScope body
   return $ getReturnValue result
@@ -152,13 +154,20 @@ data Value
   | VBool Bool
   | VStruct String [(String, Value)]
   | VList [Value]
-  | VClosure Scope Function
+  | VClosure Scoped Function
   | VVoid
   deriving (Show)
 
 data Function
   = Function [String] (S.Statement AnnT)
   deriving (Show)
+
+-- Hask to make `deriving (Show)` above work
+data Scoped
+  = Scoped Scope
+
+instance Show Scoped where
+  show _ = "scope"
 
 type Scope = [Map String Value]
 
@@ -168,4 +177,4 @@ type AnnT = (Type, ())
 
 toClosure :: Scope -> [String] -> S.Statement AnnT -> Value
 toClosure scope args stmt =
-  VClosure scope $ Function args stmt
+  VClosure (Scoped scope) $ Function args stmt
