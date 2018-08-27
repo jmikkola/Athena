@@ -28,7 +28,7 @@ interpret content =
    Left err ->
      exitError $ show err
    Right result -> do
-     putStrLn $ show result
+     --putStrLn $ show result
      Interpreter.interpret result
      exitWith ExitSuccess
 

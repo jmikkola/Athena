@@ -28,7 +28,7 @@ interpret body =
 
 startingState :: InferResult () -> IO Scope
 startingState body = do
-  rootScope <- newIORef $ Map.empty
+  rootScope <- newIORef $ builtIns
   let scope = [rootScope]
   let decls = topLevelBindings body
   -- TODO: Also evaluate constant expression
@@ -36,6 +36,11 @@ startingState body = do
         [ (name, toClosure scope args stmt)
         | (name, D.Function _ _ _ args stmt) <- decls ]
   insertAll functions scope
+
+builtIns :: Map String Value
+builtIns =
+  Map.fromList
+  [ ("print", VBuiltIn "print") ]
 
 insertAll :: [(String, Value)] -> Scope -> IO Scope
 insertAll [] scope = return scope
@@ -96,7 +101,7 @@ interpretStmt scope stmt = case stmt of
     return $ FellThrough
   S.Assign _ names expr -> do
     val <- interpretExpr scope expr
-    error "TODO: Assign"
+    assign scope names val
     return $ FellThrough
   S.Block _ stmts ->
     interpretBlock scope stmts
@@ -122,7 +127,7 @@ interpretStmt scope stmt = case stmt of
       else
         return $ FellThrough
 
-
+-- TODO: start a new scope when running blocks
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
 interpretBlock scope [] =
   return FellThrough
@@ -146,6 +151,20 @@ interpretVal scope val = case val of
           return (fname, ref)
     vals <- mapM mapField fields
     return $ VStruct name vals
+
+
+assign :: Scope -> [String] -> Value -> IO ()
+assign (s:ss) [name] value = do
+  m <- readIORef s
+  if Map.member name m
+     then do
+          writeIORef s (Map.insert name value m)
+          --rendered <- render value
+          --putStrLn $ "Set " ++ name ++ " to " ++ rendered
+    else assign ss [name] value
+assign (_:_) _ _ = error "TODO: assign multi-part names"
+assign []    _ _ = error "Empty scope given to assign"
+
 
 
 applyUOp :: E.UnaryOp -> Value -> IO Value
@@ -181,8 +200,17 @@ callFunction (VClosure scope (Function names body)) args = do
   let fnScope = innerScope : scope
   result <- interpretStmt fnScope body
   return $ getReturnValue result
+callFunction (VBuiltIn name) args = case name of
+  "print" -> builtinPrint args
+  _ -> error $ "Unknown built-in " ++ name
 callFunction _ args =
   error "calling a non-function"
+
+builtinPrint :: [Value] -> IO Value
+builtinPrint args = do
+  rendered <- mapM render args
+  putStrLn $ concat $ intersperse " " rendered
+  return VVoid
 
 castVal :: String -> Value -> IO Value
 castVal t val = error "TODO: castVal"
@@ -207,10 +235,12 @@ data Value
   | VList [IORef Value]
   | VClosure Scope Function
   | VVoid
+  | VBuiltIn String -- name of the built-in function
 
 data Function
   = Function [String] (S.Statement AnnT)
   deriving (Show)
+
 
 type Scope = [IORef (Map String Value)]
 
@@ -221,3 +251,43 @@ type AnnT = (Type, ())
 toClosure :: Scope -> [String] -> S.Statement AnnT -> Value
 toClosure scope args stmt =
   VClosure scope $ Function args stmt
+
+
+class Render a where
+  render :: a -> IO String
+
+instance Render Value where
+  render val = case val of
+    VInt i -> return $ show i
+    VFloat f -> return $ show f
+    VString s -> return $ show s
+    VBool b -> return $ show b
+    VStruct name fields -> do
+      let header = name ++ " {"
+      pairs <- mapM renderPair fields
+      let body = concat $ intersperse ", " pairs
+      return $ header ++ body ++ " }"
+    VList refs -> do
+      vals <- mapM readIORef refs
+      rendered <- mapM render vals
+      let body = concat $ intersperse ", " rendered
+      return $ "[" ++ body ++ "]"
+    VClosure _ (Function args _)  -> do
+      let joinedArgs = concat $ intersperse ", " args
+      return $ "fn(" ++ joinedArgs ++ ")"
+    VVoid ->
+      return "()"
+    VBuiltIn name ->
+      return name
+
+
+renderPair :: (String, IORef Value) -> IO String
+renderPair (name, ref) = do
+  val <- readIORef ref
+  rendered <- render val
+  return $ name ++ ": " ++ rendered
+
+intersperse :: a -> [a] -> [a]
+intersperse sep [] = []
+intersperse sep [x] = [x]
+intersperse sep (a:b:c) = a : sep : (intersperse sep (b:c))
