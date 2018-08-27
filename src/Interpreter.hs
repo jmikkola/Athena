@@ -40,7 +40,7 @@ interpretExpr scope expr = case expr of
   E.Paren _ ex ->
     interpretExpr scope ex
   E.Val _ val ->
-    convertValue val
+    interpretVal scope val
   E.Unary _ uop ex -> do
     val <- interpretExpr scope ex
     applyUOp uop val
@@ -51,7 +51,7 @@ interpretExpr scope expr = case expr of
   E.Call _ fnEx argExs -> do
     fnVal <- interpretExpr scope fnEx
     argVals <- mapM (interpretExpr scope) argExs
-    callFunction scope fnVal argVals
+    callFunction fnVal argVals
   E.Cast _ t ex -> do
     val <- interpretExpr scope ex
     castVal t val
@@ -61,34 +61,96 @@ interpretExpr scope expr = case expr of
     val <- interpretExpr scope ex
     accessField val field
 
+data StmtResult
+  = Returned Value
+  | FellThrough
 
-convertValue :: E.Value a -> IO Value
-convertValue = undefined
+getReturnValue :: StmtResult -> Value
+getReturnValue (Returned val) = val
+getReturnValue FellThrough = VVoid
+
+interpretStmt :: Scope -> S.Statement AnnT -> IO StmtResult
+interpretStmt scope stmt = case stmt of
+  S.Return _ Nothing -> do
+    return $ Returned VVoid
+  S.Return _ (Just expr) -> do
+    val <- interpretExpr scope expr
+    return $ Returned VVoid
+  S.Let _ name _ expr -> do
+    val <- interpretExpr scope expr
+    error "TODO: Let"
+    return $ FellThrough
+  S.Assign _ names expr -> do
+    val <- interpretExpr scope expr
+    error "TODO: Assign"
+    return $ FellThrough
+  S.Block _ stmts ->
+    interpretBlock scope stmts
+  S.Expr _ expr -> do
+    _ <- interpretExpr scope expr
+    return $ FellThrough
+  S.If _ tst thn els -> do
+    testVal <- interpretExpr scope tst
+    error "TODO: If"
+    return $ FellThrough
+  S.While _ tst blk -> do
+    testVal <- interpretExpr scope tst
+    error "TODO: While"
+    return $ FellThrough
+
+
+interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
+interpretBlock scope [] =
+  return FellThrough
+interpretBlock scope (s:stmts) = do
+  result <- interpretStmt scope s
+  case result of
+   FellThrough -> interpretBlock scope stmts
+   Returned _  -> return result
+
+
+interpretVal :: Scope -> E.Value AnnT -> IO Value
+interpretVal scope val = case val of
+  E.StrVal _ s              -> return $ VString s
+  E.BoolVal _ b             -> return $ VBool b
+  E.IntVal _ i              -> return $ VInt i
+  E.FloatVal _ f            -> return $ VFloat f
+  E.StructVal _ name fields -> do
+    let mapField (fname, fexpr) = do
+          fval <- interpretExpr scope fexpr
+          return (fname, fval)
+    vals <- mapM mapField fields
+    return $ VStruct name vals
 
 
 applyUOp :: E.UnaryOp -> Value -> IO Value
-applyUOp = undefined
+applyUOp = error "TODO: applyUOp"
 
 applyBOp :: E.BinOp -> Value -> Value -> IO Value
-applyBOp = undefined
+applyBOp = error "TODO: applyBOp"
 
-callFunction :: Scope -> Value -> [Value] -> IO Value
-callFunction = undefined
+callFunction :: Value -> [Value] -> IO Value
+callFunction (VClosure scope (Function names body)) args = do
+  let fnScope = (Map.fromList $ zip names args) : scope
+  result <- interpretStmt fnScope body
+  return $ getReturnValue result
 
 castVal :: String -> Value -> IO Value
-castVal t val = undefined
+castVal t val = error "TODO: castVal"
 
 lookupVar :: Scope -> String -> IO Value
-lookupVar = undefined
+lookupVar scope name =
+  return $ head [val | Just val <- map (Map.lookup name) scope]
 
 accessField :: Value -> String -> IO Value
-accessField = undefined
+accessField = error "TODO: accessField"
 
 data Value
   = VInt Int
   | VFloat Float
   | VString String
   | VBool Bool
+  | VStruct String [(String, Value)]
   | VList [Value]
   | VClosure Scope Function
   | VVoid
