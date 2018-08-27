@@ -131,7 +131,8 @@ interpretVal scope val = case val of
   E.StructVal _ name fields -> do
     let mapField (fname, fexpr) = do
           fval <- interpretExpr scope fexpr
-          return (fname, fval)
+          ref <- newIORef fval
+          return (fname, ref)
     vals <- mapM mapField fields
     return $ VStruct name vals
 
@@ -143,7 +144,7 @@ applyBOp :: E.BinOp -> Value -> Value -> IO Value
 applyBOp = error "TODO: applyBOp"
 
 callFunction :: Value -> [Value] -> IO Value
-callFunction (VClosure (Scoped scope) (Function names body)) args = do
+callFunction (VClosure scope (Function names body)) args = do
   innerScope <- newIORef $ Map.fromList $ zip names args
   let fnScope = innerScope : scope
   result <- interpretStmt fnScope body
@@ -170,22 +171,14 @@ data Value
   | VFloat Float
   | VString String
   | VBool Bool
-  | VStruct String [(String, Value)]
-  | VList [Value]
-  | VClosure Scoped Function
+  | VStruct String [(String, IORef Value)]
+  | VList [IORef Value]
+  | VClosure Scope Function
   | VVoid
-  deriving (Show)
 
 data Function
   = Function [String] (S.Statement AnnT)
   deriving (Show)
-
--- Hask to make `deriving (Show)` above work
-data Scoped
-  = Scoped Scope
-
-instance Show Scoped where
-  show _ = "scope"
 
 type Scope = [IORef (Map String Value)]
 
@@ -195,4 +188,4 @@ type AnnT = (Type, ())
 
 toClosure :: Scope -> [String] -> S.Statement AnnT -> Value
 toClosure scope args stmt =
-  VClosure (Scoped scope) $ Function args stmt
+  VClosure scope $ Function args stmt
