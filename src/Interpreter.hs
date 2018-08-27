@@ -93,7 +93,7 @@ interpretStmt scope stmt = case stmt of
   S.Return _ (Just expr) -> do
     val <- interpretExpr scope expr
     return $ Returned VVoid
-  S.Let _ name _ expr -> do
+  S.Let _ name expr -> do
     val <- interpretExpr scope expr
     let (s0:ss) = scope
     ss <- readIORef s0

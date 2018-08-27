@@ -58,8 +58,10 @@ eCall fn args = E.Call () fn args
 eBinary :: E.BinOp -> Expr -> Expr -> Expr
 eBinary op l r = E.Binary () op l r
 
-sLet :: String -> T.Type -> Expr -> Stmt
-sLet name t e = S.Let () name t e
+--sLet :: String -> T.Type -> Expr -> Stmt
+--sLet name t e = S.Let () name t e
+sLet :: String -> Expr -> Stmt
+sLet name e = S.Let () name e
 
 sBlock :: [Stmt] -> Stmt
 sBlock stmts = S.Block () stmts
@@ -129,14 +131,14 @@ tests =
     (sBlock [(sReturn $ Just $ eVal $ intVal 1)])
   , expectParses statementParser "{\n{\n}\n{\n}\n}"
     (sBlock [sBlock [], sBlock []])
-  , expectParses statementParser "let a123 Bool = True"
-    (sLet "a123" "Bool" (eVal $ boolVal True))
+  , expectParses statementParser "let a123 = True"
+    (sLet "a123" (eVal $ boolVal True))
   , expectParses statementParser "a.b.c = True"
     (sAssign ["a", "b", "c"] (eVal $ boolVal True))
   , expectParses statementParser "print(c)"
     (S.Expr () $ eCall (eVar "print") [(eVar "c")])
-  , expectParses letStatement "let int Int = 5 + (2 * 10) / 3 % 4"
-    (sLet "int" "Int" (eBinary E.Plus
+  , expectParses letStatement "let int = 5 + (2 * 10) / 3 % 4"
+    (sLet "int" (eBinary E.Plus
                         (eVal (intVal 5))
                         (eBinary E.Divide (E.Paren ()
                                              (eBinary E.Times
@@ -174,8 +176,8 @@ testEnumType2 =
 
 testParsingBlock :: Test
 testParsingBlock =
-  let text = "{\n  let a1 Bool = True \n  return a1  \n }"
-      expected = sBlock [ sLet "a1" "Bool" (eVal $ boolVal True)
+  let text = "{\n  let a1 = True \n  return a1  \n }"
+      expected = sBlock [ sLet "a1" (eVal $ boolVal True)
                          , sReturn (Just $ eVar "a1")
                          ]
   in expectParses statementParser text expected

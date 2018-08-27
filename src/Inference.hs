@@ -104,7 +104,7 @@ instance Depencencies (S.Statement a) where
   findDependencies bound stmt = case stmt of
     S.Return _ mexp ->
       fromMaybe [] $ fmap (findDependencies bound) mexp
-    S.Let _ name _ exp ->
+    S.Let _ name exp ->
       findDependencies (Set.insert name bound) exp
     S.Assign _ _ exp ->
       findDependencies bound exp
@@ -128,7 +128,7 @@ findDepBlock bound stmts = case stmts of
      (stmt:rest) ->
        let stmtDeps = findDependencies bound stmt
            bound' = case stmt of
-             (S.Let _ name _ _) ->
+             (S.Let _ name _) ->
                Set.insert name bound
              _ ->
                bound
@@ -290,10 +290,10 @@ inferStmt env stmt = case stmt of
     expr' <- inferExpr env expr
     return (S.Return (tUnit, a) (Just expr'), AlwaysReturns [getType expr'])
 
-  S.Let a name tdecl expr -> do
+  S.Let a name expr -> do
     -- TODO: recursive binding?
     expr' <- inferExpr env expr
-    return (S.Let (tUnit, a) name tdecl expr', NeverReturns)
+    return (S.Let (tUnit, a) name expr', NeverReturns)
 
   S.Assign a names expr ->
     case names of
@@ -345,7 +345,7 @@ inferBlock env [stmt] = do
 inferBlock env (s:ss) = do
   (s', _) <- inferStmt env s
   let env' = case s' of
-        S.Let _ name _ expr ->
+        S.Let _ name expr ->
           let sch = generalize env (getType expr)
           in Map.insert name sch env
         _                -> env

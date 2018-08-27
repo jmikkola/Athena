@@ -117,12 +117,13 @@ letStatement = do
   _ <- any1Whitespace
   name <- valueName
   _ <- any1Whitespace
-  typ <- typeParser
-  _ <- any1Whitespace
+  -- typ <- typeParser
+  -- _ <- any1Whitespace
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ S.Let () name typ val
+  -- return $ S.Let () name typ val
+  return $ S.Let () name val
 
 assignStatement :: Parser Statement
 assignStatement = do
