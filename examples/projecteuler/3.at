@@ -1,0 +1,14 @@
+fn main() {
+    let n Int = 600851475143
+    let largest Int = 0
+    let factor Int = 2
+    while n >= factor {
+        if n % factor == 0 {
+            largest = factor
+            n = n / factor
+        } else {
+            factor = factor + 1
+        }
+    }
+    print(largest)
+}

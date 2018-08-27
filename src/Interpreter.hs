@@ -110,8 +110,12 @@ interpretStmt scope stmt = case stmt of
     return $ FellThrough
   S.If _ tst thn els -> do
     testVal <- interpretExpr scope tst
-    error "TODO: If"
-    return $ FellThrough
+    b <- requireBool testVal
+    if b
+       then interpretBlock scope thn
+      else case els of
+            Nothing -> return FellThrough
+            Just stmt -> interpretStmt scope stmt
   S.While _ tst blk -> do
     testVal <- interpretExpr scope tst
     b <- requireBool testVal
@@ -175,8 +179,26 @@ applyBOp op l r = case op of
   E.Less -> do
     b <- intOp (<) l r
     return $ VBool b
+  E.Greater -> do
+    b <- intOp (>) l r
+    return $ VBool b
+  E.GreaterEq -> do
+    b <- intOp (>=) l r
+    return $ VBool b
+  E.Eq -> do
+    b <- intOp (==) l r
+    return $ VBool b
   E.Plus -> do
     i <- intOp (+) l r
+    return $ VInt i
+  E.Minus -> do
+    i <- intOp (-) l r
+    return $ VInt i
+  E.Mod -> do
+    i <- intOp mod l r
+    return $ VInt i
+  E.Divide -> do
+    i <- intOp div l r
     return $ VInt i
   _ -> error $ "TODO: binary op " ++ show op
 
