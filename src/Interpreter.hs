@@ -109,8 +109,18 @@ interpretStmt scope stmt = case stmt of
     return $ FellThrough
   S.While _ tst blk -> do
     testVal <- interpretExpr scope tst
-    error "TODO: While"
-    return $ FellThrough
+    b <- requireBool testVal
+    if b
+       then do
+         blkResult <- interpretBlock scope blk
+         case blkResult of
+          FellThrough ->
+            -- try the next iteration of the loop
+            interpretStmt scope stmt
+          Returned val ->
+            return $ Returned val
+      else
+        return $ FellThrough
 
 
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
@@ -125,10 +135,10 @@ interpretBlock scope (s:stmts) = do
 
 interpretVal :: Scope -> E.Value AnnT -> IO Value
 interpretVal scope val = case val of
-  E.StrVal _ s              -> return $ VString s
-  E.BoolVal _ b             -> return $ VBool b
-  E.IntVal _ i              -> return $ VInt i
-  E.FloatVal _ f            -> return $ VFloat f
+  E.StrVal    _ s           -> return $ VString s
+  E.BoolVal   _ b           -> return $ VBool b
+  E.IntVal    _ i           -> return $ VInt i
+  E.FloatVal  _ f           -> return $ VFloat f
   E.StructVal _ name fields -> do
     let mapField (fname, fexpr) = do
           fval <- interpretExpr scope fexpr
@@ -146,6 +156,9 @@ applyBOp op l r = case op of
   E.Less -> do
     b <- intOp (<) l r
     return $ VBool b
+  E.Plus -> do
+    i <- intOp (+) l r
+    return $ VInt i
   _ -> error $ "TODO: binary op " ++ show op
 
 intOp :: (Int -> Int -> a) -> Value -> Value -> IO a
@@ -157,6 +170,10 @@ intOp fn l r = do
 requireInt :: Value -> IO Int
 requireInt (VInt i) = return i
 requireInt _ = error "Not an integer"
+
+requireBool :: Value -> IO Bool
+requireBool (VBool b) = return b
+requireBool _ = error "Not a boolean"
 
 callFunction :: Value -> [Value] -> IO Value
 callFunction (VClosure scope (Function names body)) args = do
