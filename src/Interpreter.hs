@@ -1,10 +1,11 @@
 module Interpreter (interpret) where
 
 
-import System.IO (hFlush, stdout)
-
 import Data.Map (Map)
+import System.IO (hFlush, stdout)
 import qualified Data.Map as Map
+
+import Data.IORef
 
 import Inference
   ( InferResult(..)
@@ -20,20 +21,30 @@ interpret body =
   let mainT = TFunc [] tUnit
       callMain = E.Call (tUnit, ()) (E.Var (mainT, ()) "main") []
   in do
-    let scope = startingState body
+    scope <- startingState body
     _ <- interpretExpr scope callMain
     return ()
 
 
-startingState :: InferResult () -> Scope
-startingState body =
+startingState :: InferResult () -> IO Scope
+startingState body = do
+  rootScope <- newIORef $ Map.empty
+  let scope = [rootScope]
   let decls = topLevelBindings body
-      -- TODO: Also evaluate constant expression
-      bindings =
+  -- TODO: Also evaluate constant expression
+  let functions =
         [ (name, toClosure scope args stmt)
         | (name, D.Function _ _ _ args stmt) <- decls ]
-      scope = [Map.fromList bindings]
-  in scope
+  insertAll functions scope
+
+insertAll :: [(String, Value)] -> Scope -> IO Scope
+insertAll [] scope = return scope
+insertAll ((name, val):rest) (sc:ss) = do
+  bottomScope <- readIORef sc
+  let bottomScope' = Map.insert name val bottomScope
+  writeIORef sc bottomScope
+  insertAll rest (sc:ss)
+
 
 interpretExpr :: Scope -> E.Expression AnnT -> IO Value
 interpretExpr scope expr = case expr of
@@ -79,8 +90,8 @@ interpretStmt scope stmt = case stmt of
   S.Let _ name _ expr -> do
     val <- interpretExpr scope expr
     let (s0:ss) = scope
-    let scope' = (Map.insert name val s0) : ss
-    -- TODO: this won't work without mutable references to maps in the scope
+    ss <- readIORef s0
+    writeIORef s0 (Map.insert name val ss)
     return $ FellThrough
   S.Assign _ names expr -> do
     val <- interpretExpr scope expr
@@ -133,7 +144,8 @@ applyBOp = error "TODO: applyBOp"
 
 callFunction :: Value -> [Value] -> IO Value
 callFunction (VClosure (Scoped scope) (Function names body)) args = do
-  let fnScope = (Map.fromList $ zip names args) : scope
+  innerScope <- newIORef $ Map.fromList $ zip names args
+  let fnScope = innerScope : scope
   result <- interpretStmt fnScope body
   return $ getReturnValue result
 
@@ -141,8 +153,14 @@ castVal :: String -> Value -> IO Value
 castVal t val = error "TODO: castVal"
 
 lookupVar :: Scope -> String -> IO Value
-lookupVar scope name =
-  return $ head [val | Just val <- map (Map.lookup name) scope]
+lookupVar scope name = do
+  results <- mapM (lookupVar1 name) scope
+  return $ head [val | Just val <- results]
+
+lookupVar1 :: String ->  IORef (Map String Value) -> IO (Maybe Value)
+lookupVar1 name ref = do
+  mapping <- readIORef ref
+  return $ Map.lookup name mapping
 
 accessField :: Value -> String -> IO Value
 accessField = error "TODO: accessField"
@@ -169,7 +187,7 @@ data Scoped
 instance Show Scoped where
   show _ = "scope"
 
-type Scope = [Map String Value]
+type Scope = [IORef (Map String Value)]
 
 -- AnnT is short for "Annotation Type"
 type AnnT = (Type, ())
