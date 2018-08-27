@@ -42,8 +42,9 @@ insertAll [] scope = return scope
 insertAll ((name, val):rest) (sc:ss) = do
   bottomScope <- readIORef sc
   let bottomScope' = Map.insert name val bottomScope
-  writeIORef sc bottomScope
+  writeIORef sc bottomScope'
   insertAll rest (sc:ss)
+insertAll _ [] = error "How did insertAll get a scope with no parts?"
 
 
 interpretExpr :: Scope -> E.Expression AnnT -> IO Value
@@ -141,7 +142,21 @@ applyUOp :: E.UnaryOp -> Value -> IO Value
 applyUOp = error "TODO: applyUOp"
 
 applyBOp :: E.BinOp -> Value -> Value -> IO Value
-applyBOp = error "TODO: applyBOp"
+applyBOp op l r = case op of
+  E.Less -> do
+    b <- intOp (<) l r
+    return $ VBool b
+  _ -> error $ "TODO: binary op " ++ show op
+
+intOp :: (Int -> Int -> a) -> Value -> Value -> IO a
+intOp fn l r = do
+  li <- requireInt l
+  ri <- requireInt r
+  return $ fn li ri
+
+requireInt :: Value -> IO Int
+requireInt (VInt i) = return i
+requireInt _ = error "Not an integer"
 
 callFunction :: Value -> [Value] -> IO Value
 callFunction (VClosure scope (Function names body)) args = do
@@ -149,19 +164,19 @@ callFunction (VClosure scope (Function names body)) args = do
   let fnScope = innerScope : scope
   result <- interpretStmt fnScope body
   return $ getReturnValue result
+callFunction _ args =
+  error "calling a non-function"
 
 castVal :: String -> Value -> IO Value
 castVal t val = error "TODO: castVal"
 
 lookupVar :: Scope -> String -> IO Value
-lookupVar scope name = do
-  results <- mapM (lookupVar1 name) scope
-  return $ head [val | Just val <- results]
-
-lookupVar1 :: String ->  IORef (Map String Value) -> IO (Maybe Value)
-lookupVar1 name ref = do
-  mapping <- readIORef ref
-  return $ Map.lookup name mapping
+lookupVar [] name = error $ "name undefined: " ++ name
+lookupVar (s:ss) name = do
+  mapping <- readIORef s
+  case Map.lookup name mapping of
+   Nothing  -> lookupVar ss name
+   Just val -> return val
 
 accessField :: Value -> String -> IO Value
 accessField = error "TODO: accessField"
