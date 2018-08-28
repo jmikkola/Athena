@@ -2,7 +2,6 @@ module AST.Statement where
 
 import AST.Annotation (Annotated, getAnnotation)
 import AST.Expression (Expression)
-import AST.Type (Type)
 
 -- TODO: Bring back type annotations later
 

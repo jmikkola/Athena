@@ -499,7 +499,7 @@ getBinaryFnType op
     error $ "getBinaryFnType missing a case for " ++ show op
 
 intBinaryFuncs :: [BinOp]
-intBinaryFuncs = [Mod, BitAnd, BitOr, BitXor, LShift, RShift, RRShift]
+intBinaryFuncs = [Mod, BitAnd, BitOr, BitXor, LShift, RShift]
 
 numBinaryFuncs :: [BinOp]
 numBinaryFuncs = [Plus, Minus, Times, Divide, Power]

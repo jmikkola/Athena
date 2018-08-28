@@ -1,6 +1,6 @@
 module Interpreter (interpret) where
 
-import Data.Bits (complement)
+import Data.Bits (complement, (.&.), (.|.), xor, shiftL, shiftR)
 import Data.Map (Map)
 import System.IO (hFlush, stdout)
 import qualified Data.Map as Map
@@ -182,37 +182,43 @@ applyUOp op val = case op of
 
 applyBOp :: E.BinOp -> Value -> Value -> IO Value
 applyBOp op l r = case op of
-  E.Less -> do
-    b <- intOp (<) l r
-    return $ VBool b
-  E.Greater -> do
-    b <- intOp (>) l r
-    return $ VBool b
-  E.GreaterEq -> do
-    b <- intOp (>=) l r
-    return $ VBool b
-  E.Eq -> do
-    b <- intOp (==) l r
-    return $ VBool b
-  E.Plus -> do
-    i <- intOp (+) l r
-    return $ VInt i
-  E.Minus -> do
-    i <- intOp (-) l r
-    return $ VInt i
-  E.Mod -> do
-    i <- intOp mod l r
-    return $ VInt i
-  E.Divide -> do
-    i <- intOp div l r
-    return $ VInt i
-  _ -> error $ "TODO: binary op " ++ show op
+  E.Less      -> VBool <$> intOp  (<)    l r
+  E.LessEq    -> VBool <$> intOp  (<=)   l r
+  E.Greater   -> VBool <$> intOp  (>)    l r
+  E.GreaterEq -> VBool <$> intOp  (>=)   l r
+  E.Eq        -> VBool <$> intOp  (==)   l r
+  E.NotEq     -> VBool <$> intOp  (/=)   l r
+
+  E.BoolAnd   -> VBool <$> boolOp (&&)   l r
+  E.BoolOr    -> VBool <$> boolOp (||)   l r
+
+  E.Plus      -> VInt  <$> intOp  (+)    l r
+  E.Minus     -> VInt  <$> intOp  (-)    l r
+  E.Times     -> VInt  <$> intOp  (*)    l r
+  E.Divide    -> VInt  <$> intOp  div    l r
+  E.Mod       -> VInt  <$> intOp  mod    l r
+  E.Power     -> VInt  <$> intOp  (^)    l r
+
+  E.BitAnd    -> VInt  <$> intOp  (.&.)  l r
+  E.BitOr     -> VInt  <$> intOp  (.|.)  l r
+  E.BitXor    -> VInt  <$> intOp  xor    l r
+
+  E.LShift    -> VInt  <$> intOp  shiftL l r
+  E.RShift    -> VInt  <$> intOp  shiftR l r
+
 
 intOp :: (Int -> Int -> a) -> Value -> Value -> IO a
 intOp fn l r = do
   li <- requireInt l
   ri <- requireInt r
   return $ fn li ri
+
+
+boolOp :: (Bool -> Bool -> a) -> Value -> Value -> IO a
+boolOp fn l r = do
+  lb <- requireBool l
+  rb <- requireBool r
+  return $ fn lb rb
 
 requireInt :: Value -> IO Int
 requireInt (VInt i) = return i

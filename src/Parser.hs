@@ -312,7 +312,7 @@ precOrder :: [[BinOp]]
 precOrder =
   [ [E.Times, E.Divide, E.Mod]
   , [E.Plus, E.Minus]
-  , [E.LShift, E.RShift, E.RRShift]
+  , [E.LShift, E.RShift]
   , [E.Power]
   , [E.Less, E.LessEq, E.Greater, E.GreaterEq]
   , [E.Eq, E.NotEq]
@@ -489,7 +489,6 @@ opChoices =
       , ("&",  E.BitAnd)
       , ("||", E.BoolOr)
       , ("<<",  E.LShift)
-      , (">>>", E.RRShift)
       , (">>",  E.RShift)
       , ("==", E.Eq)
       , ("!=", E.NotEq)

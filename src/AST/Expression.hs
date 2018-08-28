@@ -47,7 +47,6 @@ data BinOp
   | GreaterEq
   | LShift
   | RShift
-  | RRShift
   deriving (Eq, Show)
 
 instance Annotated Value where
