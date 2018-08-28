@@ -3,6 +3,7 @@ module AST.Statement where
 import AST.Annotation (Annotated, getAnnotation)
 import AST.Expression (Expression)
 
+
 -- TODO: Bring back type annotations later
 
 data Statement a

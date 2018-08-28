@@ -92,10 +92,10 @@ interpretStmt scope stmt = case stmt of
     return $ Returned VVoid
   S.Return _ (Just expr) -> do
     val <- interpretExpr scope expr
-    return $ Returned VVoid
+    return $ Returned val
   S.Let _ name expr -> do
     val <- interpretExpr scope expr
-    let (s0:ss) = scope
+    let (s0:_) = scope
     ss <- readIORef s0
     writeIORef s0 (Map.insert name val ss)
     return $ FellThrough
@@ -115,7 +115,7 @@ interpretStmt scope stmt = case stmt of
        then interpretBlock scope thn
       else case els of
             Nothing -> return FellThrough
-            Just stmt -> interpretStmt scope stmt
+            Just st -> interpretStmt scope st
   S.While _ tst blk -> do
     testVal <- interpretExpr scope tst
     b <- requireBool testVal
@@ -133,7 +133,7 @@ interpretStmt scope stmt = case stmt of
 
 -- TODO: start a new scope when running blocks
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
-interpretBlock scope [] =
+interpretBlock _ [] =
   return FellThrough
 interpretBlock scope (s:stmts) = do
   result <- interpretStmt scope s
@@ -237,17 +237,19 @@ callFunction (VClosure scope (Function names body)) args = do
 callFunction (VBuiltIn name) args = case name of
   "print" -> builtinPrint args
   _ -> error $ "Unknown built-in " ++ name
-callFunction _ args =
+callFunction _ _ =
   error "calling a non-function"
 
 builtinPrint :: [Value] -> IO Value
 builtinPrint args = do
   rendered <- mapM render args
   putStrLn $ concat $ intersperse " " rendered
+  hFlush stdout
   return VVoid
 
+-- type, value
 castVal :: String -> Value -> IO Value
-castVal t val = error "TODO: castVal"
+castVal _ _ = error "TODO: castVal"
 
 lookupVar :: Scope -> String -> IO Value
 lookupVar [] name = error $ "name undefined: " ++ name
@@ -322,6 +324,6 @@ renderPair (name, ref) = do
   return $ name ++ ": " ++ rendered
 
 intersperse :: a -> [a] -> [a]
-intersperse sep [] = []
-intersperse sep [x] = [x]
+intersperse _   []      = []
+intersperse _   [x]     = [x]
 intersperse sep (a:b:c) = a : sep : (intersperse sep (b:c))

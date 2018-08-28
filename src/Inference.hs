@@ -8,6 +8,9 @@ module Inference
   , InferResult(..)
   ) where
 
+
+import Prelude hiding (exp)
+
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -16,6 +19,7 @@ import qualified Data.Set as Set
 import Debug.Trace
 
 import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
+
 
 import AST.Annotation (Annotated, getAnnotation)
 import AST.Expression (UnaryOp(..), BinOp(..))
@@ -47,6 +51,7 @@ import FirstPass
 import Util.Graph
   ( components )
 
+
 data BindGroup a
   = BindGroup
     { implicitBindings :: [(String, D.Declaration a)] }
@@ -76,6 +81,7 @@ makeBindGroups m =
   in map BindGroup $ map (map getBinding) topoOrder
 
 -- TODO: extend this into prelude (plus imported names)
+startingDependencies :: Set String
 startingDependencies = Set.fromList ["print"]
 
 -- This walks each declaration to find out what the
@@ -185,6 +191,7 @@ startingEnv =
   Map.fromList
   [ ("print", Scheme 1 (TFunc [TGen 0] tUnit)) ]
 
+runInfer :: Monad m => StateT InferState m a -> m a
 runInfer f = evalStateT f startingInferState
 
 inferErr :: Error -> InferM a
@@ -323,8 +330,8 @@ inferStmt env stmt = case stmt of
     (blk', blkReturns) <- inferBlock env blk
     (els', elsReturns) <- case els of
       Nothing   -> return (Nothing, NeverReturns)
-      Just stmt -> do
-        (stmt', retT) <- inferStmt env stmt
+      Just st -> do
+        (stmt', retT) <- inferStmt env st
         return (Just stmt', retT)
     let ifReturns = combineReturns blkReturns elsReturns
     return (S.If (tUnit, a) testExpr blk' els', ifReturns)
@@ -440,13 +447,14 @@ inferExpr env expr = case expr of
     t <- instantiate sch
     return $ E.Var (t, a) name
 
-  E.Access a exp field -> do
+  E.Access _ exp field -> do
     exp' <- inferExpr env exp
-    let t = getType exp'
+    let _ = getType exp'
+    let _ = field
     return $ error "TODO: Infer for Access"
 
 inferValue :: Environment -> E.Value a -> InferM (E.Value (Type, a))
-inferValue env val = case val of
+inferValue _ val = case val of
   E.StrVal a str ->
     return $ E.StrVal (tString, a) str
   E.BoolVal a b ->
@@ -513,9 +521,6 @@ equalityFuncs = [Eq, NotEq]
 ordFuncs :: [BinOp]
 ordFuncs = [Less, LessEq, Greater, GreaterEq]
 
-toBindings :: [(String, D.Declaration (Scheme, a))] -> [(String, Scheme)]
-toBindings typed  = mapSnd getType typed
-
 unifyAll :: Type -> [Type] -> InferM ()
 unifyAll t ts = do
   _ <- mapM (unify t) ts
@@ -532,8 +537,8 @@ mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2
 
 traceErr :: String -> Result a -> Result a
-traceErr message (Right x) = (Right x)
-traceErr message (Left x) = trace message (Left x)
+traceErr _       (Right x) = (Right x)
+traceErr message (Left x)  = trace message (Left x)
 
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
@@ -586,7 +591,3 @@ mustLookup key m = case Map.lookup key m of
 fromMaybe :: a -> Maybe a -> a
 fromMaybe _ (Just x) = x
 fromMaybe d Nothing  = d
-
-mapSnd :: (a -> b) -> [(x, a)] -> [(x, b)]
-mapSnd _ []         = []
-mapSnd f ((x,a):xs) = (x, f a) : mapSnd f xs
