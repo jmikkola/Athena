@@ -286,7 +286,7 @@ readBinExprParts = do
   _ <- anyLinearWhitespace
   parts <- many $ try $ do
     op <- opParser
-    _ <- anyLinearWhitespace
+    _ <- anyWhitespace
     e' <- expr
     _ <- anyLinearWhitespace
     return (op, e')
