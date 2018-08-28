@@ -1,6 +1,6 @@
 module Interpreter (interpret) where
 
-
+import Data.Bits (complement)
 import Data.Map (Map)
 import System.IO (hFlush, stdout)
 import qualified Data.Map as Map
@@ -172,7 +172,13 @@ assign []    _ _ = error "Empty scope given to assign"
 
 
 applyUOp :: E.UnaryOp -> Value -> IO Value
-applyUOp = error "TODO: applyUOp"
+applyUOp op val = case op of
+  E.BitInvert -> do
+    i <- requireInt val
+    return $ VInt $ complement i
+  E.BoolNot -> do
+    b <- requireBool val
+    return $ VBool $ not b
 
 applyBOp :: E.BinOp -> Value -> Value -> IO Value
 applyBOp op l r = case op of
