@@ -131,16 +131,19 @@ interpretStmt scope stmt = case stmt of
       else
         return $ FellThrough
 
--- TODO: start a new scope when running blocks
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
-interpretBlock _ [] =
+interpretBlock scope stmts = do
+  blockScope <- newIORef Map.empty
+  interpretBlockScoped (blockScope : scope) stmts
+
+interpretBlockScoped :: Scope -> [S.Statement AnnT] -> IO StmtResult
+interpretBlockScoped _ [] =
   return FellThrough
-interpretBlock scope (s:stmts) = do
+interpretBlockScoped scope (s:stmts) = do
   result <- interpretStmt scope s
   case result of
-   FellThrough -> interpretBlock scope stmts
+   FellThrough -> interpretBlockScoped scope stmts
    Returned _  -> return result
-
 
 interpretVal :: Scope -> E.Value AnnT -> IO Value
 interpretVal scope val = case val of
