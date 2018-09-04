@@ -9,14 +9,14 @@ type Foo struct {
 }
 
 fn main() {
-    let foo Foo = Foo{
+    let foo = Foo{
         asdf: 123 + 345,
         xyz: Bar{
             x: 1,
             y: 2.333,
         },
     }
-    let b Bar = foo.xyz
+    let b = foo.xyz
     print(String(foo))
     print("Hello, world")
     foo.xyz.x = 10000

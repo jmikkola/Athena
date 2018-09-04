@@ -483,8 +483,8 @@ canCast :: Type -> Type -> Bool
 canCast t1 t2
   | t1 == tInt && t2 == tFloat = True
   | t1 == tFloat && t2 == tInt = True
+  | t2 == tString              = True
   | otherwise = False
--- TODO: add casts to string
 
 getUnaryFnType :: UnaryOp -> Type
 getUnaryFnType op = case op of

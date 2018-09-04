@@ -1,0 +1,8 @@
+fn main() {
+    let a = 3.14
+    print(a)
+    let b = Int(a)
+    print(b)
+    let c = String(b)
+    print(c)
+}

@@ -169,6 +169,7 @@ assign (s:ss) [name] value = do
           --rendered <- render value
           --putStrLn $ "Set " ++ name ++ " to " ++ rendered
     else assign ss [name] value
+-- Doing this will rely on making structures work through the whole system
 assign (_:_) _ _ = error "TODO: assign multi-part names"
 assign []    _ _ = error "Empty scope given to assign"
 
@@ -250,9 +251,29 @@ builtinPrint args = do
   hFlush stdout
   return VVoid
 
--- type, value
+
+-- Note: Keep this in sync with the types allowed by Inference.canCast.
 castVal :: String -> Value -> IO Value
-castVal _ _ = error "TODO: castVal"
+castVal t value = case t of
+  "String" -> do
+    s <- render value
+    return $ VString s
+
+  "Int" -> case value of
+    VFloat f ->
+      return $ VInt (round f)
+    _ ->
+      error "Cannot cast that to an int"
+
+  "Float" -> case value of
+    VInt i ->
+      return $ VFloat $ fromIntegral i
+    _ ->
+      error "Cannot cast that to an float"
+
+  _ ->
+    error $ "Cannot cast to " ++ t
+
 
 lookupVar :: Scope -> String -> IO Value
 lookupVar [] name = error $ "name undefined: " ++ name
@@ -263,6 +284,7 @@ lookupVar (s:ss) name = do
    Just val -> return val
 
 accessField :: Value -> String -> IO Value
+-- Doing this will rely on making structures work through the whole system
 accessField = error "TODO: accessField"
 
 data Value
