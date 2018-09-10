@@ -4,6 +4,7 @@ module Inference
   , startingEnv
   , runInfer
   , inferExpr
+  , inferDecl
   , Environment
   , TypedDecls
   , InferResult(..)
