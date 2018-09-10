@@ -1,8 +1,9 @@
 module Inference
   ( inferModule
-  , topLevelBindings
-  , topLevelEnv
   , mgu
+  , startingEnv
+  , runInfer
+  , inferExpr
   , Environment
   , TypedDecls
   , InferResult(..)
@@ -536,6 +537,7 @@ unify t1 t2 = do
 mismatch :: Type -> Type -> Result a
 mismatch t1 t2 = Left $ Mismatch t1 t2
 
+-- TODO: remove debugging:
 traceErr :: String -> Result a -> Result a
 traceErr _       (Right x) = (Right x)
 traceErr message (Left x)  = trace message (Left x)
