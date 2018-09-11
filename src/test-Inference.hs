@@ -38,7 +38,9 @@ tests =
   [ test "basic unification" basicUnification
   , test "recursive unification" recursiveUnification
   , test "expression inference" simpleInference
-  , test "simple functions" functionInference ]
+  , test "simple functions" functionInference
+  , test "while loop" whileLoop
+  , test "if-else return" ifElseReturn ]
 
 
 basicUnification :: Assertion
@@ -100,19 +102,58 @@ simpleInference = do
 functionInference :: Assertion
 functionInference = do
   -- f() { return 1; }
-  let func1 = func [] [S.Return () $ Just $ intVal 1]
+  let func1 = func [] [returnJust $ intVal 1]
   let type1 = TFunc [] tInt
   assertDeclTypes type1 func1
 
   -- f(x) { return 1; }
-  let func2 = func ["x"] [S.Return () $ Just $ intVal 1]
+  let func2 = func ["x"] [returnJust $ intVal 1]
   let type2 = TFunc [TVar "_v0"] tInt
   assertDeclTypes type2 func2
 
   -- f(x) { return x; }
-  let func3 = func ["x"] [S.Return () $ Just $ E.Var () "x"]
+  let func3 = func ["x"] [returnJust $ E.Var () "x"]
   let type3 = TFunc [TVar "_v0"] (TVar "_v0")
   assertDeclTypes type3 func3
+
+  -- f(x) { return x + 1; }
+  let func4 = func ["x"] [returnJust $ E.Binary () E.Plus (E.Var () "x") (intVal 1)]
+  let type4 = TFunc [tInt] tInt
+  assertDeclTypes type4 func4
+
+  -- f(x) { return x > 123; }
+  let func5 = func ["x"] [returnJust $ E.Binary () E.Less (E.Var () "x") (intVal 123)]
+  let type5 = TFunc [tInt] tBool
+  assertDeclTypes type5 func5
+
+
+whileLoop :: Assertion
+whileLoop = do
+  -- f(y) = let a = 1; while a < y { a = a * 2 }; return a
+  let aTo1 = S.Let () "a" (intVal 1)
+  let aLessY = E.Binary () E.Less (E.Var () "a") (E.Var () "y")
+  let aTimes2 = E.Binary () E.Times (E.Var () "a") (intVal 2)
+  let whileBody = S.Assign () ["a"] aTimes2
+  let while = S.While () aLessY [whileBody]
+  let returnA = returnJust $ E.Var () "a"
+  let func6 = func ["y"] [aTo1, while, returnA]
+  let type6 = TFunc [tInt] tInt
+  assertDeclTypes type6 func6
+
+
+ifElseReturn :: Assertion
+ifElseReturn = do
+  -- f(x, y) = if x > y { return x; } else { return y; }
+  let test = E.Binary () E.Greater (E.Var () "x") (E.Var () "y")
+  let returnX = returnJust $ E.Var () "x"
+  let returnY = returnJust $ E.Var () "y"
+  let ifStmt = S.If () test [returnX] (Just returnY)
+  let func7 = func ["x", "y"] [ifStmt]
+  let type7 = TFunc [tInt, tInt] tInt
+  assertDeclTypes type7 func7
+
+
+returnJust expr = S.Return () (Just expr)
 
 
 assertExprTypes :: Type -> E.Expression () -> Assertion
@@ -162,6 +203,7 @@ func args stmts =
 ---- f(y) = let a = 1; while a < y { a = a * 2 }; return a
 ---- f(x, y) = if x > y { return x; } else { return y; }
 ---- f(x, y) = if x > y { return x; }; return y;
+---- f(a, b, c) = if a { return b; } else { return c; }
 ----    should fail:
 ---- f(x, y) = if x > y { return x; }
 -- Test finding dependencies (inc. handling shadowing)

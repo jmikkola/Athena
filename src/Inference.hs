@@ -541,7 +541,8 @@ mismatch t1 t2 = Left $ Mismatch t1 t2
 -- TODO: remove debugging:
 traceErr :: String -> Result a -> Result a
 traceErr _       (Right x) = (Right x)
-traceErr message (Left x)  = trace message (Left x)
+--traceErr message (Left x)  = trace message (Left x)
+traceErr message (Left x)  = (Left x)
 
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
