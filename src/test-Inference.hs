@@ -14,6 +14,7 @@ import Types
   , tInt
   , tBool
   , tString
+  , tUnit
   , makeSub
   , emptySubstitution )
 import Inference
@@ -21,10 +22,12 @@ import Inference
   , startingEnv
   , runInfer
   , inferExpr
-  , inferDecl )
+  , inferDecl
+  , unifies )
 import UnitTest
   ( Assertion
   , Test
+  , assert
   , assertEq
   , assertRight
   , assertLeft
@@ -40,7 +43,10 @@ tests =
   , test "expression inference" simpleInference
   , test "simple functions" functionInference
   , test "while loop" whileLoop
-  , test "if-else return" ifElseReturn ]
+  , test "if-else return" ifElseReturn
+  , test "if-then return" ifThenReturn
+  , test "return a-b-c" returnABC
+  , test "missing return" missingReturn ]
 
 
 basicUnification :: Assertion
@@ -101,6 +107,11 @@ simpleInference = do
 
 functionInference :: Assertion
 functionInference = do
+  -- f() { }
+  let func0 = func [] []
+  let type0 = TFunc [] tUnit
+  assertDeclTypes type0 func0
+
   -- f() { return 1; }
   let func1 = func [] [returnJust $ intVal 1]
   let type1 = TFunc [] tInt
@@ -108,12 +119,12 @@ functionInference = do
 
   -- f(x) { return 1; }
   let func2 = func ["x"] [returnJust $ intVal 1]
-  let type2 = TFunc [TVar "_v0"] tInt
+  let type2 = TFunc [TVar "a"] tInt
   assertDeclTypes type2 func2
 
   -- f(x) { return x; }
   let func3 = func ["x"] [returnJust $ E.Var () "x"]
-  let type3 = TFunc [TVar "_v0"] (TVar "_v0")
+  let type3 = TFunc [TVar "a"] (TVar "a")
   assertDeclTypes type3 func3
 
   -- f(x) { return x + 1; }
@@ -153,29 +164,74 @@ ifElseReturn = do
   assertDeclTypes type7 func7
 
 
+ifThenReturn :: Assertion
+ifThenReturn = do
+  -- f(x, y) = if x > y { return x; }; return y;
+  let test = E.Binary () E.Greater (E.Var () "x") (E.Var () "y")
+  let returnX = returnJust $ E.Var () "x"
+  let ifStmt = S.If () test [returnX] Nothing
+  let returnY = returnJust $ E.Var () "y"
+  let func8 = func ["x", "y"] [ifStmt, returnY]
+  let type8 = TFunc [tInt, tInt] tInt
+  assertDeclTypes type8 func8
+
+
+returnABC :: Assertion
+returnABC = do
+  -- f(a, b, c) = if a { return b; } else { return c; }
+  let returnB = returnJust $ E.Var () "b"
+  let returnC = returnJust $ E.Var () "c"
+  let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnC)
+  let func9 = func ["a", "b", "c"] [ifStmt]
+  let type9 = TFunc [tBool, TVar "a", TVar "a"] (TVar "a")
+  assertDeclTypes type9 func9
+
+
+missingReturn :: Assertion
+missingReturn = do
+  -- f(x, y) = if x > y { return x; }
+  let returnX = returnJust $ E.Var () "x"
+  let test = E.Binary () E.Greater (E.Var () "x") (E.Var () "y")
+  let ifStmt = S.If () test [returnX] Nothing
+  assertDeclFails $ func ["x", "y"] [ifStmt]
+
+
 returnJust expr = S.Return () (Just expr)
 
 
 assertExprTypes :: Type -> E.Expression () -> Assertion
-assertExprTypes t expr = do
-  let result = runInfer $ inferExpr startingEnv expr
-  let resultType = fmap getAnnotation result
-  let expected = Right (t, ())
-  assertEq expected resultType
+assertExprTypes t expr = assertTypes t expr inferExpr
 
 
 assertExprFails :: E.Expression () -> Assertion
-assertExprFails expr = do
-  let result = runInfer $ inferExpr startingEnv expr
-  assertLeft result
+assertExprFails expr = assertFails expr inferExpr
 
 
 assertDeclTypes :: Type -> D.Declaration () -> Assertion
-assertDeclTypes t decl = do
-  let result = runInfer $ inferDecl startingEnv decl
-  let resultType = fmap getAnnotation result
-  let expected = Right (t, ())
-  assertEq expected resultType
+assertDeclTypes t decl = assertTypes t decl inferDecl
+
+
+assertDeclFails :: D.Declaration () -> Assertion
+assertDeclFails decl = assertFails decl inferDecl
+
+
+assertTypes t ast inferFn = do
+  let result = runInfer $ inferFn startingEnv ast
+  assertRight result
+  let (Right typed) = result
+  let resultType = fst . getAnnotation $ typed
+  assertUnifies t resultType
+
+
+assertFails ast inferFn = do
+  let result = runInfer $ inferFn startingEnv ast
+  assertLeft result
+
+
+assertUnifies :: Type -> Type -> Assertion
+assertUnifies expected result = do
+  let message = "expected " ++ show result ++ " to unify with " ++ show expected
+  assert (unifies expected result) message
 
 
 intVal :: Int -> E.Expression ()
@@ -194,18 +250,6 @@ func args stmts =
 
 
 -- TODO
--- Test inference for simple functions
----- f() = 1
----- f(x) = 1
----- f(x) = x
----- f(x) = x + 1
----- f(x) = x > 123
----- f(y) = let a = 1; while a < y { a = a * 2 }; return a
----- f(x, y) = if x > y { return x; } else { return y; }
----- f(x, y) = if x > y { return x; }; return y;
----- f(a, b, c) = if a { return b; } else { return c; }
-----    should fail:
----- f(x, y) = if x > y { return x; }
 -- Test finding dependencies (inc. handling shadowing)
 -- Test inference for DAGs of functions
 ---- let id x = x in (id id) 123

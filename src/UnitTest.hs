@@ -41,6 +41,12 @@ test name assertion = do
      putStrLn $ name ++ " failed: " ++ err
      return False
 
+
+assert :: Bool -> String -> Assertion
+assert test message =
+  if test then ok else err message
+
+
 assertEq :: (Show a, Eq a) => a -> a -> Assertion
 assertEq x y
   | x == y    = ok

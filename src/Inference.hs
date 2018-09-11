@@ -5,6 +5,7 @@ module Inference
   , runInfer
   , inferExpr
   , inferDecl
+  , unifies
   , Environment
   , TypedDecls
   , InferResult(..)
@@ -544,6 +545,11 @@ traceErr _       (Right x) = (Right x)
 --traceErr message (Left x)  = trace message (Left x)
 traceErr message (Left x)  = (Left x)
 
+
+unifies :: Type -> Type -> Bool
+unifies t1 t2 = isRight $ mgu t1 t2
+
+
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
   (TGen _, _) ->
@@ -595,3 +601,8 @@ mustLookup key m = case Map.lookup key m of
 fromMaybe :: a -> Maybe a -> a
 fromMaybe _ (Just x) = x
 fromMaybe d Nothing  = d
+
+
+isRight :: Either a b -> Bool
+isRight (Right _) = True
+isRight _         = False
