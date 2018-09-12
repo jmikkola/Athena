@@ -46,7 +46,10 @@ tests =
   , test "if-else return" ifElseReturn
   , test "if-then return" ifThenReturn
   , test "return a-b-c" returnABC
-  , test "missing return" missingReturn ]
+  , test "missing return" missingReturn
+  , test "first class function" firstClassFunction
+  , test "no higher order polymorphism" noHigherOrderPolymorphism
+  , test "infinite type" infiniteType ]
 
 
 basicUnification :: Assertion
@@ -95,6 +98,9 @@ simpleInference = do
   let lessExpr = E.Binary () E.Less (intVal 5) (intVal 6)
   assertExprTypes tBool lessExpr
 
+  let notExpr = E.Unary () E.BoolNot (boolVal True)
+  assertExprTypes tBool notExpr
+
   let parenExpr = E.Paren () $ strVal "foo"
   assertExprTypes tString parenExpr
 
@@ -104,9 +110,20 @@ simpleInference = do
   let badComparison = E.Binary () E.Less (intVal 5) (strVal "bar")
   assertExprFails badComparison
 
+  -- 3()
+  let badCall = E.Call () (intVal 3) []
+  assertExprFails badCall
+
+  -- 3(5)
+  let badCall2 = E.Call () (intVal 3) [intVal 5]
+  assertExprFails badCall2
+
 
 functionInference :: Assertion
 functionInference = do
+  -- shared definitions
+  let varX = E.Var () "x"
+
   -- f() { }
   let func0 = func [] []
   let type0 = TFunc [] tUnit
@@ -123,19 +140,24 @@ functionInference = do
   assertDeclTypes type2 func2
 
   -- f(x) { return x; }
-  let func3 = func ["x"] [returnJust $ E.Var () "x"]
+  let func3 = func ["x"] [returnJust varX]
   let type3 = TFunc [TVar "a"] (TVar "a")
   assertDeclTypes type3 func3
 
   -- f(x) { return x + 1; }
-  let func4 = func ["x"] [returnJust $ E.Binary () E.Plus (E.Var () "x") (intVal 1)]
+  let func4 = func ["x"] [returnJust $ E.Binary () E.Plus varX (intVal 1)]
   let type4 = TFunc [tInt] tInt
   assertDeclTypes type4 func4
 
   -- f(x) { return x > 123; }
-  let func5 = func ["x"] [returnJust $ E.Binary () E.Less (E.Var () "x") (intVal 123)]
+  let func5 = func ["x"] [returnJust $ E.Binary () E.Less varX (intVal 123)]
   let type5 = TFunc [tInt] tBool
   assertDeclTypes type5 func5
+
+  -- f(x) { return x && True; }
+  let funcBool = func ["x"] [returnJust $ E.Binary () E.BoolAnd varX (boolVal True)]
+  let typeBool = TFunc [tBool] tBool
+  assertDeclTypes typeBool funcBool
 
 
 whileLoop :: Assertion
@@ -196,6 +218,40 @@ missingReturn = do
   assertDeclFails $ func ["x", "y"] [ifStmt]
 
 
+firstClassFunction :: Assertion
+firstClassFunction = do
+  -- f(x, y) = { return x(y, y); }
+  let varX = E.Var () "x"
+  let varY = E.Var () "y"
+  let call = E.Call () varX [varY, varY]
+  let f = func ["x", "y"] [returnJust call]
+  -- (a -> a -> b)
+  let xType = TFunc [TVar "a", TVar "a"] (TVar "b")
+  -- (a -> a -> b) -> a -> b
+  let t = TFunc [xType, TVar "a"] (TVar "b")
+  assertDeclTypes t f
+
+
+noHigherOrderPolymorphism :: Assertion
+noHigherOrderPolymorphism = do
+  -- f(x) { return x(x(1) > 2); }
+  let varX = E.Var () "x"
+  let innerCall = E.Call () varX [intVal 1]
+  let comparison = E.Binary () E.Greater innerCall (intVal 2)
+  let call = E.Call () varX [comparison]
+  let f = func ["x"] [returnJust call]
+  assertDeclFails f
+
+
+infiniteType :: Assertion
+infiniteType = do
+  -- f(x) { return x(x); }
+  let varX = E.Var () "x"
+  let call = E.Call () varX [varX]
+  let f = func ["x"] [returnJust call]
+  assertDeclFails f
+
+
 returnJust expr = S.Return () (Just expr)
 
 
@@ -242,6 +298,10 @@ strVal :: String -> E.Expression ()
 strVal s = E.Val () $ E.StrVal () s
 
 
+boolVal :: Bool -> E.Expression ()
+boolVal b = E.Val () $ E.BoolVal () b
+
+
 func args stmts =
   let fnname = "<unnamed>"
       fntype = T.TypeName "unused"
@@ -255,3 +315,4 @@ func args stmts =
 ---- let id x = x in (id id) 123
 ---- let f y = y + 1 in g x = f x
 -- Test inference for cyclic functions
+-- Test all pairwise combinations of syntax (e.g. trying to call 3 as a function)
