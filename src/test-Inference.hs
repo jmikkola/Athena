@@ -1,5 +1,7 @@
 module Main where
 
+import qualified Data.Map as Map
+
 import AST.Annotation (Annotated, getAnnotation)
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
@@ -7,6 +9,8 @@ import qualified AST.Statement as S
 import qualified AST.Type as T
 import Errors
   ( Error(..) )
+import FirstPass
+  ( Module(..) )
 import Types
   ( Substitution
   , Type(..)
@@ -23,7 +27,10 @@ import Inference
   , runInfer
   , inferExpr
   , inferDecl
-  , unifies )
+  , unifies
+  , makeBindGroups
+  , implicitBindings
+  , BindGroup(..) )
 import UnitTest
   ( Assertion
   , Test
@@ -49,7 +56,8 @@ tests =
   , test "missing return" missingReturn
   , test "first class function" firstClassFunction
   , test "no higher order polymorphism" noHigherOrderPolymorphism
-  , test "infinite type" infiniteType ]
+  , test "infinite type" infiniteType
+  , test "finding dependencies" findDependencies ]
 
 
 basicUnification :: Assertion
@@ -252,6 +260,45 @@ infiniteType = do
   assertDeclFails f
 
 
+findDependencies :: Assertion
+findDependencies = do
+  let varX = E.Var () "x"
+  let varF = E.Var () "f"
+  let varG = E.Var () "g"
+
+  -- f(x) { return g(x); }
+  -- g(x) { return x; }
+  let fCallsG = func ["x"] [returnJust $ E.Call () varG [varX]]
+  let g = func ["x"] [returnJust varX]
+  assertEq [["g"], ["f"]] (findGroups [("f", fCallsG), ("g", g)])
+
+  -- f(x) { return g(x); }
+  -- g(x) { return f(x); }
+  -- h() { return g; }
+  let gCallsF = func ["x"] [returnJust $ E.Call () varF [varX]]
+  let hReturnsG = func [] [returnJust varG]
+  let bindings2 = [("f", fCallsG), ("g", gCallsF), ("h", hReturnsG)]
+  assertEq [["g", "f"], ["h"]] (findGroups bindings2)
+
+  -- TODO: Test more deeply nested AST
+  -- TODO: Test larger call graphs w/ longer cycles
+  -- TODO: Test shadowing via arg names
+  -- TODO: Test shadowing via let statements
+
+
+findGroups :: [(String, D.Declaration a)] -> [[String]]
+findGroups bindings =
+  let bindMap = Map.fromList bindings
+      mod = Module { bindings=bindMap, types=Map.empty }
+      bindGroups = makeBindGroups mod
+  in getGroupNames bindGroups
+
+
+getGroupNames :: [BindGroup a] -> [[String]]
+getGroupNames groups = map getNames groups
+  where getNames bg = map fst $ implicitBindings bg
+
+
 returnJust expr = S.Return () (Just expr)
 
 
@@ -310,7 +357,6 @@ func args stmts =
 
 
 -- TODO
--- Test finding dependencies (inc. handling shadowing)
 -- Test inference for DAGs of functions
 ---- let id x = x in (id id) 123
 ---- let f y = y + 1 in g x = f x

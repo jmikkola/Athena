@@ -6,6 +6,9 @@ module Inference
   , inferExpr
   , inferDecl
   , unifies
+  , makeBindGroups
+  , implicitBindings
+  , BindGroup
   , Environment
   , TypedDecls
   , InferResult(..)
