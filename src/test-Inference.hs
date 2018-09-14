@@ -14,6 +14,7 @@ import FirstPass
 import Types
   ( Substitution
   , Type(..)
+  , Scheme(..)
   , tUnit
   , tInt
   , tBool
@@ -30,10 +31,16 @@ import Inference
   , unifies
   , makeBindGroups
   , implicitBindings
+  , inferModule
+  , InferResult(..)
   , BindGroup(..) )
+import Errors
+  ( Error(..)
+  , Result )
 import UnitTest
   ( Assertion
   , Test
+  , err
   , assert
   , assertEq
   , assertRight
@@ -57,7 +64,8 @@ tests =
   , test "first class function" firstClassFunction
   , test "no higher order polymorphism" noHigherOrderPolymorphism
   , test "infinite type" infiniteType
-  , test "finding dependencies" findDependencies ]
+  , test "finding dependencies" findDependencies
+  , test "simple module" simpleModule ]
 
 
 basicUnification :: Assertion
@@ -286,12 +294,52 @@ findDependencies = do
   -- TODO: Test shadowing via let statements
 
 
+simpleModule :: Assertion
+simpleModule = do
+  -- Test a super basic module
+  -- f(n) { return n + 1; }
+  let varN = E.Var () "n"
+  let nPlus1 = func ["n"] [returnJust $ E.Binary () E.Plus varN (intVal 1)]
+  let result1 = inferModule $ makeModule [("f", nPlus1)]
+  let intFn = Scheme 0 $ TFunc [tInt] tInt
+  assertModuleTypes "f" intFn result1
+
+  -- Test basic let-polymorphism
+  -- id(x) { return x; }
+  -- f(n) { return id(n > 3); }
+  let varX = E.Var () "x"
+  let identity = func ["x"] [returnJust varX]
+  let varID = E.Var () "id"
+  --let id3 = E.Call () varID [intVal 3]
+  let idExpr = E.Call () varID [E.Binary () E.Greater varN (intVal 3)]
+  let fN = func ["n"] [returnJust idExpr]
+  let result2 = inferModule $ makeModule [("f", fN), ("id", identity)]
+  let idType = Scheme 1 $ TFunc [TGen 0] (TGen 0)
+  let fNType = Scheme 0 $ TFunc [tInt] tBool
+  assertModuleTypes "f" fNType result2
+  assertModuleTypes "id" idType result2
+  -- It looks like generalization isn't working
+  -- (TODO: replace 3 with id(3))
+
+
+assertModuleTypes :: String -> Scheme -> Result (InferResult a) -> Assertion
+assertModuleTypes name sch result = case result of
+  Left msg          -> err $ "failed to infer type for module: " ++ show msg
+  Right inferResult ->
+    case Map.lookup name $ topLevelEnv inferResult of
+     Nothing        -> err $ "can't find " ++ name
+     Just resultSch -> assertSchemeUnifies sch resultSch
+
+
+makeModule :: [(String, D.Declaration a)] -> Module a
+makeModule bindings =
+  let bindMap = Map.fromList bindings
+  in Module { bindings=bindMap, types=Map.empty }
+
+
 findGroups :: [(String, D.Declaration a)] -> [[String]]
 findGroups bindings =
-  let bindMap = Map.fromList bindings
-      mod = Module { bindings=bindMap, types=Map.empty }
-      bindGroups = makeBindGroups mod
-  in getGroupNames bindGroups
+  getGroupNames $ makeBindGroups $ makeModule bindings
 
 
 getGroupNames :: [BindGroup a] -> [[String]]
@@ -335,6 +383,13 @@ assertUnifies :: Type -> Type -> Assertion
 assertUnifies expected result = do
   let message = "expected " ++ show result ++ " to unify with " ++ show expected
   assert (unifies expected result) message
+
+
+-- expected, result
+assertSchemeUnifies :: Scheme -> Scheme -> Assertion
+assertSchemeUnifies (Scheme n1 t1) (Scheme n2 t2) = do
+  assertEq n1 n2
+  assertUnifies t1 t2
 
 
 intVal :: Int -> E.Expression ()
