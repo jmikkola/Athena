@@ -3,4 +3,4 @@ packages:
 - '.'
 extra-deps: []
 system-ghc: false
-resolver: lts-6.12
+resolver: lts-12.9
