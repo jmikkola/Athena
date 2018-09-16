@@ -6,11 +6,11 @@ type LinkedList enum {
   }
 }
 
-fn length(l LinkedList) Int {
+fn length(l) {
   return length_(l, 0)
 }
 
-fn length_(l LinkedList, size Int) Int {
+fn length_(l, size) {
   match l {
     End() {
       return size
@@ -26,16 +26,16 @@ fn length_(l LinkedList, size Int) Int {
 }
 
 fn main() {
-  let a1 LinkedList = Link{
+  let a1 = Link{
     value: "last",
     next: End{
     },
   }
-  let a2 LinkedList = Link{
+  let a2 = Link{
     value: "middle",
     next: a1,
   }
-  let a3 LinkedList = Link{
+  let a3 = Link{
     value: "first",
     next: a2,
   }

@@ -12,7 +12,7 @@ type Odd struct {
 }
 
 fn main() {
-  let o Odd = Odd{
+  let o = Odd{
     value: 1,
     next: EElem{
       value: 2,

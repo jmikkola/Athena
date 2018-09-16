@@ -1,6 +1,6 @@
 fn main() {
   print("a")
-  let b Bool = True
+  let b = True
   if b {
     return
   }
