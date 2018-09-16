@@ -271,12 +271,32 @@ generalize env t =
 
 
 instantiate :: Scheme -> InferM Type
-instantiate (Scheme n t) = do
-  let range = [0..(n-1)]
+instantiate sch@(Scheme n t) = do
+  let range = [1..n]
   newVars <- mapM (\_ -> newTypeVar) range
   let genVars = map TGen range
   let sub = Map.fromList $ zip genVars newVars
-  return $ apply sub t
+  let applied = apply sub t
+  verifyContainsNoGenerics sch applied
+  return applied
+
+
+verifyContainsNoGenerics :: Scheme -> Type -> InferM ()
+verifyContainsNoGenerics sch t
+  | containsGenerics t =
+    let message = "instantiated type " ++ show t ++ " from " ++ show sch ++  " contains generics"
+    in inferErr $ CompilerBug message
+  | otherwise          =
+    return ()
+
+
+containsGenerics :: Type -> Bool
+containsGenerics t = case t of
+  TCon _ ts  -> any containsGenerics ts
+  TFunc as t -> any containsGenerics as || containsGenerics t
+  TVar _     -> False
+  TGen _     -> True
+
 
 inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
 inferDecl env decl = case decl of
