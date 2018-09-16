@@ -34,6 +34,7 @@ import Inference
   , makeBindGroups
   , implicitBindings
   , inferModule
+  , instantiate
   , InferResult(..)
   , BindGroup(..) )
 import Errors
@@ -56,6 +57,7 @@ tests :: [Test]
 tests =
   [ test "basic unification" basicUnification
   , test "recursive unification" recursiveUnification
+  , test "instantiation" instantiation
   , test "expression inference" simpleInference
   , test "simple functions" functionInference
   , test "while loop" whileLoop
@@ -106,6 +108,16 @@ recursiveUnification = do
 
   let result3 = mgu (TFunc [tInt] (TVar "a")) (TFunc [TVar "a"] tUnit)
   assertLeft result3
+
+
+instantiation :: Assertion
+instantiation = do
+  assertInstantiates (Scheme 0 tInt) tInt
+  assertInstantiates (Scheme 1 tInt) tInt
+  assertInstantiates (Scheme 1 $ TGen 1) (TVar "a")
+  let sch2 = Scheme 2 (TFunc [TGen 1, TGen 2] (TGen 2))
+  let t2 = TFunc [TVar "a", TVar "b"] (TVar "b")
+  assertInstantiates sch2 t2
 
 
 simpleInference :: Assertion
@@ -306,24 +318,26 @@ simpleModule = do
   let nPlus1 = func "f" ["n"] [returnJust $ E.Binary () E.Plus varN (intVal 1)]
   let result1 = inferModule $ makeModule [("f", nPlus1)]
   let intFn = Scheme 0 $ TFunc [tInt] tInt
-  assertModuleTypes "f" intFn (trace (show result1) result1)
+  assertModuleTypes "f" intFn result1
 
   -- Test basic let-polymorphism
   -- id(x) { return x; }
-  -- f(n) { return id(n > 3); }
   let identity = func "id" ["x"] [returnJust varX]
   let varID = E.Var () "id"
-  --let id3 = E.Call () varID [intVal 3]
-  let idExpr = E.Call () varID [E.Binary () E.Greater varN (intVal 3)]
-  let fN = func "f" ["n"] [returnJust idExpr]
-  let result2 = inferModule $ makeModule [("f", fN), ("id", identity)]
-  let idType = Scheme 1 $ TFunc [TGen 0] (TGen 0)
-  let fNType = Scheme 0 $ TFunc [tInt] tBool
-  --assertModuleTypes "f" fNType result2
+  let result2 = inferModule $ makeModule [("id", identity)]
+  let idType = Scheme 1 $ TFunc [TGen 1] (TGen 1)
   assertModuleTypes "id" idType result2
-  assertEq 1 1
-  -- It looks like generalization isn't working
-  -- (TODO: replace 3 with id(3))
+
+  -- Test usage of let-polymorphism
+  -- id(x) { return x; }
+  -- f(n) { return id(n > id(3)); }
+  let id3 = E.Call () varID [intVal 3]
+  let idExpr = E.Call () varID [E.Binary () E.Greater varN id3]
+  let fN = func "f" ["n"] [returnJust idExpr]
+  let result3 = inferModule $ makeModule [("f", fN), ("id", identity)]
+  let fNType = Scheme 0 $ TFunc [tInt] tBool
+  assertModuleTypes "f" fNType result3
+  assertModuleTypes "id" idType result3
 
 
 assertModuleTypes :: String -> Scheme -> Result (InferResult a) -> Assertion
@@ -383,12 +397,25 @@ assertFails ast inferFn = do
   assertLeft result
 
 
+-- TOOD: This should really be "assert matches" not "assert unifies"
+-- so that it doesn't allow narrower types than it should.
 assertUnifies :: Type -> Type -> Assertion
 assertUnifies expected result = do
   assertNoGenerics expected
   assertNoGenerics result
   let message = "expected " ++ show result ++ " to unify with " ++ show expected
   assert (unifies expected result) message
+
+
+assertInstantiates :: Scheme -> Type -> Assertion
+assertInstantiates sch t =
+  assertUnifies (runInstantiate sch) t
+
+
+runInstantiate :: Scheme -> Type
+runInstantiate sch =
+  let (Right result) = runInfer (instantiate sch)
+  in result
 
 
 assertNoGenerics :: Type -> Assertion
@@ -415,7 +442,7 @@ assertSchemeUnifies s1@(Scheme n1 _) s2@(Scheme n2 _) = do
 -- testInstantiate instantiates without the InferM monad available
 testInstantiate :: Scheme -> Type
 testInstantiate (Scheme n t) =
-  let range = [0..n-1]
+  let range = [1..n]
       newVars = [TVar $ "-t" ++ show i | i <- range]
       genVars = map TGen range
       sub = Map.fromList $ zip genVars newVars

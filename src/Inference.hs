@@ -8,6 +8,7 @@ module Inference
   , unifies
   , makeBindGroups
   , implicitBindings
+  , instantiate
   , BindGroup
   , Environment
   , TypedDecls
@@ -198,7 +199,7 @@ applyEnv sub env = Map.map (apply sub) env
 startingEnv :: Environment
 startingEnv =
   Map.fromList
-  [ ("print", Scheme 1 (TFunc [TGen 0] tUnit)) ]
+  [ ("print", Scheme 1 (TFunc [TGen 1] tUnit)) ]
 
 runInfer :: Monad m => StateT InferState m a -> m a
 runInfer f = evalStateT f startingInferState
@@ -245,7 +246,7 @@ inferGroup (BindGroup impls) env = do
   -- Apply the substitution to all the types and generalize them to schemes
   sub <- getSub
   let subbed = map (apply sub) ts
-  let schemes = map (generalize (applyEnv (showTrace "sub" sub) env)) (showTrace "subbed" subbed)
+  let schemes = map (generalize (applyEnv sub env)) subbed
   let resultEnv = Map.fromList $ zip bindingNames schemes
 
   return (typedDecls, resultEnv)
@@ -572,8 +573,8 @@ mismatch t1 t2 = Left $ Mismatch t1 t2
 -- TODO: remove debugging:
 traceErr :: String -> Result a -> Result a
 traceErr _       (Right x) = (Right x)
-traceErr message (Left x)  = trace message (Left x)
---traceErr message (Left x)  = (Left x)
+--traceErr message (Left x)  = trace message (Left x)
+traceErr message (Left x)  = (Left x)
 
 
 unifies :: Type -> Type -> Bool
