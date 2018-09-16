@@ -228,7 +228,7 @@ inferGroups []     _   =
   return ([], Map.empty)
 inferGroups (g:gs) env = do
   (typed, env1) <- inferGroup g env
-  (rest, env2) <- inferGroups gs env1
+  (rest, env2) <- inferGroups gs (Map.union env1 env)
   return (typed ++ rest, Map.union env1 env2)
 
 inferGroup :: BindGroup a -> Environment -> InferM (TypedDecls a, Environment)
