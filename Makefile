@@ -10,6 +10,12 @@ test-inference:
 test-parser:
 	stack test athena:test-parser
 
+test-first-pass:
+	stack test athena:test-first-pass
+
+test-graph:
+	stack test athena:test-graph
+
 run:
 	stack build
 	stack exec athena -- examples/fib.at
