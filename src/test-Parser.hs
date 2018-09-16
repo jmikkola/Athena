@@ -204,14 +204,17 @@ testParsingMatch =
 testParsingFunc :: Test
 testParsingFunc =
   let text = "fn main() {\n}"
-      expected = D.Function () "main" (T.Function [] nilT) [] (sBlock [])
+      --expected = D.Function () "main" (T.Function [] nilT) [] (sBlock [])
+      expected = D.Function () "main" [] (sBlock [])
   in expectParses declarationParser text expected
 
 testParsingFunc2 :: Test
 testParsingFunc2 =
-  let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
-      fnType = T.Function [intT, boolT] boolT
-      expected = D.Function () "main" fnType ["a", "b"] (sBlock [])
+  let --text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
+      --fnType = T.Function [intT, boolT] boolT
+      --expected = D.Function () "main" fnType ["a", "b"] (sBlock [])
+      text = "fn main(a, b) {\n//a comment\n}"
+      expected = D.Function () "main" ["a", "b"] (sBlock [])
   in expectParses declarationParser text expected
 
 testParsingTypeDecl :: Test

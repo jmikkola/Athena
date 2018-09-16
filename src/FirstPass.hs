@@ -64,9 +64,9 @@ gatherBindings file =
 checkReturns :: Declaration a -> Result ()
 checkReturns (TypeDef _ _ _) =
   return ()
-checkReturns (Let _ _ _ _) =
+checkReturns (Let _ _ _) =
   return ()
-checkReturns (Function _ name _ _ stmt) = do
+checkReturns (Function _ name _ stmt) = do
   _ <- checkStmtsReturn name Never [stmt]
   return ()
 

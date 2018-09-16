@@ -32,7 +32,7 @@ import AST.Expression (UnaryOp(..), BinOp(..))
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Declaration as D
-import qualified AST.Type as T
+--import qualified AST.Type as T
 
 import Types
   ( Substitution
@@ -41,7 +41,6 @@ import Types
   , tInt
   , tFloat
   , tBool
-  , tChar
   , tString
   , tUnit
   , apply
@@ -53,7 +52,7 @@ import Errors
   ( Error(..)
   , Result )
 import FirstPass
-  ( Module(..), bindings, types )
+  ( Module(..), bindings )
 import Util.Graph
   ( components )
 
@@ -105,9 +104,9 @@ class Depencencies a where
 
 instance Depencencies (D.Declaration a) where
   findDependencies bound decl = case decl of
-    D.Let _ name _ exp ->
+    D.Let _ name exp ->
       findDependencies (Set.insert name bound) exp
-    D.Function _ name _ args stmt ->
+    D.Function _ name args stmt ->
       findDependencies (Set.union bound $ Set.fromList (name:args)) stmt
     D.TypeDef _ _ _ ->
       []
@@ -191,6 +190,10 @@ type InferM = StateT InferState (Either Error)
 
 type Environment = Map String Scheme
 
+-- TODO: Make this a proper instance of the Types.Types class
+applyEnv :: Substitution -> Environment -> Environment
+applyEnv sub env = Map.map (apply sub) env
+
 -- TODO: this should also start with prelude and imported names
 startingEnv :: Environment
 startingEnv =
@@ -237,21 +240,25 @@ inferGroup (BindGroup impls) env = do
   let groupEnv = Map.union groupBindings env
 
   -- Do the actual inference
-  typedDecls <- inferDecls groupEnv impls
+  typedDecls <- inferDecls groupEnv impls ts
 
   -- Apply the substitution to all the types and generalize them to schemes
   sub <- getSub
   let subbed = map (apply sub) ts
-  -- TODO: This might generalize too much:
-  let schemes = map (generalize groupEnv) subbed
+  let schemes = map (generalize (applyEnv (showTrace "sub" sub) env)) (showTrace "subbed" subbed)
   let resultEnv = Map.fromList $ zip bindingNames schemes
 
   return (typedDecls, resultEnv)
 
-inferDecls :: Environment -> [(String, D.Declaration a)] -> InferM (TypedDecls a)
-inferDecls env decls = mapM infer decls
-  where infer (name, decl) = do
+
+showTrace :: (Show a) => String -> a -> a
+showTrace s a = trace (s ++ ": " ++ show a) a
+
+inferDecls :: Environment -> [(String, D.Declaration a)] -> [Type] -> InferM (TypedDecls a)
+inferDecls env decls ts = mapM infer (zip decls ts)
+  where infer ((name, decl), t) = do
           d <- inferDecl env decl
+          unify t (getType d)
           return (name, d)
 
 generalize :: Environment -> Type -> Scheme
@@ -273,11 +280,11 @@ instantiate (Scheme n t) = do
 
 inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
 inferDecl env decl = case decl of
-  D.Let a name t expr -> do
+  D.Let a name expr -> do
     expr' <- inferExpr env expr
-    return $ D.Let (getType expr', a) name t expr'
+    return $ D.Let (getType expr', a) name expr'
 
-  D.Function a name tdec args stmt -> do
+  D.Function a name args stmt -> do
     argTs <- mapM (\_ -> newTypeVar) args
     retT <- newTypeVar
     let argEnv = Map.fromList $ zip args (map asScheme argTs)
@@ -289,7 +296,7 @@ inferDecl env decl = case decl of
     let argTypes = map (apply sub) argTs
     let returnT = apply sub retT
     let t = TFunc argTypes returnT
-    return $ D.Function (t, a) name tdec args stmt'
+    return $ D.Function (t, a) name args stmt'
 
   D.TypeDef _ _ _ ->
     inferErr $ CompilerBug "TypeDefs are not bindings"
@@ -545,8 +552,8 @@ mismatch t1 t2 = Left $ Mismatch t1 t2
 -- TODO: remove debugging:
 traceErr :: String -> Result a -> Result a
 traceErr _       (Right x) = (Right x)
---traceErr message (Left x)  = trace message (Left x)
-traceErr message (Left x)  = (Left x)
+traceErr message (Left x)  = trace message (Left x)
+--traceErr message (Left x)  = (Left x)
 
 
 unifies :: Type -> Type -> Bool
@@ -556,9 +563,11 @@ unifies t1 t2 = isRight $ mgu t1 t2
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
   (TGen _, _) ->
-    Left $ CompilerBug "A generic variable should have been instantiated"
+    --Left $ CompilerBug "A generic variable should have been instantiated"
+    error "A generic variable should have been instantiated"
   (_, TGen _) ->
-    Left $ CompilerBug "A generic variable should have been instantiated"
+    --Left $ CompilerBug "A generic variable should have been instantiated"
+    error "A generic variable should have been instantiated"
 
   (TCon ac ats, TCon bc bts) | ac == bc && length ats == length bts ->
     mguList emptySubstitution (zip ats bts)

@@ -39,12 +39,15 @@ letDeclaration = do
   _ <- any1Whitespace
   name <- valueName
   _ <- any1Whitespace
+  {-
   typ <- typeParser
   _ <- any1Whitespace
+  -}
   _ <- char '='
   _ <- any1Whitespace
   val <- expressionParser
-  return $ D.Let () name typ val
+  --return $ D.Let () name typ val
+  return $ D.Let () name val
 
 funcDeclaration :: Parser Declaration
 funcDeclaration = do
@@ -55,13 +58,16 @@ funcDeclaration = do
   _ <- anyLinearWhitespace
   args <- funcArgDecl
   _ <- any1LinearWhitespace
+  {-
   retType <- optionMaybe $ try $ do
     typ <- typeParser
     _ <- any1LinearWhitespace
     return typ
+  -}
   body <- blockStatement
-  let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
-  return $ D.Function () name typ (map fst args) body
+  --let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
+  --return $ D.Function () name typ (map fst args) body
+  return $ D.Function () name args body
 
 typeDeclaration :: Parser Declaration
 typeDeclaration = do
@@ -72,24 +78,30 @@ typeDeclaration = do
   typ <- typeDefParser
   return $ D.TypeDef () name typ
 
-funcArgDecl :: Parser [(String, Type)]
+
+type ArgDecls = [String] -- [(String, Type)]
+
+funcArgDecl :: Parser ArgDecls
 funcArgDecl = argDeclEnd <|> argDecl
 
-argDeclEnd :: Parser [(String, Type)]
+argDeclEnd :: Parser ArgDecls
 argDeclEnd = do
   _ <- char ')'
   return []
 
-argDecl :: Parser [(String, Type)]
+argDecl :: Parser ArgDecls
 argDecl = do
   name <- valueName
+  {-
   _ <- any1LinearWhitespace
   typ <- typeParser
+  -}
   _ <- anyLinearWhitespace
   rest <- argDeclEnd <|> nextArgDecl
-  return $ (name, typ) : rest
+  --return $ (name, typ) : rest
+  return (name : rest)
 
-nextArgDecl :: Parser [(String, Type)]
+nextArgDecl :: Parser ArgDecls
 nextArgDecl = do
   _ <- char ','
   _ <- anyLinearWhitespace
