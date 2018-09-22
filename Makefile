@@ -2,7 +2,7 @@ athena: Makefile athena.cabal stack.yaml src/*.hs
 	stack build
 
 lint:
-	hlint src
+	hlint src/ --ignore "Reduce duplication"
 
 test: lint
 	stack test

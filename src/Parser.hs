@@ -1,6 +1,5 @@
 module Parser where
 
-import Control.Monad ( liftM )
 import Text.Parsec
 import Text.Parsec.String (Parser)
 

@@ -2,6 +2,7 @@ module Interpreter (interpret) where
 
 import Data.Bits (complement, (.&.), (.|.), xor, shiftL, shiftR)
 import Data.Map (Map)
+import Data.List (intercalate)
 import System.IO (hFlush, stdout)
 import qualified Data.Map as Map
 
@@ -28,7 +29,7 @@ interpret body =
 
 startingState :: InferResult () -> IO Scope
 startingState body = do
-  rootScope <- newIORef $ builtIns
+  rootScope <- newIORef builtIns
   let scope = [rootScope]
   let decls = topLevelBindings body
   -- TODO: Also evaluate constant expression
@@ -72,7 +73,7 @@ interpretExpr scope expr = case expr of
   E.Cast _ t ex -> do
     val <- interpretExpr scope ex
     castVal t val
-  E.Var _ name -> do
+  E.Var _ name ->
     lookupVar scope name
   E.Access _ ex field -> do
     val <- interpretExpr scope ex
@@ -88,7 +89,7 @@ getReturnValue FellThrough = VVoid
 
 interpretStmt :: Scope -> S.Statement AnnT -> IO StmtResult
 interpretStmt scope stmt = case stmt of
-  S.Return _ Nothing -> do
+  S.Return _ Nothing ->
     return $ Returned VVoid
   S.Return _ (Just expr) -> do
     val <- interpretExpr scope expr
@@ -98,16 +99,16 @@ interpretStmt scope stmt = case stmt of
     let (s0:_) = scope
     ss <- readIORef s0
     writeIORef s0 (Map.insert name val ss)
-    return $ FellThrough
+    return FellThrough
   S.Assign _ names expr -> do
     val <- interpretExpr scope expr
     assign scope names val
-    return $ FellThrough
+    return FellThrough
   S.Block _ stmts ->
     interpretBlock scope stmts
   S.Expr _ expr -> do
     _ <- interpretExpr scope expr
-    return $ FellThrough
+    return FellThrough
   S.If _ tst thn els -> do
     testVal <- interpretExpr scope tst
     b <- requireBool testVal
@@ -129,7 +130,7 @@ interpretStmt scope stmt = case stmt of
           Returned val ->
             return $ Returned val
       else
-        return $ FellThrough
+        return FellThrough
 
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
 interpretBlock scope stmts = do
@@ -164,7 +165,7 @@ assign :: Scope -> [String] -> Value -> IO ()
 assign (s:ss) [name] value = do
   m <- readIORef s
   if Map.member name m
-     then do
+     then
           writeIORef s (Map.insert name value m)
           --rendered <- render value
           --putStrLn $ "Set " ++ name ++ " to " ++ rendered
@@ -247,7 +248,7 @@ callFunction _ _ =
 builtinPrint :: [Value] -> IO Value
 builtinPrint args = do
   rendered <- mapM render args
-  putStrLn $ concat $ intersperse " " rendered
+  putStrLn $ unwords rendered
   hFlush stdout
   return VVoid
 
@@ -326,15 +327,15 @@ instance Render Value where
     VStruct name fields -> do
       let header = name ++ " {"
       pairs <- mapM renderPair fields
-      let body = concat $ intersperse ", " pairs
+      let body = intercalate ", " pairs
       return $ header ++ body ++ " }"
     VList refs -> do
       vals <- mapM readIORef refs
       rendered <- mapM render vals
-      let body = concat $ intersperse ", " rendered
+      let body = intercalate ", " rendered
       return $ "[" ++ body ++ "]"
     VClosure _ (Function args _)  -> do
-      let joinedArgs = concat $ intersperse ", " args
+      let joinedArgs = intercalate ", " args
       return $ "fn(" ++ joinedArgs ++ ")"
     VVoid ->
       return "()"
@@ -348,7 +349,3 @@ renderPair (name, ref) = do
   rendered <- render val
   return $ name ++ ": " ++ rendered
 
-intersperse :: a -> [a] -> [a]
-intersperse _   []      = []
-intersperse _   [x]     = [x]
-intersperse sep (a:b:c) = a : sep : (intersperse sep (b:c))

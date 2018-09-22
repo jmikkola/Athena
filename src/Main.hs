@@ -2,7 +2,7 @@ module Main where
 
 import Control.Monad.Except
 import System.Environment ( getArgs )
-import System.Exit ( exitWith, ExitCode(..) )
+import System.Exit ( exitWith, exitSuccess, ExitCode(..) )
 import System.IO (stderr, hPutStrLn, hFlush)
 
 import Compiler ( compile )
@@ -19,7 +19,7 @@ main = do
      content <- readFile fileName
      interpret content
 
-   _ -> do
+   _ ->
      exitError "usage: athena <file.at>"
 
 interpret :: String -> IO ()
@@ -30,7 +30,7 @@ interpret content =
    Right result -> do
      --putStrLn $ show result
      Interpreter.interpret result
-     exitWith ExitSuccess
+     exitSuccess
 
 
 either2Except :: Monad m => Either e a -> ExceptT e m a
