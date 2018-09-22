@@ -403,7 +403,7 @@ assertDeclFails decl = assertFails decl inferDecl
 
 
 assertTypes t ast inferFn = do
-  let result = runInfer $ inferFn startingEnv ast
+  let result = runInfer Map.empty $ inferFn startingEnv ast
   assertRight result
   let (Right typed) = result
   let resultType = fst . getAnnotation $ typed
@@ -411,7 +411,7 @@ assertTypes t ast inferFn = do
 
 
 assertFails ast inferFn = do
-  let result = runInfer $ inferFn startingEnv ast
+  let result = runInfer Map.empty $ inferFn startingEnv ast
   assertLeft result
 
 
@@ -431,7 +431,7 @@ assertInstantiates sch = assertUnifies (runInstantiate sch)
 
 runInstantiate :: Scheme -> Type
 runInstantiate sch =
-  let (Right result) = runInfer (instantiate sch)
+  let (Right result) = runInfer Map.empty (instantiate sch)
   in result
 
 

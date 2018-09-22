@@ -33,7 +33,7 @@ import AST.Expression (UnaryOp(..), BinOp(..))
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Declaration as D
---import qualified AST.Type as T
+import qualified AST.Type as T
 
 import Types
   ( Substitution
@@ -65,6 +65,8 @@ newtype BindGroup a
 
 type TypedDecls a = [(String, D.Declaration (Type, a))]
 
+type DeclaredTypes = Map String T.TypeDecl
+
 data InferResult a
   = InferResult
     { topLevelBindings :: TypedDecls a
@@ -75,7 +77,8 @@ data InferResult a
 inferModule :: Module a -> Result (InferResult a)
 inferModule m = do
   let bindGroups = makeBindGroups m
-  (binds, env) <- runInfer $ inferGroups bindGroups startingEnv
+  let decls = types m
+  (binds, env) <- runInfer decls $ inferGroups bindGroups startingEnv
   return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
 
 makeBindGroups :: Module a -> [BindGroup a]
@@ -178,12 +181,16 @@ instance Depencencies (E.Value a) where
 data InferState
   = InferState
     { nextVarN :: Int
-    , currentSub :: Substitution }
+    , currentSub :: Substitution
+    , typeDecls :: DeclaredTypes }
   deriving (Show)
 
-startingInferState :: InferState
-startingInferState =
-  InferState { nextVarN = 0, currentSub = Map.empty }
+startingInferState :: DeclaredTypes -> InferState
+startingInferState decls =
+  InferState
+  { nextVarN = 0
+  , currentSub = Map.empty
+  , typeDecls = decls }
 
 -- `Either Error` = `Result`, but somehow that
 -- type synonym isn't allowed here.
@@ -201,8 +208,8 @@ startingEnv =
   Map.fromList
   [ ("print", Scheme 1 (TFunc [TGen 1] tUnit)) ]
 
-runInfer :: Monad m => StateT InferState m a -> m a
-runInfer f = evalStateT f startingInferState
+runInfer :: Monad m => DeclaredTypes -> StateT InferState m a -> m a
+runInfer decls f = evalStateT f (startingInferState decls)
 
 inferErr :: Error -> InferM a
 inferErr err = lift $ Left err
