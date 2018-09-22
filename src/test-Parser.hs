@@ -35,42 +35,42 @@ type Expr = E.Expression ()
 type Stmt = S.Statement ()
 
 floatVal :: Float -> Val
-floatVal f = E.FloatVal () f
+floatVal = E.FloatVal ()
 
 intVal :: Int -> Val
-intVal i = E.IntVal () i
+intVal = E.IntVal ()
 
 boolVal :: Bool -> Val
-boolVal b = E.BoolVal () b
+boolVal = E.BoolVal ()
 
 strVal :: String -> Val
-strVal s = E.StrVal () s
+strVal = E.StrVal ()
 
 eVal :: Val -> Expr
-eVal value = E.Val () value
+eVal = E.Val ()
 
 eVar :: String -> Expr
-eVar name = E.Var () name
+eVar = E.Var ()
 
 eCall :: Expr -> [Expr] -> Expr
-eCall fn args = E.Call () fn args
+eCall = E.Call ()
 
 eBinary :: E.BinOp -> Expr -> Expr -> Expr
-eBinary op l r = E.Binary () op l r
+eBinary = E.Binary ()
 
 --sLet :: String -> T.Type -> Expr -> Stmt
 --sLet name t e = S.Let () name t e
 sLet :: String -> Expr -> Stmt
-sLet name e = S.Let () name e
+sLet = S.Let ()
 
 sBlock :: [Stmt] -> Stmt
-sBlock stmts = S.Block () stmts
+sBlock = S.Block ()
 
 sReturn :: Maybe Expr -> Stmt
-sReturn me = S.Return () me
+sReturn = S.Return ()
 
 sAssign :: [String] -> Expr -> Stmt
-sAssign path e = S.Assign () path e
+sAssign = S.Assign ()
 
 tests :: [Test]
 tests =
@@ -122,13 +122,13 @@ tests =
   , expectParses statementSep "  \n\n  \n  " ()
   , expectParses statementParser "{\n}" (sBlock [])
   , expectParses statementParser "{\nreturn 1\n}"
-    (sBlock [(sReturn $ Just $ eVal $ intVal 1)])
+    (sBlock [sReturn $ Just $ eVal $ intVal 1])
   , expectParses statementParser "{\n  return 1\n}"
-    (sBlock [(sReturn $ Just $ eVal $ intVal 1)])
+    (sBlock [sReturn $ Just $ eVal $ intVal 1])
   , expectParses statementParser "{\nreturn 1  \n}"
-    (sBlock [(sReturn $ Just $ eVal $ intVal 1)])
+    (sBlock [sReturn $ Just $ eVal $ intVal 1])
   , expectParses statementParser "{  \n  return 1  \n  \n }"
-    (sBlock [(sReturn $ Just $ eVal $ intVal 1)])
+    (sBlock [sReturn $ Just $ eVal $ intVal 1])
   , expectParses statementParser "{\n{\n}\n{\n}\n}"
     (sBlock [sBlock [], sBlock []])
   , expectParses statementParser "let a123 = True"
@@ -136,7 +136,7 @@ tests =
   , expectParses statementParser "a.b.c = True"
     (sAssign ["a", "b", "c"] (eVal $ boolVal True))
   , expectParses statementParser "print(c)"
-    (S.Expr () $ eCall (eVar "print") [(eVar "c")])
+    (S.Expr () $ eCall (eVar "print") [eVar "c"])
   , expectParses letStatement "let int = 5 + (2 * 10) / 3 % 4"
     (sLet "int" (eBinary E.Plus
                         (eVal (intVal 5))
@@ -234,8 +234,7 @@ expectParses parser text expected =
      return False
    (Right result) ->
      if result == expected
-     then do
-       return True
+     then return True
      else do
        putStrLn $ "failed parsing ''" ++ text ++ "'', expected " ++ show expected ++ ", got " ++ show result
        return False

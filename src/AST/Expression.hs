@@ -16,7 +16,7 @@ data Expression a
   | Val     a (Value a)
   | Unary   a UnaryOp (Expression a)
   | Binary  a BinOp (Expression a) (Expression a)
-  | Call    a (Expression a) [(Expression a)]
+  | Call    a (Expression a) [Expression a]
   | Cast    a Type (Expression a)
   | Var     a String
   | Access  a (Expression a) String

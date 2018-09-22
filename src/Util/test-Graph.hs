@@ -70,7 +70,7 @@ propAllReachableInGroups :: Graph Char -> Bool
 propAllReachableInGroups graph =
   let g = fixupGraph graph
       cmps = components g
-      allReachable ns node = let seen = reachable node g in all (\n -> Set.member n seen) ns
+      allReachable ns node = let seen = reachable node g in all (`Set.member` seen) ns
       mutuallyReachable ns = all (allReachable ns) ns
   in all mutuallyReachable cmps
 
@@ -80,7 +80,7 @@ propTopological graph =
       cmps = components g
       noBackreferences (previous, group) =
         let prevSet = Set.fromList $ concat previous
-            groupReachable = foldl Set.union Set.empty $ map (\n -> reachable n g) group
+            groupReachable = foldl Set.union Set.empty $ map (`reachable` g) group
         in all (\n -> not $ Set.member n prevSet) $ Set.toList groupReachable
   in all noBackreferences (prefixes cmps)
 
@@ -93,7 +93,7 @@ prefixes items = prefixes' items []
 -- fixupGraph adds missing nodes
 fixupGraph :: (Ord a) => Graph a -> Graph a
 fixupGraph graph = Map.union graph empties
-  where chs = Set.toList $ foldl Set.union Set.empty $ map Set.fromList $ map snd $ Map.toList graph
+  where chs = Set.toList $ foldl Set.union Set.empty $ map (Set.fromList . snd) $ Map.toList graph
         empties = Map.fromList $ zip chs (repeat [])
 
 testExample :: Assertion
