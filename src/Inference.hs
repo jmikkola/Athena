@@ -25,7 +25,7 @@ import qualified Data.Set as Set
 
 --import Debug.Trace
 
-import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
+import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT)
 
 
 import AST.Annotation (Annotated, getAnnotation)
@@ -215,7 +215,7 @@ newTypeVar = do
   return $ TVar $ "_v" ++ show n
 
 getSub :: InferM Substitution
-getSub = currentSub <$> get
+getSub = gets currentSub
 
 extendSub :: Substitution -> InferM ()
 extendSub sub = do
@@ -558,7 +558,7 @@ ordFuncs :: [BinOp]
 ordFuncs = [Less, LessEq, Greater, GreaterEq]
 
 unifyAll :: Type -> [Type] -> InferM ()
-unifyAll t ts = mapM_ (unify t) ts
+unifyAll t = mapM_ (unify t)
 
 unify :: Type -> Type -> InferM ()
 unify t1 t2 = do
@@ -572,9 +572,9 @@ mismatch t1 t2 = Left $ Mismatch t1 t2
 
 -- TODO: remove debugging:
 traceErr :: String -> Result a -> Result a
-traceErr _       (Right x) = (Right x)
+traceErr _       (Right x) = Right x
 --traceErr message (Left x)  = trace message (Left x)
-traceErr _ (Left x)  = (Left x)
+traceErr _ (Left x)  = Left x
 
 
 unifies :: Type -> Type -> Bool
@@ -627,9 +627,9 @@ getType :: (Annotated a) => a (b, c) -> b
 getType node = fst $ getAnnotation node
 
 mustLookup :: (Ord k, Show k) => k -> Map k v -> v
-mustLookup key m = case Map.lookup key m of
-  Just val -> val
-  Nothing  -> error $ "nothing bound for " ++ show key
+mustLookup key m =
+  let err = error $ "nothing bound for " ++ show key
+  in fromMaybe err $ Map.lookup key m
 
 fromMaybe :: a -> Maybe a -> a
 fromMaybe _ (Just x) = x
