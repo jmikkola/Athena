@@ -13,6 +13,9 @@ data Error
   | ParseError String
   | CannotCast String -- a message
   | UndefinedVar String -- variable name
+  | UndefinedType String -- type name
+  | NonStructureType String -- type name
+  | StructFieldErr String String -- type name, message
   | Unreachable String -- function name
   | MissingReturn String -- function name
   deriving (Show, Eq)

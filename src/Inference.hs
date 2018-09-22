@@ -25,6 +25,7 @@ import qualified Data.Set as Set
 
 --import Debug.Trace
 
+import Control.Monad (when)
 import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT)
 
 
@@ -497,7 +498,7 @@ inferExpr env expr = case expr of
     return $ error "TODO: Infer for Access"
 
 inferValue :: Environment -> E.Value a -> InferM (E.Value (Type, a))
-inferValue _ val = case val of
+inferValue env val = case val of
   E.StrVal a str ->
     return $ E.StrVal (tString, a) str
   E.BoolVal a b ->
@@ -506,8 +507,63 @@ inferValue _ val = case val of
     return $ E.IntVal (tInt, a) i
   E.FloatVal a f ->
     return $ E.FloatVal (tFloat, a) f
-  E.StructVal{} ->
-    error "TODO: Infer for StructVal"
+  E.StructVal a tname fields  -> do
+    structFields <- getStructDecl tname
+    labeledFields <- checkSameFields tname fields structFields
+    typedFields <- mapM (uncurry3 (inferField env)) labeledFields
+    let t = TCon tname [] -- TODO: Support generics
+    return $ E.StructVal (t, a) tname typedFields
+
+
+inferField ::
+  Environment -> String -> T.TypeDecl -> E.Expression a
+  -> InferM (String, E.Expression (Type, a))
+inferField env fname tdecl expr = do
+  typed <- inferExpr env expr
+  -- TODO: require that typed match the type of the field!
+  return (fname, typed)
+
+
+checkSameFields ::
+  String
+  -> [(String, E.Expression a)]
+  -> [(String, T.TypeDecl)]
+  -> InferM [(String, T.TypeDecl, E.Expression a)]
+checkSameFields tname given actual = do
+  let givenSet = Set.fromList $ map fst given
+  let actualSet = Set.fromList $ map fst actual
+  when (Set.size givenSet /= length given) $
+    inferErr $ StructFieldErr tname "a field was duplicated"
+  when (givenSet /= actualSet) $
+    inferErr $ StructFieldErr tname "wrong set of fields given"
+  return $ labelFields given actual
+
+
+labelFields ::
+  [(String, E.Expression a)]
+  -> [(String, T.TypeDecl)]
+  -> [(String, T.TypeDecl, E.Expression a)]
+labelFields given actual = map addTypeDecl given
+  where addTypeDecl (name,expr) = (name, lookup_ name actual, expr)
+
+lookup_ :: (Eq a) => a -> [(a, b)] -> b
+lookup_ name pairs =
+  fromMaybe (error "lookup_ got Nothing") (lookup name pairs)
+
+getStructDecl :: String -> InferM [(String, T.TypeDecl)]
+getStructDecl tname = do
+  tdecl <- getTypeDecl tname
+  case tdecl of
+   T.Struct fields -> return fields
+   _ -> inferErr $ NonStructureType tname
+
+
+getTypeDecl :: String -> InferM T.TypeDecl
+getTypeDecl tname = do
+  decls <- gets typeDecls
+  case Map.lookup tname decls of
+   Nothing -> inferErr $ UndefinedType tname
+   Just t  -> return t
 
 
 lookupName :: String -> Environment -> InferM Scheme
@@ -646,3 +702,6 @@ fromMaybe d Nothing  = d
 isRight :: Either a b -> Bool
 isRight (Right _) = True
 isRight _         = False
+
+uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
+uncurry3 fn (a, b, c) = fn a b c
