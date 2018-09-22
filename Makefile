@@ -1,7 +1,10 @@
 athena: Makefile athena.cabal stack.yaml src/*.hs
 	stack build
 
-test:
+lint:
+	hlint src
+
+test: lint
 	stack test
 
 test-inference:

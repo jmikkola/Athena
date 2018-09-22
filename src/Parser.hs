@@ -35,19 +35,28 @@ declarationParser = choice [letDeclaration, funcDeclaration, typeDeclaration]
 
 letDeclaration :: Parser Declaration
 letDeclaration = do
-  _ <- string "let"
-  _ <- any1Whitespace
-  name <- valueName
-  _ <- any1Whitespace
+  name <- letName
   {-
   typ <- typeParser
   _ <- any1Whitespace
   -}
+  D.Let () name <$> expressionParser
+  --return $ D.Let () name typ val
+
+letName :: Parser String
+letName = do
+  _ <- string "let"
+  _ <- any1Whitespace
+  name <- valueName
+  equalsWhitespace
+  return name
+
+equalsWhitespace :: Parser ()
+equalsWhitespace = do
+  _ <- any1Whitespace
   _ <- char '='
   _ <- any1Whitespace
-  val <- expressionParser
-  --return $ D.Let () name typ val
-  return $ D.Let () name val
+  return ()
 
 funcDeclaration :: Parser Declaration
 funcDeclaration = do
@@ -64,10 +73,9 @@ funcDeclaration = do
     _ <- any1LinearWhitespace
     return typ
   -}
-  body <- blockStatement
   --let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
   --return $ D.Function () name typ (map fst args) body
-  return $ D.Function () name args body
+  D.Function () name args <$> blockStatement
 
 typeDeclaration :: Parser Declaration
 typeDeclaration = do
@@ -75,8 +83,7 @@ typeDeclaration = do
   _ <- any1LinearWhitespace
   name <- typeName
   _ <- any1LinearWhitespace
-  typ <- typeDefParser
-  return $ D.TypeDef () name typ
+  D.TypeDef () name <$> typeDefParser
 
 
 type ArgDecls = [String] -- [(String, Type)]
@@ -125,27 +132,16 @@ returnStatement = do
 
 letStatement :: Parser Statement
 letStatement = do
-  _ <- string "let"
-  _ <- any1Whitespace
-  name <- valueName
-  _ <- any1Whitespace
-  -- typ <- typeParser
-  -- _ <- any1Whitespace
-  _ <- char '='
-  _ <- any1Whitespace
-  val <- expressionParser
+  name <- letName
   -- return $ S.Let () name typ val
-  return $ S.Let () name val
+  S.Let () name <$> expressionParser
 
 assignStatement :: Parser Statement
 assignStatement = do
   name <- valueName
   names <- try (assignFields [name]) <|> return [name]
-  _ <- any1Whitespace
-  _ <- char '='
-  _ <- any1Whitespace
-  val <- expressionParser
-  return $ S.Assign () names val
+  equalsWhitespace
+  S.Assign () names <$> expressionParser
 
 assignFields :: [String] -> Parser [String]
 assignFields lefts = do
@@ -158,7 +154,7 @@ blockStatement :: Parser Statement
 blockStatement = do
   _ <- char '{'
   _ <- statementSep
-  liftM (S.Block ()) $ blockStatements
+  fmap (S.Block ()) blockStatements
 
 blockStatements :: Parser [Statement]
 blockStatements = endBlock <|> nextStatement
@@ -183,17 +179,12 @@ statementSep = do
   return ()
 
 exprStatement :: Parser Statement
-exprStatement = do
-  e <- expressionParser
-  return $ S.Expr () e
+exprStatement = S.Expr () <$> expressionParser
 
 ifStatement :: Parser Statement
 ifStatement = do
   _ <- string "if"
-  _ <- any1Whitespace
-  test <- expressionParser
-  _ <- anyWhitespace
-  body <- blockStatement
+  (test, body) <- testedBlock
   elsePart <- optionMaybe $ try elseBlock
   return $ let (S.Block () stmts) = body
            in S.If () test stmts elsePart
@@ -208,12 +199,17 @@ elseBlock = do
 whileStatement :: Parser Statement
 whileStatement = do
   _ <- string "while"
+  (test, body) <- testedBlock
+  return $ let (S.Block () stmts) = body
+           in S.While () test stmts
+
+testedBlock :: Parser (Expression, Statement)
+testedBlock = do
   _ <- any1Whitespace
   test <- expressionParser
   _ <- anyWhitespace
   body <- blockStatement
-  return $ let (S.Block () stmts) = body
-           in S.While () test stmts
+  return (test, body)
 
 {-
 matchStatement :: Parser Statement
@@ -288,9 +284,7 @@ matchExpressionsNext = do
 
 -- Binary expressions are handled at this level
 expressionParser :: Parser Expression
-expressionParser = do
-  bin <- readBinExprParts
-  return $ unfoldParts bin
+expressionParser = unfoldParts <$> readBinExprParts
 
 readBinExprParts :: Parser (Expression, [(BinOp, Expression)])
 readBinExprParts = do
@@ -316,7 +310,7 @@ unfoldOps (left, parts) ops = case parts of
   []              -> (left, [])
   ((op, right):pts) ->
     let (applied, rest) = unfoldOps (right, pts) ops
-    in if elem op ops
+    in if op `elem` ops
        then (E.Binary () op left applied, rest)
        else (left, (op, applied) : rest)
 
@@ -348,25 +342,16 @@ accessExpr left = do
   try (accessExpr e) <|> return e
 
 parenExpr :: Parser Expression
-parenExpr = do
-  _ <- char '('
-  _ <- anyWhitespace
-  ex <- expressionParser
-  _ <- anyWhitespace
-  _ <- char ')'
-  return $ E.Paren () ex
+parenExpr = E.Paren () <$> parenExpr'
 
 valueExpr :: Parser Expression
-valueExpr = do
-  val <- valueParser
-  return $ E.Val () val
+valueExpr = E.Val () <$> valueParser
 
 unaryExpr :: Parser Expression
 unaryExpr = do
   op <- unaryOpParser
   _ <- anyWhitespace
-  ex <- expressionParser
-  return $ E.Unary () op ex
+  E.Unary () op <$> expressionParser
 
 callExpr :: Parser Expression
 callExpr = do
@@ -397,17 +382,19 @@ argsEnd = do
 castExpr :: Parser Expression
 castExpr = do
   typ <- typeParser
+  E.Cast () typ <$> parenExpr'
+
+parenExpr' :: Parser Expression
+parenExpr' = do
   _ <- char '('
   _ <- anyWhitespace
   ex <- expressionParser
   _ <- anyWhitespace
   _ <- char ')'
-  return $ E.Cast () typ ex
+  return ex
 
 varExpr :: Parser Expression
-varExpr = do
-  name <- valueName
-  return $ E.Var () name
+varExpr = E.Var () <$> valueName
 
 --- parse values
 
@@ -433,9 +420,7 @@ structFieldValue = do
   return (field, value)
 
 stringParser :: Parser Value
-stringParser = do
-  s <- doubleQuotedString
-  return $ E.StrVal () s
+stringParser = E.StrVal () <$> doubleQuotedString
 
 boolParser :: Parser Value
 boolParser = do
@@ -459,7 +444,7 @@ floatingPart = do
   _ <- char '.'
   ds <- optionMaybe digits
   exPart <- optionMaybe exponentPart
-  return ('.' : (unwrapOr ds "0") ++ (maybeEmpty exPart))
+  return ('.' : unwrapOr ds "0" ++ maybeEmpty exPart)
 
 exponentPart :: Parser String
 exponentPart = do
@@ -521,9 +506,7 @@ nilType :: TypeDecl
 nilType = T.TypeName "()"
 
 typeParser :: Parser Type
-typeParser = do
-  name <- string "()" <|> typeName
-  return name -- return $ Type name
+typeParser = string "()" <|> typeName
 
 typeDefParser :: Parser TypeDecl
 typeDefParser = enumTypeParser <|> structTypeParser <|> namedType
@@ -550,8 +533,7 @@ structTypeParser :: Parser TypeDecl
 structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
-  fields <- structTypeBody
-  return $ T.Struct fields
+  T.Struct <$> structTypeBody
 
 structTypeBody :: Parser [(String, TypeDecl)]
 structTypeBody = do
@@ -569,14 +551,12 @@ structField = do
   return (name, T.TypeName typ)
 
 namedType :: Parser TypeDecl
-namedType = do
-  t <- typeParser
-  return $ T.TypeName t
+namedType = T.TypeName <$> typeParser
 
 ---- Helper functions ----
 
 choices :: [(String, a)] -> Parser a
-choices = choice . map try . map pair2parser
+choices = choice . map (try . pair2parser)
 
 pair2parser :: (String, a) -> Parser a
 pair2parser (str, result) = do
@@ -619,12 +599,12 @@ anyWhitespaceS = many1 anyWhitespaceCh <|> try parseComment
 
 anyWhitespace :: Parser String
 anyWhitespace = do
-  whitespaces <- many $ anyWhitespaceS
+  whitespaces <- many anyWhitespaceS
   return $ concat whitespaces
 
 any1Whitespace :: Parser String
 any1Whitespace = do
-  whitespaces <- many1 $ anyWhitespaceS
+  whitespaces <- many1 anyWhitespaceS
   return $ concat whitespaces
 
 whitespaceChs :: String
@@ -690,6 +670,6 @@ unwrapOr Nothing  b = b
 maybeEmpty :: Maybe String -> String
 maybeEmpty m = unwrapOr m ""
 
-applyLeft :: (a -> b) -> (Either a r) -> (Either b r)
+applyLeft :: (a -> b) -> Either a r -> Either b r
 applyLeft fn (Left  a) = Left (fn a)
 applyLeft _  (Right r) = Right r
