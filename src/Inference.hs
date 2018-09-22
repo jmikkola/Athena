@@ -23,7 +23,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Debug.Trace
+--import Debug.Trace
 
 import Control.Monad.State (StateT, modify, get, put, lift, evalStateT)
 
@@ -58,7 +58,7 @@ import Util.Graph
   ( components )
 
 
-data BindGroup a
+newtype BindGroup a
   = BindGroup
     { implicitBindings :: [(String, D.Declaration a)] }
     -- TODO: Add explicit bindings
@@ -252,8 +252,10 @@ inferGroup (BindGroup impls) env = do
   return (typedDecls, resultEnv)
 
 
+{-
 showTrace :: (Show a) => String -> a -> a
 showTrace s a = trace (s ++ ": " ++ show a) a
+-}
 
 inferDecls :: Environment -> [(String, D.Declaration a)] -> [Type] -> InferM (TypedDecls a)
 inferDecls env decls ts = mapM infer (zip decls ts)
@@ -293,10 +295,10 @@ verifyContainsNoGenerics sch t
 
 containsGenerics :: Type -> Bool
 containsGenerics t = case t of
-  TCon _ ts  -> any containsGenerics ts
-  TFunc as t -> any containsGenerics as || containsGenerics t
-  TVar _     -> False
-  TGen _     -> True
+  TCon _ ts   -> any containsGenerics ts
+  TFunc as t' -> any containsGenerics as || containsGenerics t'
+  TVar _      -> False
+  TGen _      -> True
 
 
 inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
@@ -574,7 +576,7 @@ mismatch t1 t2 = Left $ Mismatch t1 t2
 traceErr :: String -> Result a -> Result a
 traceErr _       (Right x) = (Right x)
 --traceErr message (Left x)  = trace message (Left x)
-traceErr message (Left x)  = (Left x)
+traceErr _ (Left x)  = (Left x)
 
 
 unifies :: Type -> Type -> Bool

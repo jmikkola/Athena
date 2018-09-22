@@ -37,7 +37,7 @@ firstPass :: File a -> Result (Module a)
 firstPass file = do
   typesFound <- gatherTypeDecls file
   binds <- gatherBindings file
-  _ <- mapM checkReturns binds
+  mapM_ checkReturns binds
   return $ Module { bindings=binds, types=typesFound }
 
 -- select and deduplicate type declarations
@@ -61,9 +61,9 @@ gatherBindings file =
   in foldM addBinding Map.empty binds
 
 checkReturns :: Declaration a -> Result ()
-checkReturns (TypeDef _ _ _) =
+checkReturns TypeDef{} =
   return ()
-checkReturns (Let _ _ _) =
+checkReturns Let{} =
   return ()
 checkReturns (Function _ name _ stmt) = do
   _ <- checkStmtsReturn name Never [stmt]
@@ -99,7 +99,7 @@ checkStmtsReturn fname prevReturns stmts =
          whileReturns <- checkStmtsReturn fname prevReturns whileBody
          let actuallyReturns = if whileReturns == Always then Sometimes else whileReturns
          checkStmtsReturn fname actuallyReturns ss
-       _ -> do
+       _ ->
          checkStmtsReturn fname prevReturns ss
 
 data DoesReturn
@@ -109,8 +109,8 @@ data DoesReturn
   deriving (Eq, Show)
 
 isTypeDecl :: Declaration a -> Bool
-isTypeDecl (TypeDef _ _ _) = True
-isTypeDecl _               = False
+isTypeDecl TypeDef{} = True
+isTypeDecl _         = False
 
 -- TODO: add the ability to combine multiple files into a module,
 --   but check imports on a per-file basis
