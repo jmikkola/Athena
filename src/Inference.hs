@@ -84,7 +84,7 @@ makeBindGroups m =
       graph = gatherGraph declarations
       topoOrder = reverse $ components graph
       getBinding name = (name, mustLookup name declarations)
-  in map BindGroup $ map (map getBinding) topoOrder
+  in map (BindGroup . map getBinding) topoOrder
 
 -- TODO: extend this into prelude (plus imported names)
 startingDependencies :: Set String
@@ -95,7 +95,7 @@ startingDependencies = Set.fromList ["print"]
 -- This assumes that all the variables are defined (TODO: that's
 -- never checked at the moment)
 gatherGraph :: Map String (D.Declaration a) -> Map String [String]
-gatherGraph decls = Map.map (unique . findDependencies startingDependencies) decls
+gatherGraph = Map.map (unique . findDependencies startingDependencies)
 
 unique :: (Ord a) => [a] -> [a]
 unique = Set.toList . Set.fromList
@@ -109,13 +109,13 @@ instance Depencencies (D.Declaration a) where
       findDependencies (Set.insert name bound) exp
     D.Function _ name args stmt ->
       findDependencies (Set.union bound $ Set.fromList (name:args)) stmt
-    D.TypeDef _ _ _ ->
+    D.TypeDef{} ->
       []
 
 instance Depencencies (S.Statement a) where
   findDependencies bound stmt = case stmt of
     S.Return _ mexp ->
-      fromMaybe [] $ fmap (findDependencies bound) mexp
+      maybe [] (findDependencies bound) mexp
     S.Let _ name exp ->
       findDependencies (Set.insert name bound) exp
     S.Assign _ _ exp ->
@@ -127,7 +127,7 @@ instance Depencencies (S.Statement a) where
     S.If _ test body elseStmt ->
       let testDeps = findDependencies bound test
           bodyDeps = findDepBlock bound body
-          elseDeps = fromMaybe [] $ fmap (findDependencies bound) elseStmt
+          elseDeps = maybe [] (findDependencies bound) elseStmt
       in testDeps ++ bodyDeps ++ elseDeps
     S.While _ test body ->
       let testDeps = findDependencies bound test
@@ -159,7 +159,7 @@ instance Depencencies (E.Expression a) where
       findDependencies bound l ++ findDependencies bound r
     E.Call _ fn args ->
       let fnDeps = findDependencies bound fn
-          argDeps = concat $ map (findDependencies bound) args
+          argDeps = concatMap (findDependencies bound) args
       in fnDeps ++ argDeps
     E.Cast _ _ inner ->
       findDependencies bound inner
@@ -171,7 +171,7 @@ instance Depencencies (E.Expression a) where
 instance Depencencies (E.Value a) where
   findDependencies bound val = case val of
     E.StructVal _ _ fields ->
-      concat $ map (findDependencies bound . snd) fields
+      concatMap (findDependencies bound . snd) fields
     _ ->
       []
 
@@ -193,7 +193,7 @@ type Environment = Map String Scheme
 
 -- TODO: Make this a proper instance of the Types.Types class
 applyEnv :: Substitution -> Environment -> Environment
-applyEnv sub env = Map.map (apply sub) env
+applyEnv sub = Map.map (apply sub)
 
 -- TODO: this should also start with prelude and imported names
 startingEnv :: Environment
@@ -234,7 +234,7 @@ inferGroups (g:gs) env = do
 inferGroup :: BindGroup a -> Environment -> InferM (TypedDecls a, Environment)
 inferGroup (BindGroup impls) env = do
   -- Map each binding to a new type variable while recursively typing these bindings
-  ts <- mapM (\_ -> newTypeVar) impls
+  ts <- mapM (const newTypeVar) impls
   let bindingNames = map fst impls
   let bindingSchemes = map asScheme ts
   let groupBindings = Map.fromList $ zip bindingNames bindingSchemes
@@ -276,7 +276,7 @@ generalize env t =
 instantiate :: Scheme -> InferM Type
 instantiate sch@(Scheme n t) = do
   let range = [1..n]
-  newVars <- mapM (\_ -> newTypeVar) range
+  newVars <- mapM (const newTypeVar) range
   let genVars = map TGen range
   let sub = Map.fromList $ zip genVars newVars
   let applied = apply sub t
@@ -308,7 +308,7 @@ inferDecl env decl = case decl of
     return $ D.Let (getType expr', a) name expr'
 
   D.Function a name args stmt -> do
-    argTs <- mapM (\_ -> newTypeVar) args
+    argTs <- mapM (const newTypeVar) args
     retT <- newTypeVar
     let argEnv = Map.fromList $ zip args (map asScheme argTs)
     let env' = Map.union argEnv env
@@ -321,7 +321,7 @@ inferDecl env decl = case decl of
     let t = TFunc argTypes returnT
     return $ D.Function (t, a) name args stmt'
 
-  D.TypeDef _ _ _ ->
+  D.TypeDef{} ->
     inferErr $ CompilerBug "TypeDefs are not bindings"
 
 inferStmt :: Environment -> S.Statement a ->
@@ -393,7 +393,7 @@ inferBlock env (s:ss) = do
           in Map.insert name sch env
         _                -> env
   (ss', retT) <- inferBlock env' ss
-  return $ (s' : ss', retT)
+  return (s' : ss', retT)
 
 data DoesReturn
   = NeverReturns
@@ -499,7 +499,7 @@ inferValue _ val = case val of
     return $ E.IntVal (tInt, a) i
   E.FloatVal a f ->
     return $ E.FloatVal (tFloat, a) f
-  E.StructVal _ _ _ ->
+  E.StructVal{} ->
     error "TODO: Infer for StructVal"
 
 
@@ -558,14 +558,12 @@ ordFuncs :: [BinOp]
 ordFuncs = [Less, LessEq, Greater, GreaterEq]
 
 unifyAll :: Type -> [Type] -> InferM ()
-unifyAll t ts = do
-  _ <- mapM (unify t) ts
-  return ()
+unifyAll t ts = mapM_ (unify t) ts
 
 unify :: Type -> Type -> InferM ()
 unify t1 t2 = do
   s <- getSub
-  let message = "mgu " ++ (show $ apply s t1) ++ " " ++ (show $ apply s t2)
+  let message = "mgu " ++ show (apply s t1) ++ " " ++ show (apply s t2)
   s2 <- lift $ traceErr message $ mgu (apply s t1) (apply s t2)
   extendSub s2
 
