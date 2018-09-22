@@ -1,5 +1,6 @@
 module UnitTest where
 
+import Control.Monad (when)
 import System.Exit
   ( exitFailure )
 
@@ -17,11 +18,9 @@ renderResults :: Int -> Int -> IO ()
 renderResults passes failures = do
   let total = passes + failures
   putStrLn $ show passes ++ "/" ++ show total ++ " passed"
-  if failures > 0
-    then do
+  when (failures > 0) $ do
     putStrLn $ show failures ++ " failed"
     exitFailure
-    else return ()
 
 getResults :: [Test] -> Int -> Int -> IO (Int, Int)
 getResults []     passes failures =
@@ -34,7 +33,7 @@ getResults (t:ts) passes failures = do
 
 
 test :: String -> Assertion -> Test
-test name assertion = do
+test name assertion =
   case assertion of
    Right _  -> return True
    Left err -> do

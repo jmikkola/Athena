@@ -80,7 +80,7 @@ instance Types Type where
 
 
 instance (Types a) => Types [a] where
-  apply sub lst = map (apply sub) lst
+  apply sub = map (apply sub)
   freeTypeVars ts = foldl Set.union Set.empty (map freeTypeVars ts)
 
 
@@ -95,7 +95,7 @@ instance Types Scheme where
   freeTypeVars (Scheme _ t) = freeTypeVars t
 
 asScheme :: Type -> Scheme
-asScheme t = Scheme 0 t
+asScheme = Scheme 0
 
 isGeneric :: Type -> Bool
 isGeneric (TGen _) = True

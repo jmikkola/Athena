@@ -8,10 +8,10 @@ import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import qualified AST.Type as T
-import Errors
-  ( Error(..) )
+
 import FirstPass
   ( Module(..) )
+
 import Types
   ( Substitution
   , Type(..)
@@ -24,6 +24,7 @@ import Types
   , tUnit
   , makeSub
   , emptySubstitution )
+
 import Inference
   ( mgu
   , startingEnv
@@ -37,9 +38,11 @@ import Inference
   , instantiate
   , InferResult(..)
   , BindGroup(..) )
+
 import Errors
   ( Error(..)
   , Result )
+
 import UnitTest
   ( Assertion
   , Test
@@ -376,7 +379,7 @@ findGroups bindings =
 
 
 getGroupNames :: [BindGroup a] -> [[String]]
-getGroupNames groups = map getNames groups
+getGroupNames = map getNames
   where getNames bg = map fst $ implicitBindings bg
 
 
@@ -423,8 +426,7 @@ assertUnifies expected result = do
 
 
 assertInstantiates :: Scheme -> Type -> Assertion
-assertInstantiates sch t =
-  assertUnifies (runInstantiate sch) t
+assertInstantiates sch = assertUnifies (runInstantiate sch)
 
 
 runInstantiate :: Scheme -> Type
