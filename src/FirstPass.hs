@@ -30,7 +30,6 @@ data Module a =
 -- * Splits types from other bindings
 -- * (TODO) Creates extra type bindings for the "functions" that construct
 --   structures.
--- * (TODO) Lowers the syntax somewhat (e.g. StructVal -> Call)
 -- * (TODO) Check that all types referred to actually exist
 -- * (TODO) Check that variable declarations are unique in a given block
 -- * (TODO) Check for variables that are defined and never referenced

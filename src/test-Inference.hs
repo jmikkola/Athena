@@ -310,8 +310,10 @@ findDependencies = do
 
 simpleModule :: Assertion
 simpleModule = do
+  let varF = E.Var () "f"
   let varN = E.Var () "n"
   let varX = E.Var () "x"
+  let varID = E.Var () "id"
 
   -- Test a super basic module
   -- f(n) { return n + 1; }
@@ -323,7 +325,6 @@ simpleModule = do
   -- Test basic let-polymorphism
   -- id(x) { return x; }
   let identity = func "id" ["x"] [returnJust varX]
-  let varID = E.Var () "id"
   let result2 = inferModule $ makeModule [("id", identity)]
   let idType = Scheme 1 $ TFunc [TGen 1] (TGen 1)
   assertModuleTypes "id" idType result2
@@ -338,6 +339,20 @@ simpleModule = do
   let fNType = Scheme 0 $ TFunc [tInt] tBool
   assertModuleTypes "f" fNType result3
   assertModuleTypes "id" idType result3
+
+  -- Test the fact that mutually-recursive functions
+  -- are sometimes less general than you'd expect
+  -- id(x) { f(1); return x; }
+  -- f(x) { return id(x) > 2; }
+  let callF = S.Expr () $ E.Call () varF [intVal 1]
+  let identityCallingF = func "id" ["x"] [callF, returnJust varX]
+  let idOfX = E.Call () varID [varX]
+  let fCallsID = func "f" ["x"] [returnJust $ E.Binary () E.Greater idOfX (intVal 2)]
+  let result4 = inferModule $ makeModule [("f", fCallsID), ("id", identityCallingF)]
+  let lessGeneralIDType = Scheme 1 $ TFunc [tInt] tInt
+  let fCallsIDType = Scheme 1 $ TFunc [tInt] tBool
+  assertModuleTypes "f" fCallsIDType result4
+  assertModuleTypes "id" lessGeneralIDType result4
 
 
 assertModuleTypes :: String -> Scheme -> Result (InferResult a) -> Assertion
@@ -397,7 +412,7 @@ assertFails ast inferFn = do
   assertLeft result
 
 
--- TOOD: This should really be "assert matches" not "assert unifies"
+-- TODO: This should really be "assert matches" not "assert unifies"
 -- so that it doesn't allow narrower types than it should.
 assertUnifies :: Type -> Type -> Assertion
 assertUnifies expected result = do
