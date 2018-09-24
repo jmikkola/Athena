@@ -3,6 +3,8 @@ module FirstPass where
 import Control.Monad (foldM)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 import AST.Declaration
   ( Declaration(..)
@@ -66,10 +68,22 @@ unnestStructures name tdecl = case tdecl of
     noStructures ret
     return (tdecl, [])
   T.Struct fields -> do
+    requireUnique $ map fst fields
     (unnested, decls) <- unnestFields name fields
     return (T.Struct unnested, decls)
-  T.Enum{} ->
-    error "TODO: support T.Enum"
+  T.Enum variants -> do
+    requireUnique $ map fst variants
+    structs <- mapM (uncurry variantToStruct) variants
+    return (tdecl, structs)
+
+
+variantToStruct :: String -> T.EnumOption -> Result (String, TypeDecl)
+variantToStruct name fields = do
+  let (names, types) = unzip fields
+  requireUnique names
+  mapM_ noStructures types
+  return (name, T.Struct fields)
+
 
 -- fields -> Result (fields, de-anonymized)
 unnestFields :: String -> TypeDecls -> Result (TypeDecls, TypeDecls)
@@ -89,6 +103,16 @@ noStructures tdecl = case tdecl of
   T.Struct{}          -> Left InvalidAnonStructure
   T.Enum{}            -> Left InvalidAnonStructure
 
+
+requireUnique :: [String] -> Result ()
+requireUnique items = requireUnique' items Set.empty
+
+requireUnique' :: [String] -> Set String -> Result ()
+requireUnique' []        _    = return ()
+requireUnique' (n:names) seen =
+  if Set.member n seen
+  then duplicateName n
+  else requireUnique' names (Set.insert n seen)
 
 -- select and deduplicate function and let bindings
 gatherBindings :: File a -> Result (Map String (Declaration a))
