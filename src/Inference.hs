@@ -25,7 +25,7 @@ import qualified Data.Set as Set
 
 --import Debug.Trace
 
-import Control.Monad (when)
+import Control.Monad (when, foldM)
 import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT)
 
 
@@ -343,6 +343,9 @@ inferStmt env stmt = case stmt of
 
   S.Let a name expr -> do
     -- TODO: recursive binding?
+    -- Note that in recursive bindings, if the bound expression involves a
+    -- closure, I need to think about whether that closure should be allowed to
+    -- assign back to this variable
     expr' <- inferExpr env expr
     return (S.Let (tUnit, a) name expr', NeverReturns)
 
@@ -350,6 +353,8 @@ inferStmt env stmt = case stmt of
     case names of
      []    -> inferErr $ CompilerBug "assignment to no names"
      [var] -> do
+       -- Something to think about: Should this be required to be a variable
+       -- defined in a `let` statement instead of an argument to a function?
        expr' <- inferExpr env expr
        let exprT = getType expr'
        sch <- lookupName var env
@@ -358,7 +363,17 @@ inferStmt env stmt = case stmt of
        -- getting assigned, but it's good enough for now
        unify exprT varT
        return (S.Assign (tUnit, a) names expr', NeverReturns)
-     _     -> error "TODO: Multi-part assignment statements"
+     (var:fields) -> do
+       expr' <- inferExpr env expr
+       let exprT = getType expr'
+
+       sch <- lookupName var env
+       -- Is it right for this to be working on an instantiation of sch?
+       varT <- instantiate sch
+       fieldT <- getStructField varT fields
+       unify fieldT exprT
+
+       return (S.Assign (tUnit, a) names expr', NeverReturns)
 
   S.Block a stmts -> do
     (stmts', retT) <- inferBlock env stmts
@@ -402,6 +417,32 @@ inferBlock env (s:ss) = do
         _                -> env
   (ss', retT) <- inferBlock env' ss
   return (s' : ss', retT)
+
+
+getStructField :: Type -> [String] -> InferM Type
+getStructField = foldM getStructFieldType
+
+getStructFieldType :: Type -> String -> InferM Type
+getStructFieldType t fieldName = case t of
+  TCon structName [] -> do
+    fields <- getStructDecl structName
+    fieldT <- case lookup fieldName fields of
+      Nothing -> inferErr $ UndefinedField structName fieldName
+      Just ft -> return ft
+    case fieldT of
+     T.TypeName typ ->
+       return $ TCon typ []
+     _ ->
+       inferErr $ CompilerBug $ "shouldn't see a " ++ show fieldT ++ " here"
+  TCon _ (_:_) ->
+    error "TODO: implement generic structures"
+  TVar _ ->
+    inferErr InsufficientlyDefinedType
+  TGen _ ->
+    inferErr $ CompilerBug "got an unexpected generic"
+  TFunc _ _ ->
+    inferErr $ WrongType t "expected a structure, got a function"
+
 
 data DoesReturn
   = NeverReturns
