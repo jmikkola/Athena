@@ -162,17 +162,52 @@ interpretVal scope val = case val of
 
 
 assign :: Scope -> [String] -> Value -> IO ()
-assign (s:ss) [name] value = do
+assign (_:_)  []             _     =
+  error "Compiler bug: empty set of names to assign"
+assign []     _              _     =
+  error "Empty scope given to assign"
+assign (s:ss) names@(name:_) value = do
   m <- readIORef s
+  case Map.lookup name m of
+   Nothing ->
+     assign ss names value
+   Just existing ->
+     updateExisting s names existing value
+     {-
   if Map.member name m
      then
           writeIORef s (Map.insert name value m)
           --rendered <- render value
           --putStrLn $ "Set " ++ name ++ " to " ++ rendered
     else assign ss [name] value
--- Doing this will rely on making structures work through the whole system
 assign (_:_) _ _ = error "TODO: assign multi-part names"
-assign []    _ _ = error "Empty scope given to assign"
+-}
+
+
+updateExisting :: IORef (Map String Value) -> [String] -> Value -> Value -> IO ()
+updateExisting ref [name] _ newVal =
+  modifyIORef ref (Map.insert name newVal)
+updateExisting _ (_:names) existing newVal =
+  updateStruct names existing newVal
+updateExisting _ [] _ _ = undefined
+
+updateStruct :: [String] -> Value -> Value -> IO ()
+updateStruct (n:names) struct newVal = case struct of
+  VStruct _ fields -> case lookup n fields of
+    Just ref ->
+      updateRef ref names newVal
+    Nothing ->
+      error $ "can't find struct field " ++ n
+  _ ->
+    error "can't update field in non structure"
+updateStruct [] _ _ = undefined
+
+updateRef :: IORef Value -> [String] -> Value -> IO ()
+updateRef ref [] newVal =
+  writeIORef ref newVal
+updateRef ref names newVal = do
+  existing <- readIORef ref
+  updateStruct names existing newVal
 
 
 
@@ -285,8 +320,16 @@ lookupVar (s:ss) name = do
    Just val -> return val
 
 accessField :: Value -> String -> IO Value
--- Doing this will rely on making structures work through the whole system
-accessField = error "TODO: accessField"
+accessField val name = case val of
+  VStruct _ fields ->
+    case lookup name fields of
+      Just ref ->
+        readIORef ref
+      Nothing ->
+        error $ "accessing undefined field " ++ name
+  _ ->
+    error "accessing field in non-structure"
+
 
 data Value
   = VInt Int
@@ -348,4 +391,3 @@ renderPair (name, ref) = do
   val <- readIORef ref
   rendered <- render val
   return $ name ++ ": " ++ rendered
-
