@@ -16,6 +16,7 @@ data Error
   | UndefinedType String -- type name
   | NonStructureType String -- type name
   | StructFieldErr String String -- type name, message
+  | InvalidAnonStructure
   | Unreachable String -- function name
   | MissingReturn String -- function name
   deriving (Show, Eq)

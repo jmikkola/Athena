@@ -9,7 +9,8 @@ import AST.Declaration
   , File
   , getDeclaredName )
 import qualified AST.Statement as S
-import AST.Type (TypeDecl)
+import AST.Type ( TypeDecl )
+import qualified AST.Type as T
 import Errors
   ( Error(..)
   , Result )
@@ -41,13 +42,53 @@ firstPass file = do
   return $ Module { bindings=binds, types=typesFound }
 
 -- select and deduplicate type declarations
+-- TODO: Support type alises
 gatherTypeDecls :: File a -> Result (Map String TypeDecl)
 gatherTypeDecls file =
   let typeDecls = [(name, t) | TypeDef _ name t <- file]
       addDecl ds (name, t) = case Map.lookup name ds of
-        Nothing -> return $ Map.insert name t ds
+        Nothing -> do --return $ Map.insert name t ds
+          (decl, unnested) <- unnestStructures name t
+          let decls = (name, decl) : unnested
+          return $ foldl (\m (n,d) -> Map.insert n d m) ds decls
         Just _  -> duplicateName name
   in foldM addDecl Map.empty typeDecls
+
+type TypeDecls = [(String, TypeDecl)]
+
+unnestStructures :: String -> TypeDecl -> Result (TypeDecl, TypeDecls)
+unnestStructures name tdecl = case tdecl of
+  -- Aliases will have to happen as a second pass
+  T.TypeName _ ->
+    return (tdecl, [])
+  T.Function args ret -> do
+    mapM_ noStructures args
+    noStructures ret
+    return (tdecl, [])
+  T.Struct fields -> do
+    (unnested, decls) <- unnestFields name fields
+    return (T.Struct unnested, decls)
+  T.Enum{} ->
+    error "TODO: support T.Enum"
+
+-- fields -> Result (fields, de-anonymized)
+unnestFields :: String -> TypeDecls -> Result (TypeDecls, TypeDecls)
+unnestFields _    []         = return ([], [])
+unnestFields name ((n,t):ts) = do
+  (unnested, decls) <- unnestStructures (name ++ "." ++ n) t
+  (rest, decls') <- unnestFields name ts
+  return ((name, unnested) : rest, decls ++ decls')
+
+
+noStructures :: TypeDecl -> Result ()
+noStructures tdecl = case tdecl of
+  T.TypeName{}        -> return ()
+  T.Function args ret -> do
+    mapM_ noStructures args
+    noStructures ret
+  T.Struct{}          -> Left InvalidAnonStructure
+  T.Enum{}            -> Left InvalidAnonStructure
+
 
 -- select and deduplicate function and let bindings
 gatherBindings :: File a -> Result (Map String (Declaration a))
