@@ -49,9 +49,10 @@ gatherTypeDecls :: File a -> Result (Map String TypeDecl)
 gatherTypeDecls file =
   let typeDecls = [(name, t) | TypeDef _ name t <- file]
       addDecl ds (name, t) = case Map.lookup name ds of
-        Nothing -> do --return $ Map.insert name t ds
+        Nothing -> do
           (decl, unnested) <- unnestStructures name t
           let decls = (name, decl) : unnested
+          -- TODO: also ensure that names in `unnested` are unique
           return $ foldl (\m (n,d) -> Map.insert n d m) ds decls
         Just _  -> duplicateName name
   in foldM addDecl Map.empty typeDecls

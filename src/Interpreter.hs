@@ -286,7 +286,7 @@ builtinPrint args = case args of
     putStr s
     hFlush stdout
     return VVoid
-  _ -> error $ "non-string value to print"
+  _ -> error "non-string value to print"
 
 
 -- Note: Keep this in sync with the types allowed by Inference.canCast.
