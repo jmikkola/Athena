@@ -106,7 +106,7 @@ checkReturns TypeDef{} =
   return ()
 checkReturns Let{} =
   return ()
-checkReturns (Function _ name _ stmt) = do
+checkReturns (Function _ name _ _ stmt) = do
   _ <- checkStmtsReturn name Never [stmt]
   return ()
 

@@ -23,14 +23,14 @@ tests =
 
 testCheckReturns1 :: Assertion
 testCheckReturns1 = do
-  let fn = D.Function () "foo" [] (S.Block () [])
+  let fn = D.Function () "foo" Nothing [] (S.Block () [])
   assertRight $ checkReturns fn
 
 testCheckReturns2 :: Assertion
 testCheckReturns2 = do
   let returnStmt = S.Return () Nothing
   let stmts = [printStmt, returnStmt, printStmt]
-  let fn = D.Function () "foo" [] (S.Block () stmts)
+  let fn = D.Function () "foo" Nothing [] (S.Block () stmts)
   assertLeft $ checkReturns fn
 
 printStmt =

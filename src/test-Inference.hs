@@ -481,7 +481,7 @@ boolVal b = E.Val () $ E.BoolVal () b
 func :: String -> [String] -> [S.Statement ()] -> D.Declaration ()
 func name args stmts =
   let fnbody = S.Block () stmts
-  in D.Function () name args fnbody
+  in D.Function () name Nothing args fnbody
 
 
 -- TODO

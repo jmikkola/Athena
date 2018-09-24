@@ -35,7 +35,7 @@ startingState body = do
   -- TODO: Also evaluate constant expression
   let functions =
         [ (name, toClosure scope args stmt)
-        | (name, D.Function _ _ args stmt) <- decls ]
+        | (name, D.Function _ _ _ args stmt) <- decls ]
   insertAll functions scope
 
 builtIns :: Map String Value

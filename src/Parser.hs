@@ -1,5 +1,7 @@
 module Parser where
 
+import Data.Maybe (isNothing)
+
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
@@ -65,17 +67,37 @@ funcDeclaration = do
   name <- valueName
   _ <- char '('
   _ <- anyLinearWhitespace
-  args <- funcArgDecl
+  argsAndTypes <- funcArgDecl
+  let (args, argTypes) = unzip argsAndTypes
   _ <- any1LinearWhitespace
-  {-
   retType <- optionMaybe $ try $ do
     typ <- typeParser
     _ <- any1LinearWhitespace
     return typ
-  -}
-  --let typ = T.Function (map (T.TypeName . snd) args) (unwrapOr (fmap T.TypeName retType) nilType)
-  --return $ D.Function () name typ (map fst args) body
-  D.Function () name args <$> blockStatement
+  mtype <- assembleFunctionType argTypes retType
+  D.Function () name mtype args <$> blockStatement
+
+assembleFunctionType :: [Maybe Type] -> Maybe Type -> Parser (Maybe TypeDecl)
+assembleFunctionType argTypes retType =
+  if allNothings argTypes && isNothing retType
+  then return Nothing
+  else do
+    argTs <- requireJusts argTypes
+    let retT = unwrapOr (fmap T.TypeName retType) nilType
+    let typ = T.Function (map T.TypeName argTs) retT
+    return $ Just typ
+
+
+allNothings :: [Maybe a] -> Bool
+allNothings = all isNothing
+
+requireJusts :: [Maybe Type] -> Parser [Type]
+requireJusts [] = return []
+requireJusts (Nothing:_) =
+  unexpected "When a function is typed, all arguments must be typed"
+requireJusts (Just t:ts) = do
+  rest <- requireJusts ts
+  return (t:rest)
 
 typeDeclaration :: Parser Declaration
 typeDeclaration = do
@@ -86,7 +108,7 @@ typeDeclaration = do
   D.TypeDef () name <$> typeDefParser
 
 
-type ArgDecls = [String] -- [(String, Type)]
+type ArgDecls = [(String, Maybe Type)]
 
 funcArgDecl :: Parser ArgDecls
 funcArgDecl = argDeclEnd <|> argDecl
@@ -99,14 +121,12 @@ argDeclEnd = do
 argDecl :: Parser ArgDecls
 argDecl = do
   name <- valueName
-  {-
-  _ <- any1LinearWhitespace
-  typ <- typeParser
-  -}
+  mtype <- optionMaybe $ try $ do
+   _ <- any1LinearWhitespace
+   typeParser
   _ <- anyLinearWhitespace
   rest <- argDeclEnd <|> nextArgDecl
-  --return $ (name, typ) : rest
-  return (name : rest)
+  return ((name, mtype) : rest)
 
 nextArgDecl :: Parser ArgDecls
 nextArgDecl = do

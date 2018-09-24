@@ -111,7 +111,7 @@ instance Depencencies (D.Declaration a) where
   findDependencies bound decl = case decl of
     D.Let _ name _  exp ->
       findDependencies (Set.insert name bound) exp
-    D.Function _ name args stmt ->
+    D.Function _ name _ args stmt ->
       findDependencies (Set.union bound $ Set.fromList (name:args)) stmt
     D.TypeDef{} ->
       []
@@ -316,7 +316,8 @@ inferDecl env decl = case decl of
     expr' <- inferExpr env expr
     return $ D.Let (getType expr', a) name mtype expr'
 
-  D.Function a name args stmt -> do
+  D.Function a name mtype args stmt -> do
+    -- TODO: use mtype, if provided
     argTs <- mapM (const newTypeVar) args
     retT <- newTypeVar
     let argEnv = Map.fromList $ zip args (map asScheme argTs)
@@ -328,7 +329,7 @@ inferDecl env decl = case decl of
     let argTypes = map (apply sub) argTs
     let returnT = apply sub retT
     let t = TFunc argTypes returnT
-    return $ D.Function (t, a) name args stmt'
+    return $ D.Function (t, a) name mtype args stmt'
 
   D.TypeDef{} ->
     inferErr $ CompilerBug "TypeDefs are not bindings"
