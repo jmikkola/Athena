@@ -281,11 +281,12 @@ callFunction _ _ =
   error "calling a non-function"
 
 builtinPrint :: [Value] -> IO Value
-builtinPrint args = do
-  rendered <- mapM render args
-  putStrLn $ unwords rendered
-  hFlush stdout
-  return VVoid
+builtinPrint args = case args of
+  [VString s] -> do
+    putStr s
+    hFlush stdout
+    return VVoid
+  _ -> error $ "non-string value to print"
 
 
 -- Note: Keep this in sync with the types allowed by Inference.canCast.

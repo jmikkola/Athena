@@ -18,7 +18,7 @@ fn main() {
     }
     let b = foo.xyz
     // print(String(foo))
-    print("Hello, world")
+    print("Hello, world\n")
     foo.xyz.x = 10000
     print("an Int: ")
     print(String(foo.xyz.x + 9))

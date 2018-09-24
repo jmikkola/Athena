@@ -20,5 +20,7 @@ fn main() {
     name: "some name",
   }
   print(String(a))
+  print("\n")
   printEnum(a)
+  print("\n")
 }
