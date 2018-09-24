@@ -535,7 +535,7 @@ checkSameFields tname given actual = do
   when (Set.size givenSet /= length given) $
     inferErr $ StructFieldErr tname "a field was duplicated"
   when (givenSet /= actualSet) $
-    inferErr $ StructFieldErr tname "wrong set of fields given"
+    inferErr $ StructFieldErr tname $ "wrong set of fields given: " ++ show (givenSet, actualSet)
   return $ labelFields given actual
 
 

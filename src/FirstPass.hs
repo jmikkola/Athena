@@ -77,7 +77,7 @@ unnestFields _    []         = return ([], [])
 unnestFields name ((n,t):ts) = do
   (unnested, decls) <- unnestStructures (name ++ "." ++ n) t
   (rest, decls') <- unnestFields name ts
-  return ((name, unnested) : rest, decls ++ decls')
+  return ((n, unnested) : rest, decls ++ decls')
 
 
 noStructures :: TypeDecl -> Result ()
