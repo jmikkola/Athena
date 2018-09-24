@@ -196,7 +196,7 @@ functionInference = do
 whileLoop :: Assertion
 whileLoop = do
   -- f(y) = let a = 1; while a < y { a = a * 2 }; return a
-  let aTo1 = S.Let () "a" (intVal 1)
+  let aTo1 = S.Let () "a" Nothing (intVal 1)
   let aLessY = E.Binary () E.Less (E.Var () "a") (E.Var () "y")
   let aTimes2 = E.Binary () E.Times (E.Var () "a") (intVal 2)
   let whileBody = S.Assign () ["a"] aTimes2

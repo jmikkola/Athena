@@ -16,7 +16,7 @@ fn printEnum(a ASTIsh) {
 }
 
 fn main() {
-  let a ASTIsh = TNamed{
+  let a = TNamed{
     name: "some name",
   }
   print(String(a))

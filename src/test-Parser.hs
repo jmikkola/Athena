@@ -58,10 +58,11 @@ eCall = E.Call ()
 eBinary :: E.BinOp -> Expr -> Expr -> Expr
 eBinary = E.Binary ()
 
---sLet :: String -> T.Type -> Expr -> Stmt
---sLet name t e = S.Let () name t e
 sLet :: String -> Expr -> Stmt
-sLet = S.Let ()
+sLet name = S.Let () name Nothing
+
+sLetT :: String -> T.Type -> Expr -> Stmt
+sLetT name t = S.Let () name (Just t)
 
 sBlock :: [Stmt] -> Stmt
 sBlock = S.Block ()
@@ -133,6 +134,8 @@ tests =
     (sBlock [sBlock [], sBlock []])
   , expectParses statementParser "let a123 = True"
     (sLet "a123" (eVal $ boolVal True))
+  , expectParses statementParser "let a123 Bool = True"
+    (sLetT "a123" "Bool" (eVal $ boolVal True))
   , expectParses statementParser "a.b.c = True"
     (sAssign ["a", "b", "c"] (eVal $ boolVal True))
   , expectParses statementParser "print(c)"

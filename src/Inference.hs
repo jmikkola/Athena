@@ -109,7 +109,7 @@ class Depencencies a where
 
 instance Depencencies (D.Declaration a) where
   findDependencies bound decl = case decl of
-    D.Let _ name exp ->
+    D.Let _ name _  exp ->
       findDependencies (Set.insert name bound) exp
     D.Function _ name args stmt ->
       findDependencies (Set.union bound $ Set.fromList (name:args)) stmt
@@ -120,7 +120,7 @@ instance Depencencies (S.Statement a) where
   findDependencies bound stmt = case stmt of
     S.Return _ mexp ->
       maybe [] (findDependencies bound) mexp
-    S.Let _ name exp ->
+    S.Let _ name _ exp ->
       findDependencies (Set.insert name bound) exp
     S.Assign _ _ exp ->
       findDependencies bound exp
@@ -144,7 +144,7 @@ findDepBlock bound stmts = case stmts of
      (stmt:rest) ->
        let stmtDeps = findDependencies bound stmt
            bound' = case stmt of
-             (S.Let _ name _) ->
+             (S.Let _ name _ _) ->
                Set.insert name bound
              _ ->
                bound
@@ -311,9 +311,10 @@ containsGenerics t = case t of
 
 inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
 inferDecl env decl = case decl of
-  D.Let a name expr -> do
+  D.Let a name mtype expr -> do
+    -- TODO: use mtype, if provided
     expr' <- inferExpr env expr
-    return $ D.Let (getType expr', a) name expr'
+    return $ D.Let (getType expr', a) name mtype expr'
 
   D.Function a name args stmt -> do
     argTs <- mapM (const newTypeVar) args
@@ -341,13 +342,14 @@ inferStmt env stmt = case stmt of
     expr' <- inferExpr env expr
     return (S.Return (tUnit, a) (Just expr'), AlwaysReturns [getType expr'])
 
-  S.Let a name expr -> do
+  S.Let a name mtype expr -> do
+    -- TODO: Handle type, if provided
     -- TODO: recursive binding?
     -- Note that in recursive bindings, if the bound expression involves a
     -- closure, I need to think about whether that closure should be allowed to
     -- assign back to this variable
     expr' <- inferExpr env expr
-    return (S.Let (tUnit, a) name expr', NeverReturns)
+    return (S.Let (tUnit, a) name mtype expr', NeverReturns)
 
   S.Assign a names expr ->
     case names of
@@ -411,7 +413,7 @@ inferBlock env [stmt] = do
 inferBlock env (s:ss) = do
   (s', _) <- inferStmt env s
   let env' = case s' of
-        S.Let _ name expr ->
+        S.Let _ name _ expr ->
           let sch = generalize env (getType expr)
           in Map.insert name sch env
         _                -> env

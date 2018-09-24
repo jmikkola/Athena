@@ -34,21 +34,22 @@ declarationParser = choice [letDeclaration, funcDeclaration, typeDeclaration]
 
 letDeclaration :: Parser Declaration
 letDeclaration = do
-  name <- letName
-  {-
-  typ <- typeParser
-  _ <- any1Whitespace
-  -}
-  D.Let () name <$> expressionParser
-  --return $ D.Let () name typ val
+  (name, mtype) <- letName
+  D.Let () name mtype <$> expressionParser
 
-letName :: Parser String
+letName :: Parser (String, Maybe Type)
 letName = do
   _ <- string "let"
   _ <- any1Whitespace
   name <- valueName
-  equalsWhitespace
-  return name
+  _ <- any1Whitespace
+  mtype <- optionMaybe $ try $ do
+    typ <- typeParser
+    _ <- any1Whitespace
+    return typ
+  _ <- char '='
+  _ <- any1Whitespace
+  return (name, mtype)
 
 equalsWhitespace :: Parser ()
 equalsWhitespace = do
@@ -131,9 +132,8 @@ returnStatement = do
 
 letStatement :: Parser Statement
 letStatement = do
-  name <- letName
-  -- return $ S.Let () name typ val
-  S.Let () name <$> expressionParser
+  (name, mtype) <- letName
+  S.Let () name mtype <$> expressionParser
 
 assignStatement :: Parser Statement
 assignStatement = do

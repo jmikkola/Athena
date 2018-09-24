@@ -2,13 +2,13 @@ module AST.Statement where
 
 import AST.Annotation (Annotated, getAnnotation)
 import AST.Expression (Expression)
-
+import AST.Type (Type)
 
 -- TODO: Bring back type annotations later
 
 data Statement a
   = Return  a (Maybe (Expression a))
-  | Let     a String {- Type -} (Expression a)
+  | Let     a String (Maybe Type) (Expression a)
   | Assign  a [String] (Expression a)
   | Block   a [Statement a]
   | Expr    a (Expression a) -- e.g. just calling a function
@@ -33,7 +33,7 @@ data MatchExpression a
 instance Annotated Statement where
   getAnnotation stmt = case stmt of
     Return a _     -> a
-    Let    a _ _   -> a
+    Let    a _ _ _ -> a
     Assign a _ _   -> a
     Block  a _     -> a
     Expr   a _     -> a
