@@ -532,11 +532,10 @@ inferExpr env expr = case expr of
     t <- instantiate sch
     return $ E.Var (t, a) name
 
-  E.Access _ exp field -> do
+  E.Access a exp field -> do
     exp' <- inferExpr env exp
-    let _ = getType exp'
-    let _ = field
-    return $ error "TODO: Infer for Access"
+    t <- getStructFieldType (getType exp') field
+    return $ E.Access (t, a) exp' field
 
 inferValue :: Environment -> E.Value a -> InferM (E.Value (Type, a))
 inferValue env val = case val of
