@@ -173,15 +173,6 @@ assign (s:ss) names@(name:_) value = do
      assign ss names value
    Just existing ->
      updateExisting s names existing value
-     {-
-  if Map.member name m
-     then
-          writeIORef s (Map.insert name value m)
-          --rendered <- render value
-          --putStrLn $ "Set " ++ name ++ " to " ++ rendered
-    else assign ss [name] value
-assign (_:_) _ _ = error "TODO: assign multi-part names"
--}
 
 
 updateExisting :: IORef (Map String Value) -> [String] -> Value -> Value -> IO ()

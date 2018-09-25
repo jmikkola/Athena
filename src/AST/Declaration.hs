@@ -7,7 +7,6 @@ import AST.Type (Type, TypeDecl)
 
 type File a = [Declaration a]
 
--- TODO: Add back types once explicitly typed bindings are supported
 data Declaration a
   = Let a String (Maybe Type) (Expression a)
   | Function a String (Maybe TypeDecl) [String] (Statement a)
