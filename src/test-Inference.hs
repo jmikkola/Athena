@@ -370,7 +370,10 @@ assertModuleTypes name sch result = case result of
 makeModule :: [(String, D.Declaration a)] -> Module a
 makeModule bindings =
   let bindMap = Map.fromList bindings
-  in Module { bindings=bindMap, types=Map.empty }
+  in Module
+     { bindings=bindMap
+     , types=Map.empty
+     , enumTypes=Map.empty }
 
 
 findGroups :: [(String, D.Declaration a)] -> [[String]]
@@ -403,7 +406,7 @@ assertDeclFails decl = assertFails decl inferDecl
 
 
 assertTypes t ast inferFn = do
-  let result = runInfer Map.empty $ inferFn startingEnv ast
+  let result = inferEmpty $ inferFn startingEnv ast
   assertRight result
   let (Right typed) = result
   let resultType = fst . getAnnotation $ typed
@@ -411,7 +414,7 @@ assertTypes t ast inferFn = do
 
 
 assertFails ast inferFn = do
-  let result = runInfer Map.empty $ inferFn startingEnv ast
+  let result = inferEmpty $ inferFn startingEnv ast
   assertLeft result
 
 
@@ -431,8 +434,10 @@ assertInstantiates sch = assertUnifies (runInstantiate sch)
 
 runInstantiate :: Scheme -> Type
 runInstantiate sch =
-  let (Right result) = runInfer Map.empty (instantiate sch)
+  let (Right result) = inferEmpty (instantiate sch)
   in result
+
+inferEmpty = runInfer Map.empty Map.empty
 
 
 assertNoGenerics :: Type -> Assertion

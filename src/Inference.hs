@@ -79,7 +79,8 @@ inferModule :: Module a -> Result (InferResult a)
 inferModule m = do
   let bindGroups = makeBindGroups m
   let decls = types m
-  (binds, env) <- runInfer decls $ inferGroups bindGroups startingEnv
+  let enumOptions = enumTypes m
+  (binds, env) <- runInfer decls enumOptions $ inferGroups bindGroups startingEnv
   return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
 
 makeBindGroups :: Module a -> [BindGroup a]
@@ -179,19 +180,23 @@ instance Depencencies (E.Value a) where
     _ ->
       []
 
+type EnumOptions = Map String String
+
 data InferState
   = InferState
     { nextVarN :: Int
     , currentSub :: Substitution
-    , typeDecls :: DeclaredTypes }
+    , typeDecls :: DeclaredTypes
+    , enumOpts :: EnumOptions }
   deriving (Show)
 
-startingInferState :: DeclaredTypes -> InferState
-startingInferState decls =
+startingInferState :: DeclaredTypes -> EnumOptions -> InferState
+startingInferState decls enumOptions =
   InferState
   { nextVarN = 0
   , currentSub = Map.empty
-  , typeDecls = decls }
+  , typeDecls = decls
+  , enumOpts = enumOptions }
 
 -- `Either Error` = `Result`, but somehow that
 -- type synonym isn't allowed here.
@@ -209,8 +214,10 @@ startingEnv =
   Map.fromList
   [ ("print", Scheme 1 (TFunc [TGen 1] tUnit)) ]
 
-runInfer :: Monad m => DeclaredTypes -> StateT InferState m a -> m a
-runInfer decls f = evalStateT f (startingInferState decls)
+runInfer :: Monad m => DeclaredTypes -> EnumOptions
+         -> StateT InferState m a -> m a
+runInfer decls enumOptions f =
+  evalStateT f (startingInferState decls enumOptions)
 
 inferErr :: Error -> InferM a
 inferErr err = lift $ Left err
@@ -554,8 +561,17 @@ inferValue env val = case val of
     structFields <- getStructDecl tname
     labeledFields <- checkSameFields tname fields structFields
     typedFields <- mapM (uncurry3 (inferField env)) labeledFields
-    let t = TCon tname [] -- TODO: Support generics
+    t <- getStructType tname
     return $ E.StructVal (t, a) tname typedFields
+
+-- TODO: Support generics
+getStructType :: String -> InferM Type
+getStructType name = do
+  enumOptions <- gets enumOpts
+  -- If this is an enum option not a struct, look up the
+  -- actual enum type
+  let tname = fromMaybe name (Map.lookup name enumOptions)
+  return $ TCon tname []
 
 
 inferField ::

@@ -19,5 +19,7 @@ fn main() {
     value: 123,
   }
   print(String(a))
+  print("\n")
   print(String(c))
+  print("\n")
 }

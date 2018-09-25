@@ -22,6 +22,7 @@ data Module a =
   Module
   { bindings :: Map String (Declaration a)
   , types :: Map String TypeDecl
+  , enumTypes :: Map String String
   }
   deriving (Show)
 
@@ -39,9 +40,19 @@ data Module a =
 firstPass :: File a -> Result (Module a)
 firstPass file = do
   typesFound <- gatherTypeDecls file
+  enumTs <- gatherEnumTypes file
   binds <- gatherBindings file
   mapM_ checkReturns binds
-  return $ Module { bindings=binds, types=typesFound }
+  return $ Module { bindings=binds, types=typesFound, enumTypes=enumTs }
+
+
+gatherEnumTypes :: File a -> Result (Map String String)
+gatherEnumTypes file = do
+  let enumDecls = [(name, options) | TypeDef _ name (T.Enum options) <- file]
+  let optionNames = [ (optName, name)
+                    | (name, options) <- enumDecls
+                    , (optName, _) <- options ]
+  return $ Map.fromList optionNames
 
 -- select and deduplicate type declarations
 -- TODO: Support type alises
