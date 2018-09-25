@@ -46,18 +46,24 @@ firstPass file = do
 -- select and deduplicate type declarations
 -- TODO: Support type alises
 gatherTypeDecls :: File a -> Result (Map String TypeDecl)
-gatherTypeDecls file =
+gatherTypeDecls file = do
   let typeDecls = [(name, t) | TypeDef _ name t <- file]
-      addDecl ds (name, t) = case Map.lookup name ds of
-        Nothing -> do
-          (decl, unnested) <- unnestStructures name t
-          let decls = (name, decl) : unnested
-          -- TODO: also ensure that names in `unnested` are unique
-          return $ foldl (\m (n,d) -> Map.insert n d m) ds decls
-        Just _  -> duplicateName name
-  in foldM addDecl Map.empty typeDecls
+  unnestedTypeDecls <- unnestAll typeDecls
+  let addDecl ds (name, t) = case Map.lookup name ds of
+        Nothing ->
+          return $ Map.insert name t ds
+        Just _ ->
+          duplicateName name
+  foldM addDecl Map.empty unnestedTypeDecls
 
 type TypeDecls = [(String, TypeDecl)]
+
+unnestAll :: TypeDecls -> Result TypeDecls
+unnestAll [] = return []
+unnestAll ((name,t):tds) = do
+  (decl, unnested) <- unnestStructures name t
+  rest <- unnestAll tds
+  return $ (name, decl) : unnested ++ rest
 
 unnestStructures :: String -> TypeDecl -> Result (TypeDecl, TypeDecls)
 unnestStructures name tdecl = case tdecl of
