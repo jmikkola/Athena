@@ -97,9 +97,9 @@ unnestStructures name tdecl = case tdecl of
 
 variantToStruct :: String -> T.EnumOption -> Result (String, TypeDecl)
 variantToStruct name fields = do
-  let (names, types) = unzip fields
+  let (names, fieldTypes) = unzip fields
   requireUnique names
-  mapM_ noStructures types
+  mapM_ noStructures fieldTypes
   return (name, T.Struct fields)
 
 

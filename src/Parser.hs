@@ -424,7 +424,7 @@ structValueParser :: Parser Value
 structValueParser = do
   typ <- typeName
   _ <- string "{"
-  _ <- statementSep
+  _ <- anyWhitespace
   fields <- sepEndBy structFieldValue statementSep
   _ <- string "}"
   return $ E.StructVal () typ fields

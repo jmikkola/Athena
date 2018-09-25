@@ -10,10 +10,8 @@ type Channel struct {
 }
 
 fn main() {
-  let a Color = Red{
-  }
-  a = Blue{
-  }
+  let a Color = Red{}
+  a = Blue{}
   let c Channel = Channel{
     color: a,
     value: 123,
