@@ -7,5 +7,6 @@ fn f(n) {
 }
 
 fn main() {
-    print(f(4))
+    print(String(f(4)))
+    print("\n")
 }

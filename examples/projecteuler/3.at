@@ -13,5 +13,6 @@ fn main() {
                 1
         }
     }
-    print(largest)
+    print(String(largest))
+    print("\n")
 }
