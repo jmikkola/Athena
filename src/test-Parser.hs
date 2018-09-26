@@ -157,7 +157,7 @@ tests =
   -- blocks and larger
   , testParsingBlock
   , testParsingIf
---  , testParsingMatch
+  , testParsingMatch
   , testParsingFunc
   , testParsingFunc2
   , testParsingTypedFunction
@@ -194,16 +194,14 @@ testParsingIf =
       expected = S.If () test body Nothing
   in expectParses ifStatement text expected
 
-{-
 testParsingMatch :: Test
 testParsingMatch =
   let text = "match x {\n  _ {\nreturn 1\n}\n  Link(_, next) {\n return 2\n}\n}"
       ret n = sBlock [sReturn $ Just $ eVal $ intVal n]
-      case1 = S.MatchCase S.MatchAnything (ret 1)
-      case2 = S.MatchCase (S.MatchStructure "Link" [S.MatchAnything, S.MatchVariable "next"]) (ret 2)
-      expected = S.Match (eVar "x") [case1, case2]
+      case1 = S.MatchCase (S.MatchAnything ()) (ret 1)
+      case2 = S.MatchCase (S.MatchStructure () "Link" [S.MatchAnything (), S.MatchVariable () "next"]) (ret 2)
+      expected = S.Match () (eVar "x") [case1, case2]
   in expectParses statementParser text expected
--}
 
 testParsingFunc :: Test
 testParsingFunc =

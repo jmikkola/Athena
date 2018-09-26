@@ -15,6 +15,8 @@ import qualified AST.Type as T
 type File = D.File ()
 type Declaration = D.Declaration ()
 type Statement = S.Statement ()
+type MatchCase = S.MatchCase ()
+type MatchExpression = S.MatchExpression ()
 type Expression = E.Expression ()
 type Value = E.Value ()
 
@@ -139,7 +141,7 @@ nextArgDecl = do
 statementParser :: Parser Statement
 statementParser = choice $ map try [
   returnStatement, letStatement, ifStatement, whileStatement,
-  -- matchStatement,
+  matchStatement,
   blockStatement, assignStatement, exprStatement]
 
 returnStatement :: Parser Statement
@@ -230,72 +232,68 @@ testedBlock = do
   body <- blockStatement
   return (test, body)
 
-{-
 matchStatement :: Parser Statement
 matchStatement = do
   _ <- string "match"
   _ <- any1Whitespace
   value <- expressionParser
   _ <- anyWhitespace
-  cases <- matchCases
-  return $ S.Match value cases
+  S.Match () value <$> matchCases
 
-matchCases :: Parser [S.MatchCase]
+matchCases :: Parser [MatchCase]
 matchCases = do
   _ <- char '{'
   _ <- statementSep
   matchCaseBlock
 
-matchCaseBlock :: Parser [S.MatchCase]
+matchCaseBlock :: Parser [MatchCase]
 matchCaseBlock = endBlock <|> nextMatchCase
 
-nextMatchCase :: Parser [S.MatchCase]
+nextMatchCase :: Parser [MatchCase]
 nextMatchCase = do
   matchCase <- matchCaseParser
   _ <- statementSep
   rest <- matchCaseBlock
   return $ matchCase : rest
 
-matchCaseParser :: Parser S.MatchCase
+matchCaseParser :: Parser MatchCase
 matchCaseParser = do
   e <- matchExpression
   _ <- any1Whitespace
-  body <- blockStatement
-  return $ S.MatchCase e body
+  S.MatchCase e <$> blockStatement
 
-matchExpression :: Parser S.MatchExpression
+matchExpression :: Parser MatchExpression
 matchExpression = matchAnything <|> matchVariable <|> matchStructure
 
-matchAnything :: Parser S.MatchExpression
+matchAnything :: Parser MatchExpression
 matchAnything = do
   _ <- string "_"
-  return S.MatchAnything
+  return $ S.MatchAnything ()
 
-matchVariable :: Parser S.MatchExpression
-matchVariable = liftM S.MatchVariable $ valueName
+matchVariable :: Parser MatchExpression
+matchVariable = S.MatchVariable () <$> valueName
 
-matchStructure :: Parser S.MatchExpression
+matchStructure :: Parser MatchExpression
 matchStructure = do
   structType <- typeParser
   -- TODO: Make parens optional
   _ <- char '('
   _ <- anyWhitespace
   inner <- choice [matchExpressions, argsEnd]
-  return $ S.MatchStructure structType inner
+  return $ S.MatchStructure () structType inner
 
-matchExpressions :: Parser [S.MatchExpression]
+matchExpressions :: Parser [MatchExpression]
 matchExpressions = do
   e <- matchExpression
   _ <- anyWhitespace
   rest <- choice [matchExpressionsNext, argsEnd]
   return $ e : rest
 
-matchExpressionsNext :: Parser [S.MatchExpression]
+matchExpressionsNext :: Parser [MatchExpression]
 matchExpressionsNext = do
   _ <- char ','
   _ <- anyWhitespace
   matchExpressions
--}
 
 ---- AST.Expression parsers ----
 

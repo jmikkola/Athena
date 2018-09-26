@@ -4,8 +4,6 @@ import AST.Annotation (Annotated, getAnnotation)
 import AST.Expression (Expression)
 import AST.Type (Type)
 
--- TODO: Bring back type annotations later
-
 data Statement a
   = Return  a (Maybe (Expression a))
   | Let     a String (Maybe Type) (Expression a)
@@ -14,10 +12,9 @@ data Statement a
   | Expr    a (Expression a) -- e.g. just calling a function
   | If      a (Expression a) [Statement a] (Maybe (Statement a))
   | While   a (Expression a) [Statement a]
-  -- | Match a (Expression a) [MatchCase a]
+  | Match a (Expression a) [MatchCase a]
   deriving (Eq, Show)
 
-{-
 data MatchCase a
   = MatchCase (MatchExpression a) (Statement a)
   deriving (Eq, Show)
@@ -26,9 +23,8 @@ data MatchCase a
 data MatchExpression a
   = MatchAnything a
   | MatchVariable a String
-  | MatchStructure a String [(MatchExpression a)]
+  | MatchStructure a String [MatchExpression a]
   deriving (Eq, Show)
--}
 
 instance Annotated Statement where
   getAnnotation stmt = case stmt of
@@ -39,3 +35,4 @@ instance Annotated Statement where
     Expr   a _     -> a
     If     a _ _ _ -> a
     While  a _ _   -> a
+    Match  a _ _   -> a
