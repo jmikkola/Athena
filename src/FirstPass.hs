@@ -37,6 +37,10 @@ data Module a =
 -- * (TODO) Check that all types referred to actually exist
 -- * (TODO) Check that variable declarations are unique in a given block
 -- * (TODO) Check for variables that are defined and never referenced
+-- * (TODO) Check that match statements have at least one case
+-- * (TODO) Check that variables in match expressions are not repeated
+-- * (TODO) Check that match cases do not completely overlap
+-- * (TODO) Check that match cases are complete? (at least, for match expressions)
 firstPass :: File a -> Result (Module a)
 firstPass file = do
   typesFound <- gatherTypeDecls file
