@@ -36,3 +36,12 @@ instance Annotated Statement where
     If     a _ _ _ -> a
     While  a _ _   -> a
     Match  a _ _   -> a
+
+instance Annotated MatchCase where
+  getAnnotation (MatchCase expr _) = getAnnotation expr
+
+instance Annotated MatchExpression where
+  getAnnotation matchExpr = case matchExpr of
+    MatchAnything  a     -> a
+    MatchVariable  a _   -> a
+    MatchStructure a _ _ -> a

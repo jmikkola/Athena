@@ -94,21 +94,26 @@ interpretStmt scope stmt = case stmt of
   S.Return _ (Just expr) -> do
     val <- interpretExpr scope expr
     return $ Returned val
+
   S.Let _ name _ expr -> do
     val <- interpretExpr scope expr
     let (s0:_) = scope
     ss <- readIORef s0
     writeIORef s0 (Map.insert name val ss)
     return FellThrough
+
   S.Assign _ names expr -> do
     val <- interpretExpr scope expr
     assign scope names val
     return FellThrough
+
   S.Block _ stmts ->
     interpretBlock scope stmts
+
   S.Expr _ expr -> do
     _ <- interpretExpr scope expr
     return FellThrough
+
   S.If _ tst thn els -> do
     testVal <- interpretExpr scope tst
     b <- requireBool testVal
@@ -117,6 +122,7 @@ interpretStmt scope stmt = case stmt of
       else case els of
             Nothing -> return FellThrough
             Just st -> interpretStmt scope st
+
   S.While _ tst blk -> do
     testVal <- interpretExpr scope tst
     b <- requireBool testVal
@@ -131,6 +137,10 @@ interpretStmt scope stmt = case stmt of
             return $ Returned val
       else
         return FellThrough
+
+  S.Match _ expr _ -> do
+    val <- interpretExpr scope expr
+    error "TODO: Evaluate match"
 
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
 interpretBlock scope stmts = do

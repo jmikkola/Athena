@@ -153,7 +153,7 @@ instance Depencencies (S.MatchCase a) where
 findNames :: S.MatchExpression a -> [String]
 findNames matchExpr = case matchExpr of
   S.MatchAnything  _         -> []
-  S.MatchVariable  a name    -> [name]
+  S.MatchVariable  _ name    -> [name]
   S.MatchStructure _ _ exprs -> concatMap findNames exprs
 
 findDepBlock :: Set String -> [S.Statement a] -> [String]
@@ -428,6 +428,21 @@ inferStmt env stmt = case stmt of
     (blk', blkReturns) <- inferBlock env blk
     let whileReturns = demoteReturns blkReturns
     return (S.While (tUnit, a) testExpr blk', whileReturns)
+
+  S.Match a expr cases -> do
+    expr' <- inferExpr env expr
+    let exprType = getType expr'
+    casesAndReturns <- mapM (inferMatchCase env exprType) cases
+    let (cases', returns) = unzip casesAndReturns
+    let resultType = getType (head cases')
+    let result = S.Match (resultType, a) expr' cases'
+    return (result, foldl1 combineReturns returns)
+
+
+inferMatchCase :: Environment -> Type -> S.MatchCase a
+               -> InferM (S.MatchCase (Type, a), DoesReturn)
+inferMatchCase = undefined
+
 
 inferBlock :: Environment -> [S.Statement a] ->
               InferM ([S.Statement (Type, a)], DoesReturn)
