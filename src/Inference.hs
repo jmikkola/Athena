@@ -138,6 +138,23 @@ instance Depencencies (S.Statement a) where
       let testDeps = findDependencies bound test
           bodyDeps = findDepBlock bound body
       in testDeps ++ bodyDeps
+    S.Match _ expr matchCases ->
+      let exprDeps = findDependencies bound expr
+          caseDeps = concatMap (findDependencies bound) matchCases
+      in exprDeps ++ caseDeps
+
+instance Depencencies (S.MatchCase a) where
+  findDependencies bound matchCase =
+    let (S.MatchCase matchExpr stmt) = matchCase
+        exprNames = findNames matchExpr
+        bound' = foldr Set.insert bound exprNames
+    in findDependencies bound' stmt
+
+findNames :: S.MatchExpression a -> [String]
+findNames matchExpr = case matchExpr of
+  S.MatchAnything  _         -> []
+  S.MatchVariable  a name    -> [name]
+  S.MatchStructure _ _ exprs -> concatMap findNames exprs
 
 findDepBlock :: Set String -> [S.Statement a] -> [String]
 findDepBlock bound stmts = case stmts of
