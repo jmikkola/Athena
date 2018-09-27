@@ -441,7 +441,37 @@ inferStmt env stmt = case stmt of
 
 inferMatchCase :: Environment -> Type -> S.MatchCase a
                -> InferM (S.MatchCase (Type, a), DoesReturn)
-inferMatchCase = undefined
+inferMatchCase env t (S.MatchCase matchExpr stmt) = do
+  (matchExpr', matchedVars) <- inferMatchExpr env t matchExpr
+  let env' = insertAll env matchedVars
+  (stmt', doesReturn) <- inferStmt env' stmt
+  return (S.MatchCase matchExpr' stmt', doesReturn)
+
+
+inferMatchExpr :: Environment -> Type -> S.MatchExpression a
+               -> InferM (S.MatchExpression (Type, a), [(String, Scheme)])
+inferMatchExpr env targetType matchExpr = case matchExpr of
+  S.MatchAnything a ->
+    return (S.MatchAnything (targetType, a), [])
+
+  S.MatchVariable a name -> do
+    let sch = generalize env targetType
+    let bindings = [(name, sch)]
+    return (S.MatchVariable (targetType, a) name, bindings)
+
+  S.MatchStructure a enumName fields -> do
+    structType <- getStructType enumName
+    unify targetType structType
+
+    fieldTypes <- getFieldTypes structType
+    assertSameLength fields fieldTypes
+
+    inner <- sequence $ zipWith (inferMatchExpr env) fieldTypes fields
+    let (fields', bindingLists) = unzip inner
+    let bindings = concat bindingLists
+
+    -- TODO: should probably apply the current substitution to the struct type
+    return (S.MatchStructure (structType, a) fields', bindings)
 
 
 inferBlock :: Environment -> [S.Statement a] ->
@@ -796,3 +826,9 @@ isRight _         = False
 
 uncurry3 :: (a -> b -> c -> d) -> ((a, b, c) -> d)
 uncurry3 fn (a, b, c) = fn a b c
+
+insertAll :: (Ord k) => Map k v -> [(k, v)] -> Map k v
+insertAll m ((k, v):kvs) =
+  insertAll (Map.insert k v m) kvs
+insertAll m [] =
+  m
