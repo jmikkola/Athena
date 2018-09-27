@@ -25,7 +25,7 @@ import qualified Data.Set as Set
 
 --import Debug.Trace
 
-import Control.Monad (when, foldM)
+import Control.Monad (when, foldM, zipWithM)
 import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT)
 
 
@@ -456,22 +456,26 @@ inferMatchExpr env targetType matchExpr = case matchExpr of
 
   S.MatchVariable a name -> do
     let sch = generalize env targetType
-    let bindings = [(name, sch)]
-    return (S.MatchVariable (targetType, a) name, bindings)
+    let bindings' = [(name, sch)]
+    return (S.MatchVariable (targetType, a) name, bindings')
 
   S.MatchStructure a enumName fields -> do
     structType <- getStructType enumName
     unify targetType structType
 
-    fieldTypes <- getFieldTypes structType
-    assertSameLength fields fieldTypes
+    structFields <- getStructDecl enumName
+    when (length fields /= length structFields) $
+      inferErr $ PatternErr $ "wrong number of fields matched for " ++ enumName
 
-    inner <- sequence $ zipWith (inferMatchExpr env) fieldTypes fields
+    fieldTypes <- mapM (typeFromDecl . snd) structFields
+
+    inner <- zipWithM (inferMatchExpr env) fieldTypes fields
     let (fields', bindingLists) = unzip inner
-    let bindings = concat bindingLists
+    let bindings' = concat bindingLists
 
     -- TODO: should probably apply the current substitution to the struct type
-    return (S.MatchStructure (structType, a) fields', bindings)
+    return (S.MatchStructure (structType, a) enumName fields', bindings')
+
 
 
 inferBlock :: Environment -> [S.Statement a] ->
@@ -636,12 +640,37 @@ getStructType name = do
   return $ TCon tname []
 
 
+typeFromDecl :: T.TypeDecl -> InferM Type
+typeFromDecl tdecl = case tdecl of
+  T.TypeName name ->
+    typeFromName name
+  T.Function argTs retT -> do
+    argTypes <- mapM typeFromDecl argTs
+    retType <- typeFromDecl retT
+    return $ TFunc argTypes retType
+  T.Struct _ -> error "shouldn't see a Struct here"
+  T.Enum _ -> error "shouldn't see an Enum here"
+
+
+typeFromName :: String -> InferM Type
+typeFromName name
+  | name `elem` builtinTypes =
+    return $ TCon name []
+  | otherwise =
+    getStructType name
+
+builtinTypes :: [String]
+builtinTypes = words "Int Float Bool Char String ()"
+
+
 inferField ::
   Environment -> String -> T.TypeDecl -> E.Expression a
   -> InferM (String, E.Expression (Type, a))
 inferField env fname tdecl expr = do
   typed <- inferExpr env expr
-  -- TODO: require that typed match the type of the field!
+  let exprType = getType typed
+  expectedType <- typeFromDecl tdecl
+  unify expectedType exprType
   return (fname, typed)
 
 

@@ -18,6 +18,7 @@ data Error
   | UndefinedType String -- type name
   | NonStructureType String -- type name
   | StructFieldErr String String -- type name, message
+  | PatternErr String -- message
   | InvalidAnonStructure
   | InsufficientlyDefinedType
   | Unreachable String -- function name
