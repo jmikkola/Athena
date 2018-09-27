@@ -41,4 +41,7 @@ fn main() {
   }
 
   print(String(length(a3)))
+  print("\n")
+  print(String(a3))
+  print("\n")
 }

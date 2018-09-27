@@ -6,6 +6,9 @@ import Data.List (intercalate)
 import System.IO (hFlush, stdout)
 import qualified Data.Map as Map
 
+import Control.Applicative ((<$>))
+import Control.Monad (zipWithM)
+
 import Data.IORef
 
 import Inference
@@ -138,9 +141,40 @@ interpretStmt scope stmt = case stmt of
       else
         return FellThrough
 
-  S.Match _ expr _ -> do
+  S.Match _ expr cases -> do
     val <- interpretExpr scope expr
-    error "TODO: Evaluate match"
+    runMatchingCase scope val cases
+
+runMatchingCase :: Scope -> Value -> [S.MatchCase AnnT] -> IO StmtResult
+runMatchingCase _ _ [] =
+  error "no cases matched"
+runMatchingCase scope val (S.MatchCase me ms:cs) = do
+  matched <- checkMatch val me
+  case matched of
+    Nothing ->
+      runMatchingCase scope val cs
+    Just newBindings -> do
+      caseScope <- newIORef $ Map.fromList newBindings
+      interpretStmt (caseScope:scope) ms
+
+checkMatch :: Value -> S.MatchExpression AnnT -> IO (Maybe [(String, Value)])
+checkMatch value matchExpr = case matchExpr of
+  S.MatchAnything _ ->
+    return (Just [])
+  S.MatchVariable _ name ->
+    return (Just [(name, value)])
+  S.MatchStructure _ name fields ->
+    case value of
+      VStruct sname valRefs ->
+        if name == sname && length valRefs == length fields
+        then do
+          vals <- mapM (readIORef . snd) valRefs
+          innerMatches <- zipWithM checkMatch vals fields
+          return $ concat <$> sequence innerMatches
+        else
+          return Nothing
+      _ ->
+        return Nothing
 
 interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
 interpretBlock scope stmts = do
