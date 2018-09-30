@@ -79,6 +79,7 @@ tests =
   [ expectParses numberParser "123.345" (floatVal 123.345)
   , expectParses valueParser "123.345" (floatVal 123.345)
   , expectParses expressionParser "123.345" (eVal (floatVal 123.345))
+  , expectParses expressionParser "-10" (eVal (intVal (-10)))
   , expectParses expressionParser "a123" (eVar "a123")
   , expectParses expressionParser "f(a)" (eCall (eVar "f") [eVar "a"])
   , expectParses expressionParser "f(a, b , c )"
@@ -105,6 +106,10 @@ tests =
       (eBinary E.Plus
         (eBinary E.Times (eVal $ intVal 2) (eVal $ intVal 3))
         (eVal $ intVal 4)))
+  , expectParses expressionParser "10 + -5"
+    (eBinary E.Plus (eVal $ intVal 10) (eVal $ intVal (-5)))
+  , expectParses expressionParser "String(10 + -5)"
+    (E.Cast () "String" (eBinary E.Plus (eVal $ intVal 10) (eVal $ intVal (-5))))
   , expectParses expressionParser "1 == 1 && 2 < 3"
     (eBinary E.BoolAnd
      (eBinary E.Eq (eVal (intVal 1)) (eVal (intVal 1)))
@@ -118,6 +123,12 @@ tests =
     -- statements
   , expectParses statementParser "return \"foo\""
     (sReturn $ Just $ eVal $ strVal "foo")
+  , expectParses statementParser "print(String(10 + -5))"
+    (S.Expr () $ E.Call ()
+     (E.Var () "print") [E.Cast () "String"
+                         (eBinary E.Plus
+                          (eVal $ intVal 10)
+                          (eVal $ intVal (-5)))])
   , expectParses statementSep "\n" ()
   , expectParses statementSep "  \n  " ()
   , expectParses statementSep "  \n\n  \n  " ()

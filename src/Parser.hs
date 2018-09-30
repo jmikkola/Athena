@@ -1,6 +1,6 @@
 module Parser where
 
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, fromMaybe)
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -448,7 +448,9 @@ boolParser = do
 
 numberParser :: Parser Value
 numberParser = do
-  start <- digits
+  sign <- optionMaybe $ string "-"
+  dgts <- digits
+  let start =  (fromMaybe "" sign) ++ dgts
   choice [float start, integer start]
 
 float :: String -> Parser Value
