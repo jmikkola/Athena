@@ -331,7 +331,7 @@ unfoldOps (l:r:es, o:os) opset =
   then unfoldOps (E.Binary () o l r : es, os) opset
   else let (restE, restO) = unfoldOps (r:es, os) opset
        in (l:restE, o:restO)
-
+unfoldOps _ _ = error "invalid call to unfoldOps"
 
 precOrder :: [[BinOp]]
 precOrder =
@@ -452,7 +452,7 @@ numberParser :: Parser Value
 numberParser = do
   sign <- optionMaybe $ string "-"
   dgts <- digits
-  let start =  (fromMaybe "" sign) ++ dgts
+  let start =  fromMaybe "" sign ++ dgts
   choice [float start, integer start]
 
 float :: String -> Parser Value
