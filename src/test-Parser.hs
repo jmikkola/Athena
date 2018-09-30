@@ -101,13 +101,18 @@ tests =
   , expectParses expressionParser "foo.bar.baz"
     (E.Access () (E.Access () (eVar "foo") "bar") "baz")
   , expectParses expressionParser "1 + 2 * 3 + 4"
+    -- evaluation order: 2*3, then 1+(2*3), then (1+(2*3))+4
     (eBinary E.Plus
-      (eVal $ intVal 1)
       (eBinary E.Plus
-        (eBinary E.Times (eVal $ intVal 2) (eVal $ intVal 3))
-        (eVal $ intVal 4)))
+       (eVal $ intVal 1)
+       (eBinary E.Times (eVal $ intVal 2) (eVal $ intVal 3)))
+      (eVal $ intVal 4))
   , expectParses expressionParser "10 + -5"
     (eBinary E.Plus (eVal $ intVal 10) (eVal $ intVal (-5)))
+  , expectParses expressionParser "10 - 3 - 4"
+    (eBinary E.Minus
+     (eBinary E.Minus (eVal $ intVal 10) (eVal $ intVal 3))
+     (eVal $ intVal 4))
   , expectParses expressionParser "String(10 + -5)"
     (E.Cast () "String" (eBinary E.Plus (eVal $ intVal 10) (eVal $ intVal (-5))))
   , expectParses expressionParser "1 == 1 && 2 < 3"
@@ -152,15 +157,17 @@ tests =
   , expectParses statementParser "print(c)"
     (S.Expr () $ eCall (eVar "print") [eVar "c"])
   , expectParses letStatement "let int = 5 + (2 * 10) / 3 % 4"
-    (sLet "int" (eBinary E.Plus
-                        (eVal (intVal 5))
-                        (eBinary E.Divide (E.Paren ()
-                                             (eBinary E.Times
-                                              (eVal (intVal 2))
-                                              (eVal (intVal 10))))
-                         (eBinary E.Mod
-                          (eVal (intVal 3))
-                           (eVal (intVal 4))))))
+    (sLet "int"
+     (eBinary E.Plus
+       (eVal $ intVal 5)
+       (eBinary E.Mod
+         (eBinary E.Divide
+           (E.Paren ()
+            (eBinary E.Times
+             (eVal (intVal 2))
+             (eVal (intVal 10))))
+           (eVal $ intVal 3))
+         (eVal $ intVal 4))))
   , expectParses assignStatement "int = 3"
     (sAssign ["int"] $ eVal $ intVal 3)
   , expectParses assignStatement "int = int ** 3"

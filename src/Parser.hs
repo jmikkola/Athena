@@ -303,7 +303,7 @@ matchExpressionsNext = do
 expressionParser :: Parser Expression
 expressionParser = unfoldParts <$> readBinExprParts
 
-readBinExprParts :: Parser (Expression, [(BinOp, Expression)])
+readBinExprParts :: Parser ([Expression], [BinOp])
 readBinExprParts = do
   e <- expr
   _ <- anyLinearWhitespace
@@ -313,23 +313,25 @@ readBinExprParts = do
     e' <- expr
     _ <- anyLinearWhitespace
     return (op, e')
-  return (e, parts)
+  let (ops, es) = unzip parts
+  return (e : es, ops)
 
-unfoldParts :: (Expression, [(BinOp, Expression)]) -> Expression
+
+unfoldParts :: ([Expression], [BinOp]) -> Expression
 unfoldParts bin =
-  let (e, rest) = foldl unfoldOps bin precOrder
-  in if rest /= [] then error "Unexpected operator"
-     else e
+  case foldl unfoldOps bin precOrder of
+   ([e], []) -> e
+   _         -> error "compiler bug in unfoldParts"
 
-unfoldOps :: (Expression, [(BinOp, Expression)]) -> [BinOp] ->
-            (Expression, [(BinOp, Expression)])
-unfoldOps (left, parts) ops = case parts of
-  []              -> (left, [])
-  ((op, right):pts) ->
-    let (applied, rest) = unfoldOps (right, pts) ops
-    in if op `elem` ops
-       then (E.Binary () op left applied, rest)
-       else (left, (op, applied) : rest)
+unfoldOps :: ([Expression], [BinOp]) -> [BinOp] -> ([Expression], [BinOp])
+unfoldOps ([e], [])    _     = ([e], [])
+unfoldOps ([],  [])    _     = ([], [])
+unfoldOps (l:r:es, o:os) opset =
+  if o `elem` opset
+  then unfoldOps (E.Binary () o l r : es, os) opset
+  else let (restE, restO) = unfoldOps (r:es, os) opset
+       in (l:restE, o:restO)
+
 
 precOrder :: [[BinOp]]
 precOrder =
