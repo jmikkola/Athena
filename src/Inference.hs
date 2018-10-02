@@ -6,6 +6,7 @@ module Inference
   , inferExpr
   , inferDecl
   , unifies
+  , alphaSubstitues
   , makeBindGroups
   , implicitBindings
   , instantiate
@@ -794,7 +795,8 @@ traceErr _ (Left x)  = Left x
 unifies :: Type -> Type -> Bool
 unifies t1 t2 = isRight $ mgu t1 t2
 
-
+-- mgu finds a substitution s such that
+-- apply s t1 == apply s t2
 mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
   (TGen _, _) ->
@@ -862,3 +864,50 @@ insertAll m ((k, v):kvs) =
   insertAll (Map.insert k v m) kvs
 insertAll m [] =
   m
+
+
+
+
+
+alphaSubstitues :: Type -> Type -> Bool
+alphaSubstitues t1 t2 = case matchAlpha t1 t2 of
+  Nothing -> False
+  Just _  -> True
+
+-- matchAlpha only allows types to vary by alpha substitution.
+-- The two types otherwise have to be the same (and equally general)
+matchAlpha :: Type -> Type -> Maybe Substitution
+matchAlpha t1 t2 = case (t1, t2) of
+  (TGen _, _) ->
+    Nothing
+  (_, TGen _) ->
+    Nothing
+  (TCon cA tsA, TCon cB tsB) -> do
+    requireEq cA cB
+    requireEq (length tsA) (length tsB)
+    matchAlphaList emptySubstitution (zip tsA tsB)
+  (TFunc argsA retA, TFunc argsB retB) -> do
+    requireEq (length argsA) (length argsB)
+    sub <- matchAlpha retA retB
+    matchAlphaList sub (zip argsA argsB)
+  (TVar _, TVar _) ->
+    return $ Map.singleton t1 t2
+  _ ->
+    Nothing
+
+
+matchAlphaList :: Substitution -> [(Type, Type)] -> Maybe Substitution
+matchAlphaList sub [] = return sub
+matchAlphaList sub ((t1,t2):ts) = do
+  sub2 <- matchAlpha (apply sub t1) (apply sub t2)
+  -- TODO: This should actually require that the substitutions agree on
+  -- matching keys and not
+  matchAlphaList (composeSubs sub sub2) ts
+
+require :: Bool -> Maybe ()
+require True  = Just ()
+require False = Nothing
+
+
+requireEq :: (Eq a) => a -> a -> Maybe ()
+requireEq a b = require $ a == b
