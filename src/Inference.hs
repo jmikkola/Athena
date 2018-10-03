@@ -486,14 +486,14 @@ inferBlock env [stmt] = do
   (stmt', retT) <- inferStmt env stmt
   return ([stmt'], retT)
 inferBlock env (s:ss) = do
-  (s', _) <- inferStmt env s
+  (s', ret1) <- inferStmt env s
   let env' = case s' of
         S.Let _ name _ expr ->
           let sch = generalize env (getType expr)
           in Map.insert name sch env
         _                -> env
-  (ss', retT) <- inferBlock env' ss
-  return (s' : ss', retT)
+  (ss', ret2) <- inferBlock env' ss
+  return (s' : ss', appendReturns ret2 ret1)
 
 
 getStructField :: Type -> [String] -> InferM Type
@@ -535,6 +535,12 @@ combineReturns r1 r2 = case (r1, r2) of
     AlwaysReturns $ t1 ++ t2
   _ ->
     SometimesReturns $ getReturnTypes r1 ++ getReturnTypes r2
+
+appendReturns :: DoesReturn -> DoesReturn -> DoesReturn
+appendReturns r1 r2 = case r1 of
+  NeverReturns        -> r2
+  SometimesReturns t1 -> SometimesReturns (getReturnTypes r2 ++ t1)
+  AlwaysReturns    t1 -> AlwaysReturns (getReturnTypes r2 ++ t1)
 
 getReturnTypes :: DoesReturn -> [Type]
 getReturnTypes NeverReturns          = []
@@ -866,9 +872,6 @@ insertAll m [] =
   m
 
 
-
-
-
 alphaSubstitues :: Type -> Type -> Bool
 alphaSubstitues t1 t2 = case getVarPairs t1 t2 of
   Nothing    -> False
@@ -879,7 +882,7 @@ isAlphaSub :: (Ord a) => [(a, a)] -> Bool
 isAlphaSub items = isInjective items && isInjective (map swap items)
 
 isInjective :: (Ord a) => [(a, a)] -> Bool
-isInjective items = check Map.empty items
+isInjective = check Map.empty
   where check _ [] = True
         check existing ((a,b):is) =
           let noConflict = case Map.lookup a existing of

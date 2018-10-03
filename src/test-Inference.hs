@@ -71,6 +71,8 @@ tests =
   , test "if-else return" ifElseReturn
   , test "if-then return" ifThenReturn
   , test "return a-b-c" returnABC
+  , test "return a-b" returnAB
+  , test "return a-b end" returnABEnd
   , test "missing return" missingReturn
   , test "first class function" firstClassFunction
   , test "no higher order polymorphism" noHigherOrderPolymorphism
@@ -276,12 +278,34 @@ ifThenReturn = do
 returnABC :: Assertion
 returnABC = do
   -- f(a, b, c) = if a { return b; } else { return c; }
+  -- f(a, b, c) = if a { return b; } return c;
   let returnB = returnJust $ E.Var () "b"
   let returnC = returnJust $ E.Var () "c"
-  let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnC)
-  let func9 = func "f" ["a", "b", "c"] [ifStmt]
+  --let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnC)
+  --let func9 = func "f" ["a", "b", "c"] [ifStmt]
+  let ifStmt = S.If () (E.Var () "a") [returnB] Nothing
+  let func9 = func "f" ["a", "b", "c"] [ifStmt, returnB]
   let type9 = TFunc [tBool, TVar "a", TVar "a"] (TVar "a")
   assertDeclTypes type9 func9
+
+
+returnAB :: Assertion
+returnAB = do
+  -- fn(a, b) = if a { return b; } else { return b; }
+  let returnB = returnJust $ E.Var () "b"
+  let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnB)
+  let funcAB = func "f" ["a", "b"] [ifStmt]
+  let typeAB = TFunc [tBool, TVar "a"] (TVar "a")
+  assertDeclTypes typeAB funcAB
+
+returnABEnd :: Assertion
+returnABEnd = do
+  -- fn(a, b) = if a { return b; } return b;
+  let returnB = returnJust $ E.Var () "b"
+  let ifStmt = S.If () (E.Var () "a") [returnB] Nothing
+  let funcAB = func "f" ["a", "b"] [ifStmt, returnB]
+  let typeAB = TFunc [tBool, TVar "a"] (TVar "a")
+  assertDeclTypes typeAB funcAB
 
 
 missingReturn :: Assertion
