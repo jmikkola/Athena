@@ -45,6 +45,12 @@ assert :: Bool -> String -> Assertion
 assert test message =
   if test then ok else err message
 
+assertTrue :: Bool -> Assertion
+assertTrue b = assert b "expected True, got False"
+
+assertFalse :: Bool -> Assertion
+assertFalse b = assert (not b) "expected False, got True"
+
 
 assertEq :: (Show a, Eq a) => a -> a -> Assertion
 assertEq x y

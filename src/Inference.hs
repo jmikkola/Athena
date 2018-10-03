@@ -870,14 +870,28 @@ insertAll m [] =
 
 
 alphaSubstitues :: Type -> Type -> Bool
-alphaSubstitues t1 t2 = case matchAlpha t1 t2 of
-  Nothing -> False
-  Just _  -> True
+alphaSubstitues t1 t2 = case getVarPairs t1 t2 of
+  Nothing    -> False
+  Just pairs -> isAlphaSub pairs
 
--- matchAlpha only allows types to vary by alpha substitution.
--- The two types otherwise have to be the same (and equally general)
-matchAlpha :: Type -> Type -> Maybe Substitution
-matchAlpha t1 t2 = case (t1, t2) of
+
+isAlphaSub :: (Ord a) => [(a, a)] -> Bool
+isAlphaSub items = isInjective items && isInjective (map swap items)
+
+isInjective :: (Ord a) => [(a, a)] -> Bool
+isInjective items = check Map.empty items
+  where check _ [] = True
+        check existing ((a,b):is) =
+          let noConflict = case Map.lookup a existing of
+                Nothing -> True
+                Just b' -> b' == b
+          in noConflict && check (Map.insert a b existing) is
+
+swap :: (a, b) -> (b, a)
+swap (a, b) = (b, a)
+
+getVarPairs :: Type -> Type -> Maybe [(String, String)]
+getVarPairs t1 t2 = case (t1, t2) of
   (TGen _, _) ->
     Nothing
   (_, TGen _) ->
@@ -885,24 +899,17 @@ matchAlpha t1 t2 = case (t1, t2) of
   (TCon cA tsA, TCon cB tsB) -> do
     requireEq cA cB
     requireEq (length tsA) (length tsB)
-    matchAlphaList emptySubstitution (zip tsA tsB)
+    concat <$> zipWithM getVarPairs tsA tsB
   (TFunc argsA retA, TFunc argsB retB) -> do
     requireEq (length argsA) (length argsB)
-    sub <- matchAlpha retA retB
-    matchAlphaList sub (zip argsA argsB)
-  (TVar _, TVar _) ->
-    return $ Map.singleton t1 t2
+    vars1 <- getVarPairs retA retB
+    vars2 <- concat <$> zipWithM getVarPairs argsA argsB
+    return $ vars1 ++ vars2
+  (TVar a, TVar b) ->
+    return [(a, b)]
   _ ->
     Nothing
 
-
-matchAlphaList :: Substitution -> [(Type, Type)] -> Maybe Substitution
-matchAlphaList sub [] = return sub
-matchAlphaList sub ((t1,t2):ts) = do
-  sub2 <- matchAlpha (apply sub t1) (apply sub t2)
-  -- TODO: This should actually require that the substitutions agree on
-  -- matching keys and not
-  matchAlphaList (composeSubs sub sub2) ts
 
 require :: Bool -> Maybe ()
 require True  = Just ()

@@ -52,6 +52,8 @@ import UnitTest
   , assertEq
   , assertRight
   , assertLeft
+  , assertTrue
+  , assertFalse
   , runTests
   , test )
 
@@ -59,7 +61,8 @@ main = runTests "Inference" tests
 
 tests :: [Test]
 tests =
-  [ test "basic unification" basicUnification
+  [ test "comparing types" comparingTypes
+  , test "basic unification" basicUnification
   , test "recursive unification" recursiveUnification
   , test "instantiation" instantiation
   , test "expression inference" simpleInference
@@ -77,6 +80,33 @@ tests =
 --  , test "explicit let binding" explicitLetBinding
   ]
 
+
+-- Make should ghat the isAlphaSub function works properly,
+-- which the other tests rely on to tell if the thing they test is working.
+comparingTypes :: Assertion
+comparingTypes = do
+  let varA = TVar "a"
+  let varB = TVar "b"
+  let varX = TVar "x"
+  let varY = TVar "y"
+  assertTrue $ alphaSubstitues varX varX
+  assertTrue $ alphaSubstitues varX varY
+  assertTrue $ alphaSubstitues tInt tInt
+  -- allows repeated vars
+  assertTrue $ alphaSubstitues (TFunc [varX, varX] varY) (TFunc [varA, varA] varY)
+  assertTrue $ alphaSubstitues (TFunc [varX, varX] varY) (TFunc [varA, varA] varB)
+  assertTrue $ alphaSubstitues (TCon "L" [varX]) (TCon "L" [varB])
+
+  -- doesn't allow making types more or less general
+  assertFalse $ alphaSubstitues (TFunc [varX, varY] varY) (TFunc [varA, varA] varA)
+  assertFalse $ alphaSubstitues (TFunc [varX, varX] varX) (TFunc [varA, varB] varB)
+
+  assertFalse $ alphaSubstitues (TFunc [varX] varY) (TFunc [varA, varA] varY)
+  assertFalse $ alphaSubstitues (TCon "L" [varX]) (TCon "L" [varB, varB])
+  assertFalse $ alphaSubstitues (TGen 1) (TGen 1)
+  assertFalse $ alphaSubstitues tInt tBool
+  assertFalse $ alphaSubstitues (TVar "x") tInt
+  assertFalse $ alphaSubstitues tInt (TVar "x")
 
 basicUnification :: Assertion
 basicUnification = do
@@ -452,7 +482,8 @@ assertMatches :: Type -> Type -> Assertion
 assertMatches expected result = do
   assertNoGenerics expected
   assertNoGenerics result
-  let message = "expected " ++ show result ++ " to unify with " ++ show expected
+  let message = "expected\n  " ++ show result ++
+                "\nto be equivalent to\n  " ++ show expected ++ "\n"
   assert (alphaSubstitues expected result) message
 
 
