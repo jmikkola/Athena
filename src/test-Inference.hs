@@ -300,9 +300,6 @@ returnABC = do
   let returnC = returnJust $ E.Var () "c"
   let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnC)
   let func9 = func "f" ["a", "b", "c"] [ifStmt]
-  -- f(a, b, c) = if a { return b; } return c;
-  --let ifStmt = S.If () (E.Var () "a") [returnB] Nothing
-  --let func9 = func "f" ["a", "b", "c"] [ifStmt, returnB]
   let type9 = TFunc [tBool, TVar "a", TVar "a"] (TVar "a")
   assertDeclTypes type9 func9
 
