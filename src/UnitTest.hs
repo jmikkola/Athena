@@ -37,9 +37,13 @@ test name assertion =
   case assertion of
    Right _  -> return True
    Left err -> do
-     putStrLn $ name ++ " failed: " ++ err
+     putStrLn $ name ++ " failed:\n" ++ indent "    " err
      return False
 
+
+indent :: String -> String -> String
+indent indentation text =
+  unlines $ map (indentation ++) $ lines text
 
 assert :: Bool -> String -> Assertion
 assert test message =
@@ -55,7 +59,7 @@ assertFalse b = assert (not b) "expected False, got True"
 assertEq :: (Show a, Eq a) => a -> a -> Assertion
 assertEq x y
   | x == y    = ok
-  | otherwise = err $ "not equal: " ++ show x ++ " and " ++ show y
+  | otherwise = err $ "not equal:\n  " ++ show x ++ "\nand\n  " ++ show y
 
 assertLeft :: (Show a) => Either l a -> Assertion
 assertLeft (Left _)  = ok

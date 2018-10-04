@@ -16,6 +16,7 @@ import Types
   ( Substitution
   , Type(..)
   , Scheme(..)
+  , composeSubs
   , apply
   , tUnit
   , tInt
@@ -62,6 +63,7 @@ main = runTests "Inference" tests
 tests :: [Test]
 tests =
   [ test "comparing types" comparingTypes
+  , test "composing substitutions" composingSubs
   , test "basic unification" basicUnification
   , test "recursive unification" recursiveUnification
   , test "instantiation" instantiation
@@ -71,6 +73,7 @@ tests =
   , test "if-else return" ifElseReturn
   , test "if-then return" ifThenReturn
   , test "return a-b-c" returnABC
+  , test "return a-b-c 2" returnABC2
   , test "return a-b" returnAB
   , test "return a-b end" returnABEnd
   , test "missing return" missingReturn
@@ -109,6 +112,21 @@ comparingTypes = do
   assertFalse $ alphaSubstitues tInt tBool
   assertFalse $ alphaSubstitues (TVar "x") tInt
   assertFalse $ alphaSubstitues tInt (TVar "x")
+
+composingSubs :: Assertion
+composingSubs = do
+  -- Try the trivial cases
+  assertEq emptySubstitution (composeSubs emptySubstitution emptySubstitution)
+
+  let subAB = makeSub [(TVar "a", TVar "b")]
+  assertEq subAB (composeSubs emptySubstitution subAB)
+  assertEq subAB (composeSubs subAB emptySubstitution)
+  assertEq subAB (composeSubs subAB subAB)
+
+  -- Test updating elements of the other substitution
+  let subBC = makeSub [(TVar "b", TVar "c")]
+  let subABtoC = makeSub [(TVar "a", TVar "c"), (TVar "b", TVar "c")]
+  assertEq subABtoC $ composeSubs subAB subBC
 
 basicUnification :: Assertion
 basicUnification = do
@@ -278,13 +296,24 @@ ifThenReturn = do
 returnABC :: Assertion
 returnABC = do
   -- f(a, b, c) = if a { return b; } else { return c; }
+  let returnB = returnJust $ E.Var () "b"
+  let returnC = returnJust $ E.Var () "c"
+  let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnC)
+  let func9 = func "f" ["a", "b", "c"] [ifStmt]
+  -- f(a, b, c) = if a { return b; } return c;
+  --let ifStmt = S.If () (E.Var () "a") [returnB] Nothing
+  --let func9 = func "f" ["a", "b", "c"] [ifStmt, returnB]
+  let type9 = TFunc [tBool, TVar "a", TVar "a"] (TVar "a")
+  assertDeclTypes type9 func9
+
+
+returnABC2 :: Assertion
+returnABC2 = do
   -- f(a, b, c) = if a { return b; } return c;
   let returnB = returnJust $ E.Var () "b"
   let returnC = returnJust $ E.Var () "c"
-  --let ifStmt = S.If () (E.Var () "a") [returnB] (Just returnC)
-  --let func9 = func "f" ["a", "b", "c"] [ifStmt]
   let ifStmt = S.If () (E.Var () "a") [returnB] Nothing
-  let func9 = func "f" ["a", "b", "c"] [ifStmt, returnB]
+  let func9 = func "f" ["a", "b", "c"] [ifStmt, returnC]
   let type9 = TFunc [tBool, TVar "a", TVar "a"] (TVar "a")
   assertDeclTypes type9 func9
 

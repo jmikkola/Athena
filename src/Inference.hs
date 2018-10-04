@@ -24,7 +24,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
---import Debug.Trace
+import Debug.Trace
 
 import Control.Monad (when, foldM, zipWithM)
 import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT)
@@ -210,8 +210,7 @@ data InferState
 
 startingInferState :: DeclaredTypes -> EnumOptions -> InferState
 startingInferState decls enumOptions =
-  InferState
-  { nextVarN = 0
+  InferState { nextVarN = 0
   , currentSub = Map.empty
   , typeDecls = decls
   , enumOpts = enumOptions }
@@ -253,7 +252,7 @@ getSub = gets currentSub
 extendSub :: Substitution -> InferM ()
 extendSub sub = do
   s1 <- getSub
-  let s = composeSubs sub s1
+  let s = composeSubs s1 sub
   modify (\st -> st { currentSub=s })
 
 inferGroups :: [BindGroup a] -> Environment -> InferM (TypedDecls a, Environment)
@@ -285,10 +284,8 @@ inferGroup (BindGroup impls) env = do
   return (typedDecls, resultEnv)
 
 
-{-
 showTrace :: (Show a) => String -> a -> a
 showTrace s a = trace (s ++ ": " ++ show a) a
--}
 
 inferDecls :: Environment -> [(String, D.Declaration a)] -> [Type] -> InferM (TypedDecls a)
 inferDecls env decls ts = mapM infer (zip decls ts)
@@ -416,7 +413,8 @@ inferStmt env stmt = case stmt of
     unify (getType testExpr) tBool
     (blk', blkReturns) <- inferBlock env blk
     (els', elsReturns) <- case els of
-      Nothing   -> return (Nothing, NeverReturns)
+      Nothing ->
+        return (Nothing, NeverReturns)
       Just st -> do
         (stmt', retT) <- inferStmt env st
         return (Just stmt', retT)
@@ -491,7 +489,7 @@ inferBlock env (s:ss) = do
         S.Let _ name _ expr ->
           let sch = generalize env (getType expr)
           in Map.insert name sch env
-        _                -> env
+        _                  -> env
   (ss', ret2) <- inferBlock env' ss
   return (s' : ss', appendReturns ret2 ret1)
 
@@ -784,7 +782,7 @@ unifyAll t = mapM_ (unify t)
 unify :: Type -> Type -> InferM ()
 unify t1 t2 = do
   s <- getSub
-  let message = "mgu " ++ show (apply s t1) ++ " " ++ show (apply s t2)
+  let message = "mgu " ++ show (apply s t1) ++ ", " ++ show (apply s t2)
   s2 <- lift $ traceErr message $ mgu (apply s t1) (apply s t2)
   extendSub s2
 
