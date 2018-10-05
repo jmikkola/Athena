@@ -23,4 +23,7 @@ run:
 	stack build
 	stack exec athena -- examples/fib.at
 
+tags:
+	hasktags -e src
+
 .PHONY: run athena

@@ -82,7 +82,7 @@ tests =
   , test "infinite type" infiniteType
   , test "finding dependencies" findDependencies
   , test "simple module" simpleModule
---  , test "explicit let binding" explicitLetBinding
+  , test "explicit let binding" explicitLetBinding
   ]
 
 
@@ -452,8 +452,6 @@ simpleModule = do
   assertEq 1 1
 
 
-{-
-TODO: Build support for explicit bindings
 explicitLetBinding :: Assertion
 explicitLetBinding = do
   -- func(x) { let y Int = x; return y; }
@@ -464,7 +462,7 @@ explicitLetBinding = do
   let funcLet = func "f" ["x"] [letStmt, returnStmt]
   let fnType = TFunc [tInt] tInt
   assertDeclTypes fnType funcLet
--}
+
 
 assertModuleTypes :: String -> Scheme -> Result (InferResult a) -> Assertion
 assertModuleTypes name sch result = case result of

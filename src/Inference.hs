@@ -372,6 +372,11 @@ inferStmt env stmt = case stmt of
     -- closure, I need to think about whether that closure should be allowed to
     -- assign back to this variable
     expr' <- inferExpr env expr
+    case mtype of
+      Nothing    -> return()
+      Just tname -> do
+        t <- typeFromName tname
+        unify (getType expr') t
     return (S.Let (tUnit, a) name mtype expr', NeverReturns)
 
   S.Assign a names expr ->
