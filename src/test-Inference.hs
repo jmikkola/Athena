@@ -490,7 +490,13 @@ explicitFunctionBinding = do
   let result = inferModule $ makeModule  [("f", funcInts)]
   assertModuleTypes "f" fnType result
 
--- TODO: Test that invalid annotations are rejected
+  -- This should be rejected because the return type is actually Int
+  -- func(x Int) Bool { return x }
+  let boolName = T.TypeName "Bool"
+  let type2 = Just $ T.Function [intName] boolName
+  let funcWrongType = D.Function () "f" type2 ["x"] returnStmt
+  assertLeft $ inferModule $ makeModule  [("f", funcWrongType)]
+
 -- TODO: Test that explicitly typed bindings break cycles
 
 assertModuleTypes :: String -> Scheme -> Result (InferResult a) -> Assertion
