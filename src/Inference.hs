@@ -434,7 +434,6 @@ inferStmt env stmt = case stmt of
     return (S.Return (tUnit, a) (Just expr'), AlwaysReturns [getType expr'])
 
   S.Let a name mtype expr -> do
-    -- TODO: Handle type, if provided
     -- TODO: recursive binding?
     -- Note that in recursive bindings, if the bound expression involves a
     -- closure, I need to think about whether that closure should be allowed to
