@@ -137,8 +137,6 @@ setSubtract :: (Ord a) => Set a -> Set a -> Set a
 setSubtract toRemove s = Set.filter keep s
   where keep e = not $ Set.member e toRemove
 
-unique :: (Ord a) => [a] -> [a]
-unique = Set.toList . Set.fromList
 
 class Depencencies a where
   findDependencies :: Set String -> a -> [String]
