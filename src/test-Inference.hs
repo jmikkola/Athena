@@ -38,6 +38,7 @@ import Inference
   , implicitBindings
   , inferModule
   , instantiate
+  , splitExplicit
   , InferResult(..)
   , BindGroup(..) )
 
@@ -398,6 +399,18 @@ findDependencies = do
   let bindings2 = [("f", fCallsG), ("g", gCallsF), ("h", hReturnsG)]
   assertEq [["g", "f"], ["h"]] (findGroups bindings2)
 
+  -- f(x Int) Int { return g(x); }
+  -- g(x) { return f(x); }
+  -- h() { return g; }
+  let intName = T.TypeName "Int"
+  let typeAnnotation = Just $ T.Function [intName] intName
+  let fExpl = D.Function () "f" typeAnnotation ["x"] (returnJust $ E.Call () varG [varX])
+  let bindings3 = [("f", fExpl), ("g", gCallsF), ("h", hReturnsG)]
+  let (di, de) = splitExplicit $ Map.fromList bindings3
+  assertEq ["g", "h"] $ Map.keys di
+  assertEq ["f"] $ Map.keys de
+  assertEq [["g"], ["h"]] (findGroups bindings3)
+
   -- TODO: Test more deeply nested AST
   -- TODO: Test larger call graphs w/ longer cycles
   -- TODO: Test shadowing via arg names
@@ -487,7 +500,7 @@ assertModuleTypes name sch result = case result of
      Just resultSch -> assertSchemeUnifies sch resultSch
 
 
-makeModule :: [(String, D.Declaration a)] -> Module a
+makeModule :: (Show a) => [(String, D.Declaration a)] -> Module a
 makeModule bindings =
   let bindMap = Map.fromList bindings
   in Module
@@ -496,7 +509,7 @@ makeModule bindings =
      , enumTypes=Map.empty }
 
 
-findGroups :: [(String, D.Declaration a)] -> [[String]]
+findGroups :: (Show a) => [(String, D.Declaration a)] -> [[String]]
 findGroups bindings =
   getGroupNames $ makeBindGroup $ makeModule bindings
 

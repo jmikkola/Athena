@@ -10,6 +10,7 @@ module Inference
   , makeBindGroup
   , implicitBindings
   , instantiate
+  , splitExplicit
   , BindGroup
   , Environment
   , TypedDecls
@@ -87,9 +88,6 @@ inferModule m = do
   let bindGroup = makeBindGroup m
   let decls = types m
   let enumOptions = enumTypes m
-  --let expls = explicitBindings bindGroup
-  -- TODO: Add types for explicit bindings to env when checking implicit bindings
-  --let impls = implicitBindings bindGroup
   (binds, env) <- runInfer decls enumOptions $ inferBindGroup bindGroup startingEnv
   return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
 
@@ -97,7 +95,8 @@ makeBindGroup :: Module a -> BindGroup a
 makeBindGroup m =
   let declarations = bindings m
       (di, de) = splitExplicit declarations
-      graph = gatherGraph di
+      explicitNames = Set.fromList $ Map.keys de
+      graph = gatherGraph explicitNames di
       topoOrder = reverse $ components graph
       getBinding name = (name, mustLookup name declarations)
       impls = map (map getBinding) topoOrder
@@ -129,8 +128,13 @@ startingDependencies = Set.fromList ["print"]
 -- dependency graph looks like.
 -- This assumes that all the variables are defined (TODO: that's
 -- never checked at the moment)
-gatherGraph :: Map String (D.Declaration a) -> Map String [String]
-gatherGraph = Map.map (unique . findDependencies startingDependencies)
+gatherGraph :: Set String -> Map String (D.Declaration a) -> Map String [String]
+gatherGraph explicitNames = Map.map (removeExpl . findDependencies startingDependencies)
+  where removeExpl deps = Set.toList $ setSubtract explicitNames $ Set.fromList deps
+
+setSubtract :: (Ord a) => Set a -> Set a -> Set a
+setSubtract toRemove s = Set.filter keep s
+  where keep e = not $ Set.member e toRemove
 
 unique :: (Ord a) => [a] -> [a]
 unique = Set.toList . Set.fromList
@@ -301,7 +305,8 @@ inferBindGroup bg env = do
 
 tiExpls :: [(String, D.Declaration a)] -> Environment ->
            InferM (TypedDecls a, Environment)
-tiExpls = undefined
+tiExpls [] env = return ([], env)
+tiExpls _ _ = error "todo: tiExpls"
 
 
 getExplicitTypes :: [(String, D.Declaration a)] -> InferM Environment
