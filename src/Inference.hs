@@ -297,17 +297,40 @@ inferBindGroup :: BindGroup a -> Environment -> InferM (TypedDecls a, Environmen
 inferBindGroup bg env = do
   let expls = explicitBindings bg
   explicitBindingTypes <- getExplicitTypes expls
+
   let env1 = addToEnv explicitBindingTypes env
   let impls = implicitBindings bg
+
   (decls1, env2) <- inferGroups impls env1
-  (decls2, env3) <- tiExpls expls env2
-  return (decls1 ++ decls2, env3)
+  let env' = addToEnv env2 env1
+  decls2 <- tiExpls expls env'
+  return (decls1 ++ decls2, env')
 
 
-tiExpls :: [(String, D.Declaration a)] -> Environment ->
-           InferM (TypedDecls a, Environment)
-tiExpls [] env = return ([], env)
-tiExpls _ _ = error "todo: tiExpls"
+tiExpls :: [(String, D.Declaration a)] -> Environment -> InferM (TypedDecls a)
+tiExpls expls env = case expls of
+  [] ->
+    return []
+  ((name, decl):es) -> do
+    d <- tiExpl name decl env
+    ds <- tiExpls es env
+    return $ (name, d) : ds
+
+tiExpl ::  String -> D.Declaration a -> Environment -> InferM (D.Declaration (Type, a))
+tiExpl name decl env = do
+  let sch = mustLookup name env
+  t <- instantiate sch
+
+  d <- inferDecl env decl
+  let dt = getType d
+
+  unify t dt
+
+  sub <- getSub
+  let sch' = generalize (applyEnv sub env) (apply sub dt)
+  if sch' /= sch
+    then inferErr $ BindingTooGeneral name
+    else return d
 
 
 getExplicitTypes :: [(String, D.Declaration a)] -> InferM Environment
@@ -402,12 +425,10 @@ containsGenerics t = case t of
 inferDecl :: Environment -> D.Declaration a -> InferM (D.Declaration (Type, a))
 inferDecl env decl = case decl of
   D.Let a name mtype expr -> do
-    -- TODO: use mtype, if provided
     expr' <- inferExpr env expr
     return $ D.Let (getType expr', a) name mtype expr'
 
   D.Function a name mtype args stmt -> do
-    -- TODO: use mtype, if provided
     argTs <- mapM (const newTypeVar) args
     retT <- newTypeVar
     let argEnv = Map.fromList $ zip args (map asScheme argTs)

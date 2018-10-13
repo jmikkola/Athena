@@ -12,3 +12,4 @@ dist
 *.go
 a.out
 .idea
+*.prof

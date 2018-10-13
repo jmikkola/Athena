@@ -9,6 +9,7 @@ data Error
   = Mismatch Type Type
   | WrongType Type String
   | InfiniteType String -- a type variable
+  | BindingTooGeneral String -- name of binding
   | CompilerBug String
   | DuplicateBinding String -- binding name
   | ParseError String
