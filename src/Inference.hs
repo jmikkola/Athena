@@ -23,6 +23,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Maybe (isJust)
 
 import Debug.Trace
 
@@ -86,19 +87,39 @@ inferModule m = do
   let bindGroup = makeBindGroup m
   let decls = types m
   let enumOptions = enumTypes m
-  let impls = implicitBindings bindGroup
-  (binds, env) <- runInfer decls enumOptions $ inferGroups impls startingEnv
+  --let expls = explicitBindings bindGroup
+  -- TODO: Add types for explicit bindings to env when checking implicit bindings
+  --let impls = implicitBindings bindGroup
+  (binds, env) <- runInfer decls enumOptions $ inferBindGroup bindGroup startingEnv
   return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
 
 makeBindGroup :: Module a -> BindGroup a
 makeBindGroup m =
   let declarations = bindings m
-      graph = gatherGraph declarations
+      (di, de) = splitExplicit declarations
+      graph = gatherGraph di
       topoOrder = reverse $ components graph
       getBinding name = (name, mustLookup name declarations)
       impls = map (map getBinding) topoOrder
-      -- TODO: Separate out explicit bindings before finding order
-  in BindGroup { implicitBindings=impls, explicitBindings=[] }
+      expls = Map.toList de
+  in BindGroup { implicitBindings=impls, explicitBindings=expls }
+
+type DeclMap a = Map String (D.Declaration a)
+
+splitExplicit :: DeclMap a -> (DeclMap a, DeclMap a)
+splitExplicit decls = Map.partition isImplicit decls
+
+isImplicit :: D.Declaration a -> Bool
+isImplicit = not . isExplicit
+
+isExplicit :: D.Declaration a -> Bool
+isExplicit = isJust . getDeclaredType
+
+getDeclaredType :: D.Declaration a -> Maybe T.TypeDecl
+getDeclaredType decl = case decl of
+  D.Let      _ _ mt _   -> fmap T.TypeName mt
+  D.Function _ _ mt _ _ -> mt
+  D.TypeDef{}           -> error "shouldn't see a typedef here"
 
 -- TODO: extend this into prelude (plus imported names)
 startingDependencies :: Set String
@@ -229,6 +250,9 @@ type InferM = StateT InferState (Either Error)
 
 type Environment = Map String Scheme
 
+addToEnv :: Environment -> Environment -> Environment
+addToEnv toAdd env = Map.union toAdd env
+
 -- TODO: Make this a proper instance of the Types.Types class
 applyEnv :: Substitution -> Environment -> Environment
 applyEnv sub = Map.map (apply sub)
@@ -262,6 +286,34 @@ extendSub sub = do
   s1 <- getSub
   let s = composeSubs s1 sub
   modify (\st -> st { currentSub=s })
+
+
+inferBindGroup :: BindGroup a -> Environment -> InferM (TypedDecls a, Environment)
+inferBindGroup bg env = do
+  let expls = explicitBindings bg
+  explicitBindingTypes <- getExplicitTypes expls
+  let env1 = addToEnv explicitBindingTypes env
+  let impls = implicitBindings bg
+  (decls1, env2) <- inferGroups impls env1
+  (decls2, env3) <- tiExpls expls env2
+  return (decls1 ++ decls2, env3)
+
+
+tiExpls :: [(String, D.Declaration a)] -> Environment ->
+           InferM (TypedDecls a, Environment)
+tiExpls = undefined
+
+
+getExplicitTypes :: [(String, D.Declaration a)] -> InferM Environment
+getExplicitTypes expls = do
+  typed <- mapM getExplicitType expls
+  return $ Map.fromList typed
+
+getExplicitType :: (name, D.Declaration a) -> InferM (name, Scheme)
+getExplicitType (name, decl) = do
+  let (Just declaredType) = getDeclaredType decl
+  t <- typeFromDecl declaredType
+  return (name, asScheme t)
 
 inferGroups :: [[(String, D.Declaration a)]] -> Environment ->
                InferM (TypedDecls a, Environment)
