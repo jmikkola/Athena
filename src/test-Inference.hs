@@ -83,6 +83,7 @@ tests =
   , test "finding dependencies" findDependencies
   , test "simple module" simpleModule
   , test "explicit let binding" explicitLetBinding
+  , test "explicitly typed function" explicitFunctionBinding
   ]
 
 
@@ -463,6 +464,19 @@ explicitLetBinding = do
   let fnType = TFunc [tInt] tInt
   assertDeclTypes fnType funcLet
 
+
+explicitFunctionBinding :: Assertion
+explicitFunctionBinding = do
+  -- func(x Int) Int { return x }
+  let intName = T.TypeName "Int"
+  let typeAnnotation = Just $ T.Function [intName] intName
+  let returnStmt = returnJust (E.Var () "x")
+  let funcInts = D.Function () "f" typeAnnotation ["x"] returnStmt
+  let fnType = TFunc [tInt] tInt
+  assertDeclTypes fnType funcInts
+
+-- TODO: Test that invalid annotations are rejected
+-- TODO: Test that explicitly typed bindings break cycles
 
 assertModuleTypes :: String -> Scheme -> Result (InferResult a) -> Assertion
 assertModuleTypes name sch result = case result of
