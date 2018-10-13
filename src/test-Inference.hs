@@ -461,12 +461,10 @@ simpleModule = do
   let idOfX = E.Call () varID [varX]
   let fCallsID = func "f" ["x"] [returnJust $ E.Binary () E.Greater idOfX (intVal 2)]
   let result4 = inferModule $ makeModule [("f", fCallsID), ("id", identityCallingF)]
-  let lessGeneralIDType = Scheme 1 $ TFunc [tInt] tInt
-  let fCallsIDType = Scheme 1 $ TFunc [tInt] tBool
-  --assertModuleTypes "f" fCallsIDType result4
-  --assertModuleTypes "id" lessGeneralIDType result4
-  -- TODO: It looks like this is returning a type that is too general
-  assertEq 1 1
+  let lessGeneralIDType = Scheme 0 $ TFunc [tInt] tInt
+  let fCallsIDType = Scheme 0 $ TFunc [tInt] tBool
+  assertModuleTypes "f" fCallsIDType result4
+  assertModuleTypes "id" lessGeneralIDType result4
 
 
 explicitLetBinding :: Assertion
