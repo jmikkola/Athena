@@ -34,7 +34,7 @@ import Inference
   , inferDecl
   , unifies
   , alphaSubstitues
-  , makeBindGroups
+  , makeBindGroup
   , implicitBindings
   , inferModule
   , instantiate
@@ -484,12 +484,11 @@ makeModule bindings =
 
 findGroups :: [(String, D.Declaration a)] -> [[String]]
 findGroups bindings =
-  getGroupNames $ makeBindGroups $ makeModule bindings
+  getGroupNames $ makeBindGroup $ makeModule bindings
 
 
-getGroupNames :: [BindGroup a] -> [[String]]
-getGroupNames = map getNames
-  where getNames bg = map fst $ implicitBindings bg
+getGroupNames :: BindGroup a -> [[String]]
+getGroupNames bg = map (map fst) (implicitBindings bg)
 
 
 returnJust expr = S.Return () (Just expr)

@@ -7,7 +7,7 @@ module Inference
   , inferDecl
   , unifies
   , alphaSubstitues
-  , makeBindGroups
+  , makeBindGroup
   , implicitBindings
   , instantiate
   , BindGroup
@@ -60,10 +60,15 @@ import Util.Graph
   ( components )
 
 
-newtype BindGroup a
+data BindGroup a
   = BindGroup
-    { implicitBindings :: [(String, D.Declaration a)] }
-    -- TODO: Add explicit bindings
+    -- the bindings without an explicit type are grouped by strongly connected
+    -- component and the groups are toplogically sorted. Bindings in the head of
+    -- the list may not refer to bindings in the tail, but bindings in the tail
+    -- can refer to bindings in the head.
+    { implicitBindings :: [[(String, D.Declaration a)]]
+    -- all bindings with an explicit type go in one group
+    , explicitBindings :: [(String, D.Declaration a)] }
 
 type TypedDecls a = [(String, D.Declaration (Type, a))]
 
@@ -78,19 +83,22 @@ data InferResult a
 -- (Type, a) adds a type to whatever the original annotation was
 inferModule :: Module a -> Result (InferResult a)
 inferModule m = do
-  let bindGroups = makeBindGroups m
+  let bindGroup = makeBindGroup m
   let decls = types m
   let enumOptions = enumTypes m
-  (binds, env) <- runInfer decls enumOptions $ inferGroups bindGroups startingEnv
+  let impls = implicitBindings bindGroup
+  (binds, env) <- runInfer decls enumOptions $ inferGroups impls startingEnv
   return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
 
-makeBindGroups :: Module a -> [BindGroup a]
-makeBindGroups m =
+makeBindGroup :: Module a -> BindGroup a
+makeBindGroup m =
   let declarations = bindings m
       graph = gatherGraph declarations
       topoOrder = reverse $ components graph
       getBinding name = (name, mustLookup name declarations)
-  in map (BindGroup . map getBinding) topoOrder
+      impls = map (map getBinding) topoOrder
+      -- TODO: Separate out explicit bindings before finding order
+  in BindGroup { implicitBindings=impls, explicitBindings=[] }
 
 -- TODO: extend this into prelude (plus imported names)
 startingDependencies :: Set String
@@ -255,7 +263,8 @@ extendSub sub = do
   let s = composeSubs s1 sub
   modify (\st -> st { currentSub=s })
 
-inferGroups :: [BindGroup a] -> Environment -> InferM (TypedDecls a, Environment)
+inferGroups :: [[(String, D.Declaration a)]] -> Environment ->
+               InferM (TypedDecls a, Environment)
 inferGroups []     _   =
   return ([], Map.empty)
 inferGroups (g:gs) env = do
@@ -263,8 +272,9 @@ inferGroups (g:gs) env = do
   (rest, env2) <- inferGroups gs (Map.union env1 env)
   return (typed ++ rest, Map.union env1 env2)
 
-inferGroup :: BindGroup a -> Environment -> InferM (TypedDecls a, Environment)
-inferGroup (BindGroup impls) env = do
+inferGroup :: [(String, D.Declaration a)] -> Environment ->
+              InferM (TypedDecls a, Environment)
+inferGroup impls env = do
   -- Map each binding to a new type variable while recursively typing these bindings
   ts <- mapM (const newTypeVar) impls
   let bindingNames = map fst impls
