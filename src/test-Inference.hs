@@ -16,6 +16,7 @@ import Types
   ( Substitution
   , Type(..)
   , Scheme(..)
+  , asScheme
   , composeSubs
   , apply
   , tUnit
@@ -36,6 +37,7 @@ import Inference
   , alphaSubstitues
   , makeBindGroup
   , implicitBindings
+  , explicitBindings
   , inferModule
   , instantiate
   , splitExplicit
@@ -410,6 +412,7 @@ findDependencies = do
   assertEq ["g", "h"] $ Map.keys di
   assertEq ["f"] $ Map.keys de
   assertEq [["g"], ["h"]] (findGroups bindings3)
+  assertEq ["f"] $ map fst $ explicitBindings $ makeBindGroup $ makeModule bindings3
 
   -- TODO: Test more deeply nested AST
   -- TODO: Test larger call graphs w/ longer cycles
@@ -485,8 +488,9 @@ explicitFunctionBinding = do
   let typeAnnotation = Just $ T.Function [intName] intName
   let returnStmt = returnJust (E.Var () "x")
   let funcInts = D.Function () "f" typeAnnotation ["x"] returnStmt
-  let fnType = TFunc [tInt] tInt
-  assertDeclTypes fnType funcInts
+  let fnType = asScheme $ TFunc [tInt] tInt
+  let result = inferModule $ makeModule  [("f", funcInts)]
+  assertModuleTypes "f" fnType result
 
 -- TODO: Test that invalid annotations are rejected
 -- TODO: Test that explicitly typed bindings break cycles

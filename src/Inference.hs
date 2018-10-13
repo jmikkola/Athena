@@ -9,6 +9,7 @@ module Inference
   , alphaSubstitues
   , makeBindGroup
   , implicitBindings
+  , explicitBindings
   , instantiate
   , splitExplicit
   , BindGroup
