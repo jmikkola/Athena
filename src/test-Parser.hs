@@ -23,13 +23,13 @@ import UnitTest
 main = runTests "Parser" tests
 
 boolT :: T.TypeDecl
-boolT = T.TypeName "Bool"
+boolT = T.TypeName [] "Bool"
 intT :: T.TypeDecl
-intT = T.TypeName "Int"
+intT = T.TypeName [] "Int"
 stringT :: T.TypeDecl
-stringT = T.TypeName "String"
+stringT = T.TypeName [] "String"
 nilT :: T.TypeDecl
-nilT = T.TypeName "()"
+nilT = T.TypeName [] "()"
 
 type Val = E.Value
 type Expr = E.Expression
@@ -121,8 +121,8 @@ tests =
      (eBinary E.Eq (eVal (intVal 1)) (eVal (intVal 1)))
      (eBinary E.Less (eVal (intVal 2)) (eVal (intVal 3))))
   , expectParses typeParser "Int" "Int"
-  , expectParses typeDefParser "struct {\n  a  Int\nb String\n}"
-    (T.Struct [("a", intT), ("b", stringT)])
+  , expectParsesA typeDefParser "struct {\n  a  Int\nb String\n}"
+    (T.Struct [] [("a", intT), ("b", stringT)])
   , testEnumType
   , testEnumType2
 
@@ -186,16 +186,16 @@ tests =
 testEnumType :: Test
 testEnumType =
   let text = "enum {\n Cons {\n item Int \n next List \n } \n End \n }"
-      expected = T.Enum [ ("Cons", [("item", intT), ("next", T.TypeName "List")])
-                        , ("End", []) ]
-  in expectParses typeDefParser text expected
+      expected = T.Enum [] [ ("Cons", [("item", intT), ("next", T.TypeName [] "List")])
+                           , ("End", []) ]
+  in expectParsesA typeDefParser text expected
 
 testEnumType2 :: Test
 testEnumType2 =
   let text = "enum {\n TInt\n TFloat \n }"
-      expected = T.Enum [ ("TInt", [])
-                        , ("TFloat", []) ]
-  in expectParses typeDefParser text expected
+      expected = T.Enum [] [ ("TInt", [])
+                           , ("TFloat", []) ]
+  in expectParsesA typeDefParser text expected
 
 testParsingBlock :: Test
 testParsingBlock =
@@ -237,14 +237,14 @@ testParsingFunc2 =
 testParsingTypedFunction :: Test
 testParsingTypedFunction =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
-      fnType = Just $ T.Function [intT, boolT] boolT
+      fnType = Just $ T.Function [] [intT, boolT] boolT
       expected = D.Function [] "main" fnType ["a", "b"] (sBlock [])
   in expectParsesA declarationParser text expected
 
 testParsingTypeDecl :: Test
 testParsingTypeDecl =
   let text = "type Foo struct {\n  asdf Int\n  xyz Foo\n}"
-      declaredType = T.Struct [("asdf", intT), ("xyz", T.TypeName "Foo")]
+      declaredType = T.Struct [] [("asdf", intT), ("xyz", T.TypeName [] "Foo")]
       expected = D.TypeDef [] "Foo" declaredType
   in expectParsesA declarationParser text expected
 
@@ -266,5 +266,12 @@ expectParses' postprocess parser text expected =
      if postprocess result == expected
      then return True
      else do
-       putStrLn $ "failed parsing ''" ++ text ++ "'', expected " ++ show expected ++ ", got " ++ show result
+       let parts =
+             [ "failed parsing ''"
+             , text
+             , "''\n=== expected: ===\n  "
+             , show expected
+             , "\n=== got ===\n  "
+             , show result ]
+       putStrLn $ concat parts
        return False

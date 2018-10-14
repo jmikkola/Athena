@@ -117,7 +117,7 @@ isExplicit = isJust . getDeclaredType
 
 getDeclaredType :: D.Declaration -> Maybe T.TypeDecl
 getDeclaredType decl = case decl of
-  D.Let      _ _ mt _   -> fmap T.TypeName mt
+  D.Let      _ _ mt _   -> fmap (T.TypeName []) mt
   D.Function _ _ mt _ _ -> mt
   D.TypeDef{}           -> error "shouldn't see a typedef here"
 
@@ -598,7 +598,7 @@ getStructFieldType t fieldName = case t of
       Nothing -> inferErr $ UndefinedField structName fieldName
       Just ft -> return ft
     case fieldT of
-     T.TypeName typ ->
+     T.TypeName _ typ ->
        return $ TCon typ []
      _ ->
        inferErr $ CompilerBug $ "shouldn't see a " ++ show fieldT ++ " here"
@@ -740,14 +740,16 @@ getStructType name = do
 
 typeFromDecl :: T.TypeDecl -> InferM Type
 typeFromDecl tdecl = case tdecl of
-  T.TypeName name ->
+  T.TypeName _ name ->
     typeFromName name
-  T.Function argTs retT -> do
+  T.Function _ argTs retT -> do
     argTypes <- mapM typeFromDecl argTs
     retType <- typeFromDecl retT
     return $ TFunc argTypes retType
-  T.Struct _ -> error "shouldn't see a Struct here"
-  T.Enum _ -> error "shouldn't see an Enum here"
+  T.Struct{} ->
+    error "shouldn't see a Struct here"
+  T.Enum{} ->
+    error "shouldn't see an Enum here"
 
 
 typeFromName :: String -> InferM Type
@@ -803,7 +805,7 @@ getStructDecl :: String -> InferM [(String, T.TypeDecl)]
 getStructDecl tname = do
   tdecl <- getTypeDecl tname
   case tdecl of
-   T.Struct fields -> return fields
+   T.Struct _ fields -> return fields
    _ -> inferErr $ NonStructureType tname
 
 

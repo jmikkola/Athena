@@ -19,6 +19,8 @@ showRegion :: [String] -> Region -> String
 showRegion fileLines region =
   let firstLine = line $ start region
       lastLine = line $ end region
-      nlines = lastLine - firstLine + 1
+      nlines = min maxLines (lastLine - firstLine + 1)
       regionLines = take nlines $ drop (firstLine - 1) fileLines
   in unlines regionLines
+
+maxLines = 5

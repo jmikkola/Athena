@@ -5,7 +5,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 
 import AST.Annotation (Annotated, getLocation)
 import AST.Declaration
@@ -69,7 +69,7 @@ ensureDeclsAreUnique (d:ds) = do
 
 gatherEnumTypes :: File -> Result (Map String String)
 gatherEnumTypes file = do
-  let enumDecls = [(name, options) | TypeDef _ name (T.Enum options) <- file]
+  let enumDecls = [(name, options) | TypeDef _ name (T.Enum _ options) <- file]
   let optionNames = [ (optName, name)
                     | (name, options) <- enumDecls
                     , (optName, _) <- options ]
@@ -100,17 +100,17 @@ unnestAll ((name,t):tds) = do
 unnestStructures :: String -> TypeDecl -> Result (TypeDecl, TypeDecls)
 unnestStructures name tdecl = case tdecl of
   -- Aliases will have to happen as a second pass
-  T.TypeName _ ->
+  T.TypeName _ _ ->
     return (tdecl, [])
-  T.Function args ret -> do
+  T.Function _ args ret -> do
     mapM_ noStructures args
     noStructures ret
     return (tdecl, [])
-  T.Struct fields -> do
+  T.Struct a fields -> do
     requireUnique $ map fst fields
     (unnested, decls) <- unnestFields name fields
-    return (T.Struct unnested, decls)
-  T.Enum variants -> do
+    return (T.Struct a unnested, decls)
+  T.Enum _ variants -> do
     requireUnique $ map fst variants
     structs <- mapM (uncurry variantToStruct) variants
     return (tdecl, structs)
@@ -121,7 +121,7 @@ variantToStruct name fields = do
   let (names, fieldTypes) = unzip fields
   requireUnique names
   mapM_ noStructures fieldTypes
-  return (name, T.Struct fields)
+  return (name, T.Struct [] fields)
 
 
 -- fields -> Result (fields, de-anonymized)
@@ -136,7 +136,7 @@ unnestFields name ((n,t):ts) = do
 noStructures :: TypeDecl -> Result ()
 noStructures tdecl = case tdecl of
   T.TypeName{}        -> return ()
-  T.Function args ret -> do
+  T.Function _ args ret -> do
     mapM_ noStructures args
     noStructures ret
   T.Struct{}          -> Left InvalidAnonStructure
@@ -220,5 +220,5 @@ duplicateName :: String -> Result a
 duplicateName name = Left $ DuplicateBinding name
 
 withLocations :: (Annotated a) => [a] -> Result b -> Result b
-withLocations code result =
-  mapLeft (WithLocations (catMaybes $ map getLocation code)) result
+withLocations code =
+  mapLeft (WithLocations (mapMaybe getLocation code))

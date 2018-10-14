@@ -90,8 +90,8 @@ assembleFunctionType argTypes retType =
   then return Nothing
   else do
     argTs <- requireJusts argTypes
-    let retT = unwrapOr (fmap T.TypeName retType) nilType
-    let typ = T.Function (map T.TypeName argTs) retT
+    let retT = unwrapOr (fmap (T.TypeName []) retType) nilType
+    let typ = T.Function [] (map (T.TypeName []) argTs) retT
     return $ Just typ
 
 
@@ -529,13 +529,13 @@ unaryOpParser =
 ---- AST.Type parsers ----
 
 nilType :: TypeDecl
-nilType = T.TypeName "()"
+nilType = T.TypeName [] "()"
 
 typeParser :: Parser Type
 typeParser = string "()" <|> typeName
 
 typeDefParser :: Parser TypeDecl
-typeDefParser = enumTypeParser <|> structTypeParser <|> namedType
+typeDefParser = addLocation (enumTypeParser <|> structTypeParser <|> namedType)
 
 enumTypeParser :: Parser TypeDecl
 enumTypeParser = do
@@ -545,7 +545,7 @@ enumTypeParser = do
   _ <- statementSep
   options <- sepEndBy enumField statementSep
   _ <- string "}"
-  return $ T.Enum options
+  return $ T.Enum [] options
 
 enumField :: Parser (String, T.EnumOption)
 enumField = do
@@ -559,7 +559,7 @@ structTypeParser :: Parser TypeDecl
 structTypeParser = do
   _ <- string "struct"
   _ <- any1LinearWhitespace
-  T.Struct <$> structTypeBody
+  T.Struct [] <$> structTypeBody
 
 structTypeBody :: Parser [(String, TypeDecl)]
 structTypeBody = do
@@ -573,11 +573,11 @@ structField :: Parser (String, TypeDecl)
 structField = do
   name <- valueName
   _ <- any1LinearWhitespace
-  typ <- typeParser
-  return (name, T.TypeName typ)
+  typ <- addLocation namedType
+  return (name, typ)
 
 namedType :: Parser TypeDecl
-namedType = T.TypeName <$> typeParser
+namedType = T.TypeName [] <$> typeParser
 
 ---- Helper functions ----
 
