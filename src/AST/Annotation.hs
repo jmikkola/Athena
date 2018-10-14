@@ -7,6 +7,8 @@ import Types (Type)
 class Annotated a where
   getAnnotation :: a -> Annotation
   setAnnotation :: Annotation -> a -> a
+  -- unlike the other functions, removeAnnotations is recurisve
+  removeAnnotations :: a -> a
 
 
 type Annotation = [Metadata]
@@ -35,9 +37,6 @@ getType node = listToMaybe [t | Typed t <- getAnnotation node]
 
 getLocation :: (Annotated a) => a -> Maybe Region
 getLocation node = listToMaybe [r | Location r <- getAnnotation node]
-
-removeAnnotations :: (Annotated a) => a -> a
-removeAnnotations = setAnnotation emptyAnnotation
 
 
 listToMaybe :: [a] -> Maybe a

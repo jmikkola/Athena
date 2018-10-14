@@ -4,6 +4,7 @@ module Main where
 import Text.Parsec (eof, parse)
 import Text.Parsec.String (Parser)
 
+import AST.Annotation (Annotated, removeAnnotations)
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
@@ -76,46 +77,46 @@ sAssign = S.Assign []
 tests :: [Test]
 tests =
   -- expressions
-  [ expectParses numberParser "123.345" (floatVal 123.345)
-  , expectParses valueParser "123.345" (floatVal 123.345)
-  , expectParses expressionParser "123.345" (eVal (floatVal 123.345))
-  , expectParses expressionParser "-10" (eVal (intVal (-10)))
-  , expectParses expressionParser "a123" (eVar "a123")
-  , expectParses expressionParser "f(a)" (eCall (eVar "f") [eVar "a"])
-  , expectParses expressionParser "f(a, b , c )"
+  [ expectParsesA numberParser "123.345" (floatVal 123.345)
+  , expectParsesA valueParser "123.345" (floatVal 123.345)
+  , expectParsesA expressionParser "123.345" (eVal (floatVal 123.345))
+  , expectParsesA expressionParser "-10" (eVal (intVal (-10)))
+  , expectParsesA expressionParser "a123" (eVar "a123")
+  , expectParsesA expressionParser "f(a)" (eCall (eVar "f") [eVar "a"])
+  , expectParsesA expressionParser "f(a, b , c )"
     (eCall (eVar "f") [eVar "a", eVar "b", eVar "c"])
-  , expectParses expressionParser "Bool(a)" (E.Cast [] "Bool" (eVar "a"))
-  , expectParses expressionParser "(2 + 3)"
+  , expectParsesA expressionParser "Bool(a)" (E.Cast [] "Bool" (eVar "a"))
+  , expectParsesA expressionParser "(2 + 3)"
     (E.Paren [] (eBinary E.Plus (eVal (intVal 2)) (eVal (intVal 3))))
-  , expectParses expressionParser "Point{\nx: 123,\ny: 45, \n}"
+  , expectParsesA expressionParser "Point{\nx: 123,\ny: 45, \n}"
     (eVal $ E.StructVal [] "Point"
      [("x", eVal $ intVal 123), ("y", eVal $ intVal 45)])
-  , expectParses expressionParser "int ** 3"
+  , expectParsesA expressionParser "int ** 3"
     (eBinary E.Power (eVar "int") (eVal (intVal 3)))
-  , expectParses expressionParser "\"a quoted \\\"string\\\" \""
+  , expectParsesA expressionParser "\"a quoted \\\"string\\\" \""
     (eVal (strVal "a quoted \"string\" "))
-  , expectParses expressionParser "!False"
+  , expectParsesA expressionParser "!False"
     (E.Unary [] E.BoolNot (eVal (boolVal False)))
-  , expectParses expressionParser "foo.bar"
+  , expectParsesA expressionParser "foo.bar"
     (E.Access [] (eVar "foo") "bar")
-  , expectParses expressionParser "foo.bar.baz"
+  , expectParsesA expressionParser "foo.bar.baz"
     (E.Access [] (E.Access [] (eVar "foo") "bar") "baz")
-  , expectParses expressionParser "1 + 2 * 3 + 4"
+  , expectParsesA expressionParser "1 + 2 * 3 + 4"
     -- evaluation order: 2*3, then 1+(2*3), then (1+(2*3))+4
     (eBinary E.Plus
       (eBinary E.Plus
        (eVal $ intVal 1)
        (eBinary E.Times (eVal $ intVal 2) (eVal $ intVal 3)))
       (eVal $ intVal 4))
-  , expectParses expressionParser "10 + -5"
+  , expectParsesA expressionParser "10 + -5"
     (eBinary E.Plus (eVal $ intVal 10) (eVal $ intVal (-5)))
-  , expectParses expressionParser "10 - 3 - 4"
+  , expectParsesA expressionParser "10 - 3 - 4"
     (eBinary E.Minus
      (eBinary E.Minus (eVal $ intVal 10) (eVal $ intVal 3))
      (eVal $ intVal 4))
-  , expectParses expressionParser "String(10 + -5)"
+  , expectParsesA expressionParser "String(10 + -5)"
     (E.Cast [] "String" (eBinary E.Plus (eVal $ intVal 10) (eVal $ intVal (-5))))
-  , expectParses expressionParser "1 == 1 && 2 < 3"
+  , expectParsesA expressionParser "1 == 1 && 2 < 3"
     (eBinary E.BoolAnd
      (eBinary E.Eq (eVal (intVal 1)) (eVal (intVal 1)))
      (eBinary E.Less (eVal (intVal 2)) (eVal (intVal 3))))
@@ -126,9 +127,9 @@ tests =
   , testEnumType2
 
     -- statements
-  , expectParses statementParser "return \"foo\""
+  , expectParsesA statementParser "return \"foo\""
     (sReturn $ Just $ eVal $ strVal "foo")
-  , expectParses statementParser "print(String(10 + -5))"
+  , expectParsesA statementParser "print(String(10 + -5))"
     (S.Expr [] $ E.Call []
      (E.Var [] "print") [E.Cast [] "String"
                          (eBinary E.Plus
@@ -137,26 +138,26 @@ tests =
   , expectParses statementSep "\n" ()
   , expectParses statementSep "  \n  " ()
   , expectParses statementSep "  \n\n  \n  " ()
-  , expectParses statementParser "{\n}" (sBlock [])
-  , expectParses statementParser "{\nreturn 1\n}"
+  , expectParsesA statementParser "{\n}" (sBlock [])
+  , expectParsesA statementParser "{\nreturn 1\n}"
     (sBlock [sReturn $ Just $ eVal $ intVal 1])
-  , expectParses statementParser "{\n  return 1\n}"
+  , expectParsesA statementParser "{\n  return 1\n}"
     (sBlock [sReturn $ Just $ eVal $ intVal 1])
-  , expectParses statementParser "{\nreturn 1  \n}"
+  , expectParsesA statementParser "{\nreturn 1  \n}"
     (sBlock [sReturn $ Just $ eVal $ intVal 1])
-  , expectParses statementParser "{  \n  return 1  \n  \n }"
+  , expectParsesA statementParser "{  \n  return 1  \n  \n }"
     (sBlock [sReturn $ Just $ eVal $ intVal 1])
-  , expectParses statementParser "{\n{\n}\n{\n}\n}"
+  , expectParsesA statementParser "{\n{\n}\n{\n}\n}"
     (sBlock [sBlock [], sBlock []])
-  , expectParses statementParser "let a123 = True"
+  , expectParsesA statementParser "let a123 = True"
     (sLet "a123" (eVal $ boolVal True))
-  , expectParses statementParser "let a123 Bool = True"
+  , expectParsesA statementParser "let a123 Bool = True"
     (sLetT "a123" "Bool" (eVal $ boolVal True))
-  , expectParses statementParser "a.b.c = True"
+  , expectParsesA statementParser "a.b.c = True"
     (sAssign ["a", "b", "c"] (eVal $ boolVal True))
-  , expectParses statementParser "print(c)"
+  , expectParsesA statementParser "print(c)"
     (S.Expr [] $ eCall (eVar "print") [eVar "c"])
-  , expectParses letStatement "let int = 5 + (2 * 10) / 3 % 4"
+  , expectParsesA letStatement "let int = 5 + (2 * 10) / 3 % 4"
     (sLet "int"
      (eBinary E.Plus
        (eVal $ intVal 5)
@@ -168,9 +169,9 @@ tests =
              (eVal (intVal 10))))
            (eVal $ intVal 3))
          (eVal $ intVal 4))))
-  , expectParses assignStatement "int = 3"
+  , expectParsesA assignStatement "int = 3"
     (sAssign ["int"] $ eVal $ intVal 3)
-  , expectParses assignStatement "int = int ** 3"
+  , expectParsesA assignStatement "int = int ** 3"
     (sAssign ["int"] $ eBinary E.Power (eVar "int") (eVal $ intVal 3))
   -- blocks and larger
   , testParsingBlock
@@ -202,7 +203,7 @@ testParsingBlock =
       expected = sBlock [ sLet "a1" (eVal $ boolVal True)
                          , sReturn (Just $ eVar "a1")
                          ]
-  in expectParses statementParser text expected
+  in expectParsesA statementParser text expected
 
 testParsingIf :: Test
 testParsingIf =
@@ -210,7 +211,7 @@ testParsingIf =
       test = eBinary E.Eq (eVar "a") (eVal $ intVal 1)
       body = [sReturn $ Just $ eVar "a"]
       expected = S.If [] test body Nothing
-  in expectParses ifStatement text expected
+  in expectParsesA ifStatement text expected
 
 testParsingMatch :: Test
 testParsingMatch =
@@ -219,44 +220,50 @@ testParsingMatch =
       case1 = S.MatchCase (S.MatchAnything []) (ret 1)
       case2 = S.MatchCase (S.MatchStructure [] "Link" [S.MatchAnything [], S.MatchVariable [] "next"]) (ret 2)
       expected = S.Match [] (eVar "x") [case1, case2]
-  in expectParses statementParser text expected
+  in expectParsesA statementParser text expected
 
 testParsingFunc :: Test
 testParsingFunc =
   let text = "fn main() {\n}"
       expected = D.Function [] "main" Nothing [] (sBlock [])
-  in expectParses declarationParser text expected
+  in expectParsesA declarationParser text expected
 
 testParsingFunc2 :: Test
 testParsingFunc2 =
   let text = "fn main(a, b) {\n//a comment\n}"
       expected = D.Function [] "main" Nothing ["a", "b"] (sBlock [])
-  in expectParses declarationParser text expected
+  in expectParsesA declarationParser text expected
 
 testParsingTypedFunction :: Test
 testParsingTypedFunction =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
       fnType = Just $ T.Function [intT, boolT] boolT
       expected = D.Function [] "main" fnType ["a", "b"] (sBlock [])
-  in expectParses declarationParser text expected
+  in expectParsesA declarationParser text expected
 
 testParsingTypeDecl :: Test
 testParsingTypeDecl =
   let text = "type Foo struct {\n  asdf Int\n  xyz Foo\n}"
       declaredType = T.Struct [("asdf", intT), ("xyz", T.TypeName "Foo")]
       expected = D.TypeDef [] "Foo" declaredType
-  in expectParses declarationParser text expected
+  in expectParsesA declarationParser text expected
 
 ---- Utilities ----
 
+expectParsesA :: (Eq a, Show a, Annotated a) => Parser a -> String -> a -> Test
+expectParsesA = expectParses' removeAnnotations
+
 expectParses :: (Eq a, Show a) => Parser a -> String -> a -> Test
-expectParses parser text expected =
+expectParses = expectParses' id
+
+expectParses' :: (Eq a, Show a) => (a -> a) -> Parser a -> String -> a -> Test
+expectParses' postprocess parser text expected =
   case parse (parser <* eof) "<test>" text of
    (Left err) -> do
      putStrLn $  "failed parsing ''" ++ text ++ "'', error parsing (" ++ show err ++ ")"
      return False
    (Right result) ->
-     if result == expected
+     if postprocess result == expected
      then return True
      else do
        putStrLn $ "failed parsing ''" ++ text ++ "'', expected " ++ show expected ++ ", got " ++ show result

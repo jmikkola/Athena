@@ -65,6 +65,7 @@ executable athena
                 Parser,
                 Region,
                 Types,
+                Util.Functions,
                 Util.Graph
 
   -- LANGUAGE extensions used by modules in this package.
@@ -100,11 +101,12 @@ Test-Suite test-first-pass
                   AST.Expression,
                   AST.Statement,
                   AST.Type,
-                  Types,
                   Errors,
                   FirstPass,
                   Region,
-                  UnitTest
+                  Types,
+                  UnitTest,
+                  Util.Functions
 
 Test-Suite test-parser
     type:    exitcode-stdio-1.0
@@ -118,10 +120,11 @@ Test-Suite test-parser
                   AST.Expression,
                   AST.Statement,
                   AST.Type,
-                  Types,
                   Parser,
                   Region,
-                  UnitTest
+                  Types,
+                  UnitTest,
+                  Util.Functions
 
 Test-Suite test-graph
     type:    exitcode-stdio-1.0
@@ -130,8 +133,9 @@ Test-Suite test-graph
     hs-source-dirs:      src
     default-language:    Haskell2010
     other-modules:
-                  Util.Graph,
-                  UnitTest
+                  UnitTest,
+                  Util.Functions,
+                  Util.Graph
 
 
 Test-Suite test-infer
@@ -146,10 +150,11 @@ Test-Suite test-infer
                   AST.Expression,
                   AST.Statement,
                   AST.Type,
-                  Types,
                   Errors,
                   FirstPass,
-                  Util.Graph,
-                  UnitTest,
+                  Inference,
                   Region,
-                  Inference
+                  Types,
+                  UnitTest,
+                  Util.Functions,
+                  Util.Graph

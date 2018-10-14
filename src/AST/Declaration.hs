@@ -5,6 +5,7 @@ import AST.Annotation
     , Annotated
     , getAnnotation
     , setAnnotation
+    , removeAnnotations
     )
 
 import AST.Expression (Expression)
@@ -31,6 +32,11 @@ instance Annotated Declaration where
     TypeDef  a _ _     -> a
 
   setAnnotation ann decl = case decl of
-    Let      _ n t e   -> Let ann n t e
+    Let      _ n t e   -> Let      ann n t e
     Function _ n t a s -> Function ann n t a s
-    TypeDef  _ s t     -> TypeDef ann s t
+    TypeDef  _ s t     -> TypeDef  ann s t
+
+  removeAnnotations decl = case decl of
+    Let      _ n t e   -> Let      [] n t   (removeAnnotations e)
+    Function _ n t a s -> Function [] n t a (removeAnnotations s)
+    TypeDef  _ s t     -> TypeDef  [] s t

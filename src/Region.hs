@@ -2,7 +2,7 @@ module Region where
 
 data Region =
   Region
-  { sourceName :: !String
+  { fileName :: !String
   , start :: !Position
   , end :: !Position
   } deriving (Eq, Ord, Show)

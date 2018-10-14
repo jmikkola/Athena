@@ -1,7 +1,8 @@
 module AST.Expression where
 
-import AST.Annotation (Annotation, Annotated, getAnnotation, setAnnotation)
+import AST.Annotation (Annotation, Annotated, getAnnotation, setAnnotation, removeAnnotations)
 import AST.Type (Type)
+import Util.Functions (mapSnd)
 
 data Value
   = StrVal     Annotation String
@@ -49,6 +50,7 @@ data BinOp
   | RShift
   deriving (Eq, Show)
 
+
 instance Annotated Value where
   getAnnotation val = case val of
     StrVal    a _   -> a
@@ -63,6 +65,14 @@ instance Annotated Value where
     IntVal    _ i   -> IntVal    ann i
     FloatVal  _ f   -> FloatVal  ann f
     StructVal _ t f -> StructVal ann t f
+
+  removeAnnotations val = case val of
+    StrVal    _ s   -> StrVal    [] s
+    BoolVal   _ b   -> BoolVal   [] b
+    IntVal    _ i   -> IntVal    [] i
+    FloatVal  _ f   -> FloatVal  [] f
+    StructVal _ t f -> StructVal [] t (mapSnd removeAnnotations f)
+
 
 instance Annotated Expression where
   getAnnotation expr = case expr of
@@ -84,3 +94,13 @@ instance Annotated Expression where
     Cast    _ t e   -> Cast    ann t e
     Var     _ v     -> Var     ann v
     Access  _ e f   -> Access  ann e f
+
+  removeAnnotations expr = case expr of
+    Paren   _ e     -> Paren   [] (removeAnnotations e)
+    Val     _ v     -> Val     [] (removeAnnotations v)
+    Unary   _ o e   -> Unary   [] o (removeAnnotations e)
+    Binary  _ o l r -> Binary  [] o (removeAnnotations l) (removeAnnotations r)
+    Call    _ f a   -> Call    [] (removeAnnotations f) (map removeAnnotations a)
+    Cast    _ t e   -> Cast    [] t (removeAnnotations e)
+    Var     _ v     -> Var     [] v
+    Access  _ e f   -> Access  [] (removeAnnotations e) f

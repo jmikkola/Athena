@@ -4,13 +4,17 @@ import Data.Maybe (isNothing, fromMaybe)
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
+import Text.Parsec.Pos (sourceLine, sourceColumn, sourceName)
 
+import AST.Annotation (Annotated)
+import qualified AST.Annotation as Annotation
 import qualified AST.Declaration as D
 import AST.Expression (BinOp, UnaryOp)
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import AST.Type (Type, TypeDecl)
 import qualified AST.Type as T
+import Region
 
 type File = D.File
 type Declaration = D.Declaration
@@ -34,7 +38,7 @@ fileParser = do
   return decls
 
 declarationParser :: Parser Declaration
-declarationParser = choice [letDeclaration, funcDeclaration, typeDeclaration]
+declarationParser = addLocation $ choice [letDeclaration, funcDeclaration, typeDeclaration]
 
 letDeclaration :: Parser Declaration
 letDeclaration = do
@@ -139,7 +143,7 @@ nextArgDecl = do
 ---- AST.Statement parsers ----
 
 statementParser :: Parser Statement
-statementParser = choice $ map try [
+statementParser = addLocation $ choice $ map try [
   returnStatement, letStatement, ifStatement, whileStatement,
   matchStatement,
   blockStatement, assignStatement, exprStatement]
@@ -350,7 +354,7 @@ precOrder =
 
 expr :: Parser Expression
 expr = do
-  e <- choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
+  e <- addLocation $ choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
   try (accessExpr e) <|> return e
 
 accessExpr :: Expression -> Parser Expression
@@ -418,7 +422,7 @@ varExpr = E.Var [] <$> valueName
 --- parse values
 
 valueParser :: Parser Value
-valueParser = choice $ map try [structValueParser, stringParser, boolParser, numberParser]
+valueParser = addLocation $ choice $ map try [structValueParser, stringParser, boolParser, numberParser]
 
 structValueParser :: Parser Value
 structValueParser = do
@@ -694,3 +698,26 @@ maybeEmpty m = unwrapOr m ""
 applyLeft :: (a -> b) -> Either a r -> Either b r
 applyLeft fn (Left  a) = Left (fn a)
 applyLeft _  (Right r) = Right r
+
+
+---- Position utilities ----
+
+position :: Parser Position
+position = convertPosition <$> getPosition
+
+convertPosition :: SourcePos -> Position
+convertPosition pos =
+  Position { line=sourceLine pos, column=sourceColumn pos }
+
+getRegion :: Position -> Parser Region
+getRegion start = do
+  end <- position
+  name <- sourceName <$> getPosition
+  return $ Region { fileName=name, start=start, end=end }
+
+addLocation :: (Annotated a) => Parser a -> Parser a
+addLocation inner = do
+  start <- position
+  result <- inner
+  region <- getRegion start
+  return $ Annotation.addLocation region result

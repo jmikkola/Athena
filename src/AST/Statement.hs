@@ -1,6 +1,6 @@
 module AST.Statement where
 
-import AST.Annotation (Annotation, Annotated, getAnnotation, setAnnotation)
+import AST.Annotation (Annotation, Annotated, getAnnotation, setAnnotation, removeAnnotations)
 import AST.Expression (Expression)
 import AST.Type (Type)
 
@@ -26,6 +26,7 @@ data MatchExpression
   | MatchStructure Annotation String [MatchExpression]
   deriving (Eq, Show)
 
+
 instance Annotated Statement where
   getAnnotation stmt = case stmt of
     Return a _     -> a
@@ -47,11 +48,26 @@ instance Annotated Statement where
     While  _ e s   -> While  ann e s
     Match  _ e m   -> Match  ann e m
 
+  removeAnnotations stmt = case stmt of
+    Return _ e     -> Return [] (fmap removeAnnotations e)
+    Let    _ n t e -> Let    [] n t (removeAnnotations e)
+    Assign _ n e   -> Assign [] n (removeAnnotations e)
+    Block  _ s     -> Block  [] (map removeAnnotations s)
+    Expr   _ e     -> Expr   [] (removeAnnotations e)
+    If     _ t s e -> If     [] (removeAnnotations t) (map removeAnnotations s) (fmap removeAnnotations e)
+    While  _ e s   -> While  [] (removeAnnotations e) (map removeAnnotations s)
+    Match  _ e m   -> Match  [] (removeAnnotations e) (map removeAnnotations m)
+
+
 instance Annotated MatchCase where
   getAnnotation (MatchCase expr _) = getAnnotation expr
 
   setAnnotation ann (MatchCase expr stmt) =
     MatchCase (setAnnotation ann expr) stmt
+
+  removeAnnotations (MatchCase expr stmt) =
+    MatchCase (removeAnnotations expr) (removeAnnotations stmt)
+
 
 instance Annotated MatchExpression where
   getAnnotation matchExpr = case matchExpr of
@@ -60,6 +76,11 @@ instance Annotated MatchExpression where
     MatchStructure a _ _ -> a
 
   setAnnotation ann matchExpr = case matchExpr of
-    MatchAnything _       -> MatchAnything ann
-    MatchVariable _ v     -> MatchVariable ann v
+    MatchAnything  _      -> MatchAnything  ann
+    MatchVariable  _ v    -> MatchVariable  ann v
     MatchStructure _ s me -> MatchStructure ann s me
+
+  removeAnnotations matchExpr = case matchExpr of
+    MatchAnything  _      -> MatchAnything  []
+    MatchVariable  _ v    -> MatchVariable  [] v
+    MatchStructure _ s me -> MatchStructure [] s me
