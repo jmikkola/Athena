@@ -24,8 +24,9 @@ type MatchExpression = S.MatchExpression
 type Expression = E.Expression
 type Value = E.Value
 
-parseFile :: String -> Either String File
-parseFile content = applyLeft show $ parse fileParser "<input>" content
+parseFile :: String -> String -> Either String File
+parseFile fileName content =
+  applyLeft show $ parse fileParser fileName content
 
 ---- AST.Declaration parsers ----
 

@@ -6,6 +6,7 @@ import System.Exit ( exitWith, exitSuccess, ExitCode(..) )
 import System.IO (stderr, hPutStrLn, hFlush)
 
 import Compiler ( compile )
+import Errors (renderError)
 import qualified Interpreter
 
 type ExitCodeResult = ExceptT String IO ExitCode
@@ -17,16 +18,16 @@ main = do
   case args of
    [fileName] -> do
      content <- readFile fileName
-     interpret content
+     interpret fileName content
 
    _ ->
      exitError "usage: athena <file.at>"
 
-interpret :: String -> IO ()
-interpret content =
-  case compile content of
+interpret :: String -> String -> IO ()
+interpret fileName content =
+  case compile fileName content of
    Left err ->
-     exitError $ show err
+     exitError $ renderError err content
    Right result -> do
      --putStrLn $ show result
      Interpreter.interpret result

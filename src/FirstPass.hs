@@ -5,7 +5,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Maybe (catMaybes)
 
+import AST.Annotation (Annotated, getLocation)
 import AST.Declaration
   ( Declaration(..)
   , File
@@ -16,7 +18,7 @@ import qualified AST.Type as T
 import Errors
   ( Error(..)
   , Result )
-
+import Util.Functions
 
 data Module =
   Module
@@ -43,11 +45,26 @@ data Module =
 -- * (TODO) Check that match cases are complete? (at least, for match expressions)
 firstPass :: File -> Result Module
 firstPass file = do
-  typesFound <- gatherTypeDecls file
+  uniqueDecls <- ensureDeclsAreUnique file
+  typesFound <- gatherTypeDecls uniqueDecls
   enumTs <- gatherEnumTypes file
-  binds <- gatherBindings file
+  binds <- gatherBindings uniqueDecls
   mapM_ checkReturns binds
   return $ Module { bindings=binds, types=typesFound, enumTypes=enumTs }
+
+
+type DeclMap = Map String Declaration
+
+ensureDeclsAreUnique :: File -> Result DeclMap
+ensureDeclsAreUnique [] = return Map.empty
+ensureDeclsAreUnique (d:ds) = do
+  rest <- ensureDeclsAreUnique ds
+  let name = getDeclaredName d
+  case Map.lookup name rest of
+    Nothing ->
+      return $ Map.insert name d rest
+    Just duplicate ->
+      withLocations [d, duplicate] $ duplicateName name
 
 
 gatherEnumTypes :: File -> Result (Map String String)
@@ -60,16 +77,16 @@ gatherEnumTypes file = do
 
 -- select and deduplicate type declarations
 -- TODO: Support type alises
-gatherTypeDecls :: File -> Result (Map String TypeDecl)
-gatherTypeDecls file = do
-  let typeDecls = [(name, t) | TypeDef _ name t <- file]
+gatherTypeDecls :: DeclMap -> Result (Map String TypeDecl)
+gatherTypeDecls decls = do
+  let list = Map.toList decls
+  let typeDecls = [(name, t) | (_, TypeDef _ name t) <- list]
   unnestedTypeDecls <- unnestAll typeDecls
-  let addDecl ds (name, t) = case Map.lookup name ds of
-        Nothing ->
-          return $ Map.insert name t ds
-        Just _ ->
-          duplicateName name
+  -- Trust that ensureDeclsAreUnique has already made the declarations unique
+  -- and that the unnest scheme works at generating unique names
+  let addDecl ds (name, t) = return $ Map.insert name t ds
   foldM addDecl Map.empty unnestedTypeDecls
+
 
 type TypeDecls = [(String, TypeDecl)]
 
@@ -137,14 +154,11 @@ requireUnique' (n:names) seen =
   else requireUnique' names (Set.insert n seen)
 
 -- select and deduplicate function and let bindings
-gatherBindings :: File -> Result (Map String Declaration)
-gatherBindings file =
-  let binds = filter (not . isTypeDecl) file
+gatherBindings :: DeclMap -> Result (Map String Declaration)
+gatherBindings decls =
+  let binds = Map.filter (not . isTypeDecl) decls
       addBinding bs decl =
-        let name = getDeclaredName decl
-        in case Map.lookup name bs of
-            Nothing -> return $ Map.insert name decl bs
-            Just _  -> duplicateName name
+        return $ Map.insert (getDeclaredName decl) decl bs
   in foldM addBinding Map.empty binds
 
 checkReturns :: Declaration -> Result ()
@@ -204,3 +218,7 @@ isTypeDecl _         = False
 
 duplicateName :: String -> Result a
 duplicateName name = Left $ DuplicateBinding name
+
+withLocations :: (Annotated a) => [a] -> Result b -> Result b
+withLocations code result =
+  mapLeft (WithLocations (catMaybes $ map getLocation code)) result

@@ -1,5 +1,9 @@
 module Errors where
 
+import Data.List (intercalate)
+
+import Region
+
 -- TODO: create a module for file position
 -- and then annotate errors with where they came form.
 
@@ -24,6 +28,22 @@ data Error
   | InsufficientlyDefinedType
   | Unreachable String -- function name
   | MissingReturn String -- function name
+  | WithLocations [Region] Error -- wrap another error, adding a location
   deriving (Show, Eq)
 
 type Result a = Either Error a
+
+renderError :: Error -> String -> String
+renderError err fileContent = case err of
+  WithLocations regions err ->
+    addRegions regions fileContent (show err)
+  _ ->
+    show err
+
+-- This is a very suboptimal way to do this, but it
+-- works for now
+addRegions :: [Region] -> String -> String -> String
+addRegions regions fileContent errStr =
+  let fileLines = lines fileContent
+      fileLocations = map (showRegion fileLines) regions
+  in intercalate "\n" (errStr : fileLocations)
