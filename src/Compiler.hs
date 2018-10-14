@@ -6,7 +6,7 @@ import Inference ( inferModule, InferResult )
 import Parser ( parseFile )
 --import Types ( Scheme )
 
-compile :: String -> Result (InferResult ())
+compile :: String -> Result InferResult
 compile text = do
   file <- mapLeft ParseError $ parseFile text
   m <- firstPass file

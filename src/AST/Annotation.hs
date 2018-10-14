@@ -1,4 +1,45 @@
 module AST.Annotation where
 
+import Region (Region)
+import Types (Type)
+
+
 class Annotated a where
-  getAnnotation :: a ann -> ann
+  getAnnotation :: a -> Annotation
+  setAnnotation :: Annotation -> a -> a
+
+
+type Annotation = [Metadata]
+
+emptyAnnotation :: Annotation
+emptyAnnotation = []
+
+data Metadata
+  = Location Region
+  | Typed Type
+  deriving (Eq, Show)
+
+
+addAnnotation :: (Annotated a) => Metadata -> a -> a
+addAnnotation metadata a = setAnnotation (metadata : getAnnotation a) a
+
+addType :: (Annotated a) => Type -> a -> a
+addType t a = addAnnotation (Typed t) a
+
+addLocation :: (Annotated a) => Region -> a -> a
+addLocation r a = addAnnotation (Location r) a
+
+
+getType :: (Annotated a) => a -> Maybe Type
+getType node = listToMaybe [t | Typed t <- getAnnotation node]
+
+getLocation :: (Annotated a) => a -> Maybe Region
+getLocation node = listToMaybe [r | Location r <- getAnnotation node]
+
+removeAnnotations :: (Annotated a) => a -> a
+removeAnnotations = setAnnotation emptyAnnotation
+
+
+listToMaybe :: [a] -> Maybe a
+listToMaybe []    = Nothing
+listToMaybe (a:_) = Just a

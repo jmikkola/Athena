@@ -18,9 +18,9 @@ import Errors
   , Result )
 
 
-data Module a =
+data Module =
   Module
-  { bindings :: Map String (Declaration a)
+  { bindings :: Map String Declaration
   , types :: Map String TypeDecl
   , enumTypes :: Map String String
   }
@@ -41,7 +41,7 @@ data Module a =
 -- * (TODO) Check that variables in match expressions are not repeated
 -- * (TODO) Check that match cases do not completely overlap
 -- * (TODO) Check that match cases are complete? (at least, for match expressions)
-firstPass :: File a -> Result (Module a)
+firstPass :: File -> Result Module
 firstPass file = do
   typesFound <- gatherTypeDecls file
   enumTs <- gatherEnumTypes file
@@ -50,7 +50,7 @@ firstPass file = do
   return $ Module { bindings=binds, types=typesFound, enumTypes=enumTs }
 
 
-gatherEnumTypes :: File a -> Result (Map String String)
+gatherEnumTypes :: File -> Result (Map String String)
 gatherEnumTypes file = do
   let enumDecls = [(name, options) | TypeDef _ name (T.Enum options) <- file]
   let optionNames = [ (optName, name)
@@ -60,7 +60,7 @@ gatherEnumTypes file = do
 
 -- select and deduplicate type declarations
 -- TODO: Support type alises
-gatherTypeDecls :: File a -> Result (Map String TypeDecl)
+gatherTypeDecls :: File -> Result (Map String TypeDecl)
 gatherTypeDecls file = do
   let typeDecls = [(name, t) | TypeDef _ name t <- file]
   unnestedTypeDecls <- unnestAll typeDecls
@@ -137,7 +137,7 @@ requireUnique' (n:names) seen =
   else requireUnique' names (Set.insert n seen)
 
 -- select and deduplicate function and let bindings
-gatherBindings :: File a -> Result (Map String (Declaration a))
+gatherBindings :: File -> Result (Map String Declaration)
 gatherBindings file =
   let binds = filter (not . isTypeDecl) file
       addBinding bs decl =
@@ -147,7 +147,7 @@ gatherBindings file =
             Just _  -> duplicateName name
   in foldM addBinding Map.empty binds
 
-checkReturns :: Declaration a -> Result ()
+checkReturns :: Declaration -> Result ()
 checkReturns TypeDef{} =
   return ()
 checkReturns Let{} =
@@ -156,7 +156,7 @@ checkReturns (Function _ name _ _ stmt) = do
   _ <- checkStmtsReturn name Never [stmt]
   return ()
 
-checkStmtsReturn :: String -> DoesReturn -> [S.Statement a] -> Result DoesReturn
+checkStmtsReturn :: String -> DoesReturn -> [S.Statement] -> Result DoesReturn
 checkStmtsReturn fname prevReturns stmts =
   case prevReturns of
    Always -> case stmts of
@@ -195,7 +195,7 @@ data DoesReturn
   | Always
   deriving (Eq, Show)
 
-isTypeDecl :: Declaration a -> Bool
+isTypeDecl :: Declaration -> Bool
 isTypeDecl TypeDef{} = True
 isTypeDecl _         = False
 

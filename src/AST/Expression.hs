@@ -1,25 +1,25 @@
 module AST.Expression where
 
-import AST.Annotation (Annotated, getAnnotation)
+import AST.Annotation (Annotation, Annotated, getAnnotation, setAnnotation)
 import AST.Type (Type)
 
-data Value a
-  = StrVal     a String
-  | BoolVal    a Bool
-  | IntVal     a Int
-  | FloatVal   a Float
-  | StructVal  a String [(String, Expression a)]
+data Value
+  = StrVal     Annotation String
+  | BoolVal    Annotation Bool
+  | IntVal     Annotation Int
+  | FloatVal   Annotation Float
+  | StructVal  Annotation String [(String, Expression)]
   deriving (Eq, Show)
 
-data Expression a
-  = Paren   a (Expression a)
-  | Val     a (Value a)
-  | Unary   a UnaryOp (Expression a)
-  | Binary  a BinOp (Expression a) (Expression a)
-  | Call    a (Expression a) [Expression a]
-  | Cast    a Type (Expression a)
-  | Var     a String
-  | Access  a (Expression a) String
+data Expression
+  = Paren   Annotation Expression
+  | Val     Annotation Value
+  | Unary   Annotation UnaryOp Expression
+  | Binary  Annotation BinOp Expression Expression
+  | Call    Annotation Expression [Expression]
+  | Cast    Annotation Type Expression
+  | Var     Annotation String
+  | Access  Annotation Expression String
   deriving (Eq, Show)
 
 data UnaryOp
@@ -57,6 +57,13 @@ instance Annotated Value where
     FloatVal  a _   -> a
     StructVal a _ _ -> a
 
+  setAnnotation ann val = case val of
+    StrVal    _ s   -> StrVal    ann s
+    BoolVal   _ b   -> BoolVal   ann b
+    IntVal    _ i   -> IntVal    ann i
+    FloatVal  _ f   -> FloatVal  ann f
+    StructVal _ t f -> StructVal ann t f
+
 instance Annotated Expression where
   getAnnotation expr = case expr of
     Paren   a _     -> a
@@ -67,3 +74,13 @@ instance Annotated Expression where
     Cast    a _ _   -> a
     Var     a _     -> a
     Access  a _ _   -> a
+
+  setAnnotation ann expr = case expr of
+    Paren   _ e     -> Paren   ann e
+    Val     _ v     -> Val     ann v
+    Unary   _ o e   -> Unary   ann o e
+    Binary  _ o l r -> Binary  ann o l r
+    Call    _ f a   -> Call    ann f a
+    Cast    _ t e   -> Cast    ann t e
+    Var     _ v     -> Var     ann v
+    Access  _ e f   -> Access  ann e f

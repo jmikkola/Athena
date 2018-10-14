@@ -12,13 +12,13 @@ import qualified AST.Statement as S
 import AST.Type (Type, TypeDecl)
 import qualified AST.Type as T
 
-type File = D.File ()
-type Declaration = D.Declaration ()
-type Statement = S.Statement ()
-type MatchCase = S.MatchCase ()
-type MatchExpression = S.MatchExpression ()
-type Expression = E.Expression ()
-type Value = E.Value ()
+type File = D.File
+type Declaration = D.Declaration
+type Statement = S.Statement
+type MatchCase = S.MatchCase
+type MatchExpression = S.MatchExpression
+type Expression = E.Expression
+type Value = E.Value
 
 parseFile :: String -> Either String File
 parseFile content = applyLeft show $ parse fileParser "<input>" content
@@ -39,7 +39,7 @@ declarationParser = choice [letDeclaration, funcDeclaration, typeDeclaration]
 letDeclaration :: Parser Declaration
 letDeclaration = do
   (name, mtype) <- letName
-  D.Let () name mtype <$> expressionParser
+  D.Let [] name mtype <$> expressionParser
 
 letName :: Parser (String, Maybe Type)
 letName = do
@@ -77,7 +77,7 @@ funcDeclaration = do
     _ <- any1LinearWhitespace
     return typ
   mtype <- assembleFunctionType argTypes retType
-  D.Function () name mtype args <$> blockStatement
+  D.Function [] name mtype args <$> blockStatement
 
 assembleFunctionType :: [Maybe Type] -> Maybe Type -> Parser (Maybe TypeDecl)
 assembleFunctionType argTypes retType =
@@ -107,7 +107,7 @@ typeDeclaration = do
   _ <- any1LinearWhitespace
   name <- typeName
   _ <- any1LinearWhitespace
-  D.TypeDef () name <$> typeDefParser
+  D.TypeDef [] name <$> typeDefParser
 
 
 type ArgDecls = [(String, Maybe Type)]
@@ -150,19 +150,19 @@ returnStatement = do
   e <- optionMaybe $ do
     _ <- any1LinearWhitespace
     expressionParser
-  return $ S.Return () e
+  return $ S.Return [] e
 
 letStatement :: Parser Statement
 letStatement = do
   (name, mtype) <- letName
-  S.Let () name mtype <$> expressionParser
+  S.Let [] name mtype <$> expressionParser
 
 assignStatement :: Parser Statement
 assignStatement = do
   name <- valueName
   names <- try (assignFields [name]) <|> return [name]
   equalsWhitespace
-  S.Assign () names <$> expressionParser
+  S.Assign [] names <$> expressionParser
 
 assignFields :: [String] -> Parser [String]
 assignFields lefts = do
@@ -175,7 +175,7 @@ blockStatement :: Parser Statement
 blockStatement = do
   _ <- char '{'
   _ <- statementSep
-  fmap (S.Block ()) blockStatements
+  fmap (S.Block []) blockStatements
 
 blockStatements :: Parser [Statement]
 blockStatements = endBlock <|> nextStatement
@@ -200,15 +200,15 @@ statementSep = do
   return ()
 
 exprStatement :: Parser Statement
-exprStatement = S.Expr () <$> expressionParser
+exprStatement = S.Expr [] <$> expressionParser
 
 ifStatement :: Parser Statement
 ifStatement = do
   _ <- string "if"
   (test, body) <- testedBlock
   elsePart <- optionMaybe $ try elseBlock
-  return $ let (S.Block () stmts) = body
-           in S.If () test stmts elsePart
+  return $ let (S.Block [] stmts) = body
+           in S.If [] test stmts elsePart
 
 elseBlock :: Parser Statement
 elseBlock = do
@@ -221,8 +221,8 @@ whileStatement :: Parser Statement
 whileStatement = do
   _ <- string "while"
   (test, body) <- testedBlock
-  return $ let (S.Block () stmts) = body
-           in S.While () test stmts
+  return $ let (S.Block [] stmts) = body
+           in S.While [] test stmts
 
 testedBlock :: Parser (Expression, Statement)
 testedBlock = do
@@ -238,7 +238,7 @@ matchStatement = do
   _ <- any1Whitespace
   value <- expressionParser
   _ <- anyWhitespace
-  S.Match () value <$> matchCases
+  S.Match [] value <$> matchCases
 
 matchCases :: Parser [MatchCase]
 matchCases = do
@@ -268,10 +268,10 @@ matchExpression = matchAnything <|> matchVariable <|> matchStructure
 matchAnything :: Parser MatchExpression
 matchAnything = do
   _ <- string "_"
-  return $ S.MatchAnything ()
+  return $ S.MatchAnything []
 
 matchVariable :: Parser MatchExpression
-matchVariable = S.MatchVariable () <$> valueName
+matchVariable = S.MatchVariable [] <$> valueName
 
 matchStructure :: Parser MatchExpression
 matchStructure = do
@@ -280,7 +280,7 @@ matchStructure = do
   _ <- char '('
   _ <- anyWhitespace
   inner <- choice [matchExpressions, argsEnd]
-  return $ S.MatchStructure () structType inner
+  return $ S.MatchStructure [] structType inner
 
 matchExpressions :: Parser [MatchExpression]
 matchExpressions = do
@@ -328,7 +328,7 @@ unfoldOps ([e], [])    _     = ([e], [])
 unfoldOps ([],  [])    _     = ([], [])
 unfoldOps (l:r:es, o:os) opset =
   if o `elem` opset
-  then unfoldOps (E.Binary () o l r : es, os) opset
+  then unfoldOps (E.Binary [] o l r : es, os) opset
   else let (restE, restO) = unfoldOps (r:es, os) opset
        in (l:restE, o:restO)
 unfoldOps _ _ = error "invalid call to unfoldOps"
@@ -357,20 +357,20 @@ accessExpr :: Expression -> Parser Expression
 accessExpr left = do
   _ <- char '.'
   right <- valueName
-  let e = E.Access () left right
+  let e = E.Access [] left right
   try (accessExpr e) <|> return e
 
 parenExpr :: Parser Expression
-parenExpr = E.Paren () <$> parenExpr'
+parenExpr = E.Paren [] <$> parenExpr'
 
 valueExpr :: Parser Expression
-valueExpr = E.Val () <$> valueParser
+valueExpr = E.Val [] <$> valueParser
 
 unaryExpr :: Parser Expression
 unaryExpr = do
   op <- unaryOpParser
   _ <- anyWhitespace
-  E.Unary () op <$> expressionParser
+  E.Unary [] op <$> expressionParser
 
 callExpr :: Parser Expression
 callExpr = do
@@ -378,7 +378,7 @@ callExpr = do
   _ <- char '('
   _ <- anyWhitespace
   args <- choice [fnCallArg, argsEnd]
-  return $ E.Call () fn args
+  return $ E.Call [] fn args
 
 fnCallArg :: Parser [Expression]
 fnCallArg = do
@@ -401,7 +401,7 @@ argsEnd = do
 castExpr :: Parser Expression
 castExpr = do
   typ <- typeParser
-  E.Cast () typ <$> parenExpr'
+  E.Cast [] typ <$> parenExpr'
 
 parenExpr' :: Parser Expression
 parenExpr' = do
@@ -413,7 +413,7 @@ parenExpr' = do
   return ex
 
 varExpr :: Parser Expression
-varExpr = E.Var () <$> valueName
+varExpr = E.Var [] <$> valueName
 
 --- parse values
 
@@ -427,7 +427,7 @@ structValueParser = do
   _ <- anyWhitespace
   fields <- sepEndBy structFieldValue statementSep
   _ <- string "}"
-  return $ E.StructVal () typ fields
+  return $ E.StructVal [] typ fields
 
 structFieldValue :: Parser (String, Expression)
 structFieldValue = do
@@ -439,12 +439,12 @@ structFieldValue = do
   return (field, value)
 
 stringParser :: Parser Value
-stringParser = E.StrVal () <$> doubleQuotedString
+stringParser = E.StrVal [] <$> doubleQuotedString
 
 boolParser :: Parser Value
 boolParser = do
   b <- choices [("False", False), ("True", True)]
-  return $ E.BoolVal () b
+  return $ E.BoolVal [] b
 
 --- parse floating and integer numbers
 
@@ -458,7 +458,7 @@ numberParser = do
 float :: String -> Parser Value
 float start = do
   fp <- floatingPart
-  return $ E.FloatVal () (read (start ++ fp))
+  return $ E.FloatVal [] (read (start ++ fp))
 
 floatingPart :: Parser String
 floatingPart = do
@@ -486,7 +486,7 @@ _digit = do
   digit
 
 integer :: String -> Parser Value
-integer start = return $ E.IntVal () (read start)
+integer start = return $ E.IntVal [] (read start)
 
 --- parse operators
 

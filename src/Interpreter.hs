@@ -14,23 +14,24 @@ import Data.IORef
 import Inference
   ( InferResult(..)
   , topLevelBindings )
+import AST.Annotation (addType)
 import qualified AST.Declaration as D
 import qualified AST.Expression as E
 import qualified AST.Statement as S
 import Types (Type(..), tUnit)
 
 
-interpret :: InferResult () -> IO ()
+interpret :: InferResult -> IO ()
 interpret body =
   let mainT = TFunc [] tUnit
-      callMain = E.Call (tUnit, ()) (E.Var (mainT, ()) "main") []
+      callMain = E.Call [] (addType mainT $ E.Var [] "main") []
   in do
     scope <- startingState body
     _ <- interpretExpr scope callMain
     return ()
 
 
-startingState :: InferResult () -> IO Scope
+startingState :: InferResult -> IO Scope
 startingState body = do
   rootScope <- newIORef builtIns
   let scope = [rootScope]
@@ -56,7 +57,7 @@ insertAll ((name, val):rest) (sc:ss) = do
 insertAll _ [] = error "How did insertAll get a scope with no parts?"
 
 
-interpretExpr :: Scope -> E.Expression AnnT -> IO Value
+interpretExpr :: Scope -> E.Expression -> IO Value
 interpretExpr scope expr = case expr of
   E.Paren _ ex ->
     interpretExpr scope ex
@@ -90,7 +91,7 @@ getReturnValue :: StmtResult -> Value
 getReturnValue (Returned val) = val
 getReturnValue FellThrough = VVoid
 
-interpretStmt :: Scope -> S.Statement AnnT -> IO StmtResult
+interpretStmt :: Scope -> S.Statement -> IO StmtResult
 interpretStmt scope stmt = case stmt of
   S.Return _ Nothing ->
     return $ Returned VVoid
@@ -145,7 +146,7 @@ interpretStmt scope stmt = case stmt of
     val <- interpretExpr scope expr
     runMatchingCase scope val cases
 
-runMatchingCase :: Scope -> Value -> [S.MatchCase AnnT] -> IO StmtResult
+runMatchingCase :: Scope -> Value -> [S.MatchCase] -> IO StmtResult
 runMatchingCase _ _ [] =
   error "no cases matched"
 runMatchingCase scope val (S.MatchCase me ms:cs) = do
@@ -157,7 +158,7 @@ runMatchingCase scope val (S.MatchCase me ms:cs) = do
       caseScope <- newIORef $ Map.fromList newBindings
       interpretStmt (caseScope:scope) ms
 
-checkMatch :: Value -> S.MatchExpression AnnT -> IO (Maybe [(String, Value)])
+checkMatch :: Value -> S.MatchExpression -> IO (Maybe [(String, Value)])
 checkMatch value matchExpr = case matchExpr of
   S.MatchAnything _ ->
     return (Just [])
@@ -176,12 +177,12 @@ checkMatch value matchExpr = case matchExpr of
       _ ->
         return Nothing
 
-interpretBlock :: Scope -> [S.Statement AnnT] -> IO StmtResult
+interpretBlock :: Scope -> [S.Statement] -> IO StmtResult
 interpretBlock scope stmts = do
   blockScope <- newIORef Map.empty
   interpretBlockScoped (blockScope : scope) stmts
 
-interpretBlockScoped :: Scope -> [S.Statement AnnT] -> IO StmtResult
+interpretBlockScoped :: Scope -> [S.Statement] -> IO StmtResult
 interpretBlockScoped _ [] =
   return FellThrough
 interpretBlockScoped scope (s:stmts) = do
@@ -190,7 +191,7 @@ interpretBlockScoped scope (s:stmts) = do
    FellThrough -> interpretBlockScoped scope stmts
    Returned _  -> return result
 
-interpretVal :: Scope -> E.Value AnnT -> IO Value
+interpretVal :: Scope -> E.Value -> IO Value
 interpretVal scope val = case val of
   E.StrVal    _ s           -> return $ VString s
   E.BoolVal   _ b           -> return $ VBool b
@@ -379,17 +380,14 @@ data Value
   | VBuiltIn String -- name of the built-in function
 
 data Function
-  = Function [String] (S.Statement AnnT)
+  = Function [String] (S.Statement)
   deriving (Show)
 
 
 type Scope = [IORef (Map String Value)]
 
--- AnnT is short for "Annotation Type"
-type AnnT = (Type, ())
 
-
-toClosure :: Scope -> [String] -> S.Statement AnnT -> Value
+toClosure :: Scope -> [String] -> S.Statement -> Value
 toClosure scope args stmt =
   VClosure scope $ Function args stmt
 

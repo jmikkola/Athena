@@ -103,6 +103,7 @@ Test-Suite test-first-pass
                   Types,
                   Errors,
                   FirstPass,
+                  Region,
                   UnitTest
 
 Test-Suite test-parser
@@ -117,7 +118,9 @@ Test-Suite test-parser
                   AST.Expression,
                   AST.Statement,
                   AST.Type,
+                  Types,
                   Parser,
+                  Region,
                   UnitTest
 
 Test-Suite test-graph
@@ -148,4 +151,5 @@ Test-Suite test-infer
                   FirstPass,
                   Util.Graph,
                   UnitTest,
+                  Region,
                   Inference
