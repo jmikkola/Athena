@@ -35,10 +35,13 @@ type Result a = Either Error a
 
 renderError :: Error -> String -> String
 renderError err fileContent = case err of
-  WithLocations regions err ->
-    addRegions regions fileContent (show err)
+  WithLocations regions err' ->
+    addRegions regions fileContent (renderError err' fileContent)
+  Unreachable fname ->
+    "unreachable code in function " ++ fname
   _ ->
     show err
+
 
 -- This is a very suboptimal way to do this, but it
 -- works for now

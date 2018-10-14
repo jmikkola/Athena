@@ -139,8 +139,8 @@ noStructures tdecl = case tdecl of
   T.Function _ args ret -> do
     mapM_ noStructures args
     noStructures ret
-  T.Struct{}          -> Left InvalidAnonStructure
-  T.Enum{}            -> Left InvalidAnonStructure
+  T.Struct{}          -> withLocations [tdecl] $ Left InvalidAnonStructure
+  T.Enum{}            -> withLocations [tdecl] $ Left InvalidAnonStructure
 
 
 requireUnique :: [String] -> Result ()
@@ -175,7 +175,7 @@ checkStmtsReturn fname prevReturns stmts =
   case prevReturns of
    Always -> case stmts of
      []    -> return Always
-     (_:_) -> Left $ Unreachable fname
+     (s:_) -> withLocations [s] $ Left $ Unreachable fname
    _ -> case stmts of
      []     -> return prevReturns
      (s:ss) -> case s of
