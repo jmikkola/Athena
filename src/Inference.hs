@@ -107,7 +107,7 @@ makeBindGroup m =
 type DeclMap = Map String D.Declaration
 
 splitExplicit :: DeclMap -> (DeclMap, DeclMap)
-splitExplicit decls = Map.partition isImplicit decls
+splitExplicit = Map.partition isImplicit
 
 isImplicit :: D.Declaration -> Bool
 isImplicit = not . isExplicit
@@ -134,7 +134,7 @@ gatherGraph explicitNames = Map.map (removeExpl . findDependencies startingDepen
   where removeExpl deps = Set.toList $ setSubtract explicitNames $ Set.fromList deps
 
 setSubtract :: (Ord a) => Set a -> Set a -> Set a
-setSubtract toRemove s = Set.filter keep s
+setSubtract toRemove = Set.filter keep
   where keep e = not $ Set.member e toRemove
 
 
@@ -253,8 +253,9 @@ type InferM = StateT InferState (Either Error)
 
 type Environment = Map String Scheme
 
+-- toAdd, existing
 addToEnv :: Environment -> Environment -> Environment
-addToEnv toAdd env = Map.union toAdd env
+addToEnv = Map.union
 
 -- TODO: Make this a proper instance of the Types.Types class
 applyEnv :: Substitution -> Environment -> Environment
@@ -376,7 +377,7 @@ inferGroup impls env = do
 showTrace :: (Show a) => String -> a -> a
 showTrace s a = trace (s ++ ": " ++ show a) a
 
-inferDecls :: Environment -> [(String, D.Declaration)] -> [Type] -> InferM (TypedDecls)
+inferDecls :: Environment -> [(String, D.Declaration)] -> [Type] -> InferM TypedDecls
 inferDecls env decls ts = mapM infer (zip decls ts)
   where infer ((name, decl), t) = do
           d <- inferDecl env decl
@@ -543,7 +544,7 @@ inferMatchExpr :: Environment -> Type -> S.MatchExpression
                -> InferM (S.MatchExpression, [(String, Scheme)])
 inferMatchExpr env targetType matchExpr = case matchExpr of
   S.MatchAnything a ->
-    return $ (addType targetType $ S.MatchAnything a, [])
+    return (addType targetType $ S.MatchAnything a, [])
 
   S.MatchVariable a name -> do
     let sch = generalize env targetType
@@ -710,7 +711,7 @@ inferExpr env expr = case expr of
     t <- getStructFieldType (getType exp') field
     return $ addType t $ E.Access a exp' field
 
-inferValue :: Environment -> E.Value -> InferM (E.Value)
+inferValue :: Environment -> E.Value -> InferM E.Value
 inferValue env val = case val of
   E.StrVal a str ->
     return $ addType tString $ E.StrVal a str
@@ -936,9 +937,8 @@ mguList sub ((t1,t2):ts) = do
   mguList (composeSubs sub sub2) ts
 
 getType :: (Annotated a) => a -> Type
-getType node = case Annotation.getType node of
-  Nothing -> error "must be typed"
-  Just t  -> t
+getType node =
+  fromMaybe (error "must be typed") (Annotation.getType node)
 
 mustLookup :: (Ord k, Show k) => k -> Map k v -> v
 mustLookup key m =

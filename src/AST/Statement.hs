@@ -16,7 +16,7 @@ data Statement
   deriving (Eq, Show)
 
 data MatchCase
-  = MatchCase (MatchExpression) Statement
+  = MatchCase MatchExpression Statement
   deriving (Eq, Show)
 
 -- TODO: add support for matching literal values (int, string)

@@ -380,7 +380,7 @@ data Value
   | VBuiltIn String -- name of the built-in function
 
 data Function
-  = Function [String] (S.Statement)
+  = Function [String] S.Statement
   deriving (Show)
 
 

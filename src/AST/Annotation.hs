@@ -24,10 +24,10 @@ addAnnotation :: (Annotated a) => Metadata -> a -> a
 addAnnotation metadata a = setAnnotation (metadata : getAnnotation a) a
 
 addType :: (Annotated a) => Type -> a -> a
-addType t a = addAnnotation (Typed t) a
+addType t = addAnnotation (Typed t)
 
 addLocation :: (Annotated a) => Region -> a -> a
-addLocation r a = addAnnotation (Location r) a
+addLocation r = addAnnotation (Location r)
 
 
 getType :: (Annotated a) => a -> Maybe Type
