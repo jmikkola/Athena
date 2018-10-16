@@ -25,16 +25,17 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, mapMaybe)
 
 import Debug.Trace
 
 import Control.Monad (when, foldM, zipWithM)
-import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT)
+import Control.Monad.State (StateT, modify, get, gets, put, lift, evalStateT, mapStateT)
 
 
-import qualified AST.Annotation as Annotation
-import AST.Annotation (Annotated, getAnnotation, addType)
+import Util.Functions
+import qualified AST.Annotation as Anno
+import AST.Annotation (Annotated, getLocation, addType)
 import AST.Expression (UnaryOp(..), BinOp(..))
 import qualified AST.Expression as E
 import qualified AST.Statement as S
@@ -275,6 +276,14 @@ runInfer decls enumOptions f =
 inferErr :: Error -> InferM a
 inferErr err = lift $ Left err
 
+inferErrFor :: (Annotated a) => [a] -> Error -> InferM b
+inferErrFor nodes err = withLocations nodes $ inferErr err
+
+withLocations :: (Annotated a) => [a] -> InferM b -> InferM b
+withLocations nodes inf =
+  let regions = mapMaybe getLocation nodes
+  in mapStateT (mapLeft (WithLocations regions)) inf
+
 newTypeVar :: InferM Type
 newTypeVar = do
   st <- get
@@ -328,7 +337,7 @@ tiExpl name decl env = do
   sub <- getSub
   let sch' = generalize (applyEnv sub env) (apply sub dt)
   if sch' /= sch
-    then inferErr $ BindingTooGeneral name
+    then inferErrFor [decl] $ BindingTooGeneral name
     else return d
 
 
@@ -557,7 +566,7 @@ inferMatchExpr env targetType matchExpr = case matchExpr of
 
     structFields <- getStructDecl enumName
     when (length fields /= length structFields) $
-      inferErr $ PatternErr $ "wrong number of fields matched for " ++ enumName
+      inferErrFor [matchExpr] $ PatternErr $ "wrong number of fields matched for " ++ enumName
 
     fieldTypes <- mapM (typeFromDecl . snd) structFields
 
@@ -708,7 +717,7 @@ inferExpr env expr = case expr of
 
   E.Access a exp field -> do
     exp' <- inferExpr env exp
-    t <- getStructFieldType (getType exp') field
+    t <- withLocations [expr] $ getStructFieldType (getType exp') field
     return $ addType t $ E.Access a exp' field
 
 inferValue :: Environment -> E.Value -> InferM E.Value
@@ -940,7 +949,7 @@ mguList sub ((t1,t2):ts) = do
 
 getType :: (Annotated a) => a -> Type
 getType node =
-  fromMaybe (error "must be typed") (Annotation.getType node)
+  fromMaybe (error "must be typed") (Anno.getType node)
 
 mustLookup :: (Ord k, Show k) => k -> Map k v -> v
 mustLookup key m =
