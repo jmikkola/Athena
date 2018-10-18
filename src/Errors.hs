@@ -3,11 +3,7 @@ module Errors where
 import Data.List (intercalate)
 
 import Region
-
--- TODO: create a module for file position
--- and then annotate errors with where they came form.
-
-import Types (Type)
+import Types (Type, prettyPrint)
 
 data Error
   = Mismatch Type Type
@@ -39,6 +35,10 @@ renderError err fileContent = case err of
     addRegions regions fileContent (renderError err' fileContent)
   Unreachable fname ->
     "unreachable code in function " ++ fname
+  Mismatch t1 t2 ->
+    "Type mismatch between " ++ prettyPrint t1 ++ " and " ++ prettyPrint t2
+  WrongType t1 s ->
+    "Wrong type " ++ prettyPrint t1 ++ " " ++ s
   _ ->
     show err
 

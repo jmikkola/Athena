@@ -1,5 +1,6 @@
 module Types where
 
+import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -104,3 +105,16 @@ isGeneric _        = False
 fromMaybe :: a -> Maybe a -> a
 fromMaybe _ (Just x) = x
 fromMaybe d Nothing  = d
+
+prettyPrint :: Type -> String
+prettyPrint t = case t of
+  TCon name [] ->
+    name
+  TCon name ts ->
+    name ++ "<" ++ intercalate "," (map prettyPrint ts) ++ ">"
+  TFunc as r ->
+    "func(" ++ intercalate "," (map prettyPrint as) ++ ") " ++ prettyPrint r
+  TVar s ->
+    s
+  TGen i ->
+    "_t" ++ show i
