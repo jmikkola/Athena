@@ -332,7 +332,7 @@ tiExpl name decl env = do
   d <- inferDecl env decl
   let dt = getType d
 
-  unify t dt
+  withLocations [decl] $ unify t dt
 
   sub <- getSub
   let sch' = generalize (applyEnv sub env) (apply sub dt)
@@ -390,7 +390,7 @@ inferDecls :: Environment -> [(String, D.Declaration)] -> [Type] -> InferM Typed
 inferDecls env decls ts = mapM infer (zip decls ts)
   where infer ((name, decl), t) = do
           d <- inferDecl env decl
-          unify t (getType d)
+          withLocations [d] $ unify t (getType d)
           return (name, d)
 
 generalize :: Environment -> Type -> Scheme
@@ -444,7 +444,7 @@ inferDecl env decl = case decl of
     let env' = Map.union argEnv env
     (stmt', stmtReturns) <- inferStmt env' stmt
     let funcReturns = toFunctionReturns stmtReturns
-    unifyAll retT funcReturns
+    withLocations [stmt] $ unifyAll retT funcReturns
     sub <- getSub
     let argTypes = map (apply sub) argTs
     let returnT = apply sub retT
@@ -473,7 +473,7 @@ inferStmt env stmt = case stmt of
       Nothing    -> return()
       Just tname -> do
         t <- typeFromName tname
-        unify (getType expr') t
+        withLocations [stmt] $ unify (getType expr') t
     return (S.Let a name mtype expr', NeverReturns)
 
   S.Assign a names expr ->
@@ -484,21 +484,21 @@ inferStmt env stmt = case stmt of
        -- defined in a `let` statement instead of an argument to a function?
        expr' <- inferExpr env expr
        let exprT = getType expr'
-       sch <- lookupName var env
+       sch <- withLocations [stmt] $ lookupName var env
        varT <- instantiate sch
        -- TODO: not quite right, since this may result in too narrow of a type
        -- getting assigned, but it's good enough for now
-       unify exprT varT
+       withLocations [stmt] $ unify exprT varT
        return (S.Assign a names expr', NeverReturns)
      (var:fields) -> do
        expr' <- inferExpr env expr
        let exprT = getType expr'
 
-       sch <- lookupName var env
+       sch <- withLocations [stmt] $ lookupName var env
        -- Is it right for this to be working on an instantiation of sch?
        varT <- instantiate sch
        fieldT <- getStructField varT fields
-       unify fieldT exprT
+       withLocations [stmt] $ unify fieldT exprT
 
        return (S.Assign a names expr', NeverReturns)
 
@@ -512,7 +512,7 @@ inferStmt env stmt = case stmt of
 
   S.If a test blk els -> do
     testExpr <- inferExpr env test
-    unify (getType testExpr) tBool
+    withLocations [testExpr] $ unify (getType testExpr) tBool
     (blk', blkReturns) <- inferBlock env blk
     (els', elsReturns) <- case els of
       Nothing ->
@@ -525,7 +525,7 @@ inferStmt env stmt = case stmt of
 
   S.While a test blk -> do
     testExpr <- inferExpr env test
-    unify (getType testExpr) tBool
+    withLocations [testExpr] $ unify (getType testExpr) tBool
     (blk', blkReturns) <- inferBlock env blk
     let whileReturns = demoteReturns blkReturns
     return (S.While a testExpr blk', whileReturns)
@@ -562,9 +562,9 @@ inferMatchExpr env targetType matchExpr = case matchExpr of
 
   S.MatchStructure a enumName fields -> do
     structType <- getStructType enumName
-    unify targetType structType
+    withLocations [matchExpr] $ unify targetType structType
 
-    structFields <- getStructDecl enumName
+    structFields <- withLocations [matchExpr] $ getStructDecl enumName
     when (length fields /= length structFields) $
       inferErrFor [matchExpr] $ PatternErr $ "wrong number of fields matched for " ++ enumName
 
@@ -676,7 +676,7 @@ inferExpr env expr = case expr of
     exp' <- inferExpr env exp
     let expT = getType exp'
     let fnT = getUnaryFnType op
-    unify fnT (TFunc [expT] resultT)
+    withLocations [expr] $ unify fnT (TFunc [expT] resultT)
     sub <- getSub
     let t = apply sub resultT
     return $ addType t $ E.Unary a op exp'
@@ -688,7 +688,7 @@ inferExpr env expr = case expr of
     r' <- inferExpr env r
     let rt = getType r'
     let fnT = getBinaryFnType op
-    unify fnT (TFunc [lt, rt] resultT)
+    withLocations [expr] $ unify fnT (TFunc [lt, rt] resultT)
     sub <- getSub
     let t = apply sub resultT
     return $ addType t $ E.Binary a op l' r'
@@ -699,7 +699,7 @@ inferExpr env expr = case expr of
     let ft = getType fexp'
     args' <- mapM (inferExpr env) args
     let argTs = map getType args'
-    unify ft (TFunc argTs resultT)
+    withLocations [expr] $ unify ft (TFunc argTs resultT)
     sub <- getSub
     let t = apply sub resultT
     return $ addType t $ E.Call a fexp' args'
@@ -707,11 +707,11 @@ inferExpr env expr = case expr of
   E.Cast a t exp -> do
     exp' <- inferExpr env exp
     let expT = getType exp'
-    sch <- attemptCast t expT
+    sch <- withLocations [expr] $ attemptCast t expT
     return $ addType sch $ E.Cast a t exp'
 
   E.Var a name -> do
-    sch <- lookupName name env
+    sch <- withLocations [expr] $ lookupName name env
     t <- instantiate sch
     return $ addType t $ E.Var a name
 
@@ -732,7 +732,7 @@ inferValue env val = case val of
     return $ addType tFloat $ E.FloatVal a f
   E.StructVal a tname fields  -> do
     structFields <- getStructDecl tname
-    labeledFields <- checkSameFields tname fields structFields
+    labeledFields <- withLocations [val] $ checkSameFields tname fields structFields
     typedFields <- mapM (uncurry3 (inferField env)) labeledFields
     t <- getStructType tname
     return $ addType t $ E.StructVal a tname typedFields
@@ -779,7 +779,7 @@ inferField env fname tdecl expr = do
   typed <- inferExpr env expr
   let exprType = getType typed
   expectedType <- typeFromDecl tdecl
-  unify expectedType exprType
+  withLocations [expr] $ unify expectedType exprType
   return (fname, typed)
 
 
