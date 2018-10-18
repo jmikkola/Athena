@@ -714,7 +714,7 @@ getRegion :: Position -> Parser Region
 getRegion start = do
   end <- position
   name <- sourceName <$> getPosition
-  return $ Region { fileName=name, start=start, end=end }
+  return Region { fileName=name, start=start, end=end }
 
 addLocation :: (Annotated a) => Parser a -> Parser a
 addLocation inner = do

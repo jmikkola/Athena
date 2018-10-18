@@ -50,7 +50,7 @@ firstPass file = do
   enumTs <- gatherEnumTypes file
   binds <- gatherBindings uniqueDecls
   mapM_ checkReturns binds
-  return $ Module { bindings=binds, types=typesFound, enumTypes=enumTs }
+  return Module { bindings=binds, types=typesFound, enumTypes=enumTs }
 
 
 type DeclMap = Map String Declaration

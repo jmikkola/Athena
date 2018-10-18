@@ -91,7 +91,7 @@ inferModule m = do
   let decls = types m
   let enumOptions = enumTypes m
   (binds, env) <- runInfer decls enumOptions $ inferBindGroup bindGroup startingEnv
-  return $ InferResult { topLevelBindings=binds, topLevelEnv=env }
+  return InferResult { topLevelBindings=binds, topLevelEnv=env }
 
 makeBindGroup :: Module -> BindGroup
 makeBindGroup m =
