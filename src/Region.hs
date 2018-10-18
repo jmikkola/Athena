@@ -17,10 +17,16 @@ data Position =
 -- TODO: Show what the actual region was
 showRegion :: [String] -> Region -> String
 showRegion fileLines region =
-  let firstLine = line $ start region
+  let numberedLines = zipWith addNumber [1..] fileLines
+      firstLine = line $ start region
       lastLine = line $ end region
       nlines = min maxLines (lastLine - firstLine + 1)
-      regionLines = take nlines $ drop (firstLine - 1) fileLines
+      regionLines = take nlines $ drop (firstLine - 1) numberedLines
   in unlines regionLines
 
 maxLines = 5
+
+addNumber :: Int -> String -> String
+addNumber lineNo line =
+  let n = show lineNo
+  in n ++ ": " ++ line
