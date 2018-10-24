@@ -13,6 +13,7 @@ type Type = String
 
 data TypeDecl
   = TypeName Annotation Type
+  | Generic Annotation Type [TypeDecl]
   | Function Annotation [TypeDecl] TypeDecl
   | Struct Annotation [(String, TypeDecl)]
   | Enum Annotation [(String, EnumOption)]

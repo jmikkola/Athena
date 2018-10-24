@@ -53,7 +53,7 @@ letName = do
   name <- valueName
   _ <- any1Whitespace
   mtype <- optionMaybe $ try $ do
-    typ <- typeParser
+    typ <- typeParser -- TODO: Change to a full TypeDecl
     _ <- any1Whitespace
     return typ
   _ <- char '='
@@ -78,7 +78,7 @@ funcDeclaration = do
   let (args, argTypes) = unzip argsAndTypes
   _ <- any1LinearWhitespace
   retType <- optionMaybe $ try $ do
-    typ <- typeParser
+    typ <- typeParser -- TODO: Change to a full TypeDecl
     _ <- any1LinearWhitespace
     return typ
   mtype <- assembleFunctionType argTypes retType
@@ -130,7 +130,7 @@ argDecl = do
   name <- valueName
   mtype <- optionMaybe $ try $ do
    _ <- any1LinearWhitespace
-   typeParser
+   typeParser -- TODO: Change to a full TypeDecl
   _ <- anyLinearWhitespace
   rest <- argDeclEnd <|> nextArgDecl
   return ((name, mtype) : rest)
@@ -535,7 +535,7 @@ typeParser :: Parser Type
 typeParser = string "()" <|> typeName
 
 typeDefParser :: Parser TypeDecl
-typeDefParser = addLocation (enumTypeParser <|> structTypeParser <|> namedType)
+typeDefParser = addLocation (enumTypeParser <|> structTypeParser <|> genericType <|> namedType)
 
 enumTypeParser :: Parser TypeDecl
 enumTypeParser = do
@@ -575,6 +575,14 @@ structField = do
   _ <- any1LinearWhitespace
   typ <- addLocation namedType
   return (name, typ)
+
+genericType :: Parser TypeDecl
+genericType = do
+  name <- typeParser
+  _ <- string "<"
+  parts <- sepBy typeDefParser commaSep
+  _ <- string ">"
+  return $ T.Generic [] name parts
 
 namedType :: Parser TypeDecl
 namedType = T.TypeName [] <$> typeParser
@@ -647,6 +655,12 @@ anyLinearWhitespace = many linearWhitespaceCh
 
 any1LinearWhitespace :: Parser String
 any1LinearWhitespace = many1 linearWhitespaceCh
+
+commaSep :: Parser ()
+commaSep = do
+  _ <- string ","
+  _ <- any1LinearWhitespace
+  return ()
 
 parseComment :: Parser String
 parseComment = try parseLineComment <|> parseBlockComment <?> "Comment"
