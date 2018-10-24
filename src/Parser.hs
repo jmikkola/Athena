@@ -14,7 +14,7 @@ import qualified AST.Expression as E
 import qualified AST.Statement as S
 import AST.Type (Type, TypeDecl)
 import qualified AST.Type as T
-import Region
+import Region (Position(..), Region(..))
 
 type File = D.File
 type Declaration = D.Declaration
@@ -268,7 +268,7 @@ matchCaseParser = do
   S.MatchCase e <$> blockStatement
 
 matchExpression :: Parser MatchExpression
-matchExpression = matchAnything <|> matchVariable <|> matchStructure
+matchExpression = addLocation (matchAnything <|> matchVariable <|> matchStructure)
 
 matchAnything :: Parser MatchExpression
 matchAnything = do

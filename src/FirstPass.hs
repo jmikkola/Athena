@@ -1,6 +1,7 @@
 module FirstPass where
 
 import Control.Monad (foldM)
+import Data.Foldable (forM_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -12,6 +13,7 @@ import AST.Declaration
   ( Declaration(..)
   , File
   , getDeclaredName )
+import qualified AST.Expression as E
 import qualified AST.Statement as S
 import AST.Type ( TypeDecl )
 import qualified AST.Type as T
@@ -34,15 +36,10 @@ data Module =
 -- Among other things, this:
 -- * Checks for duplicate bindings
 -- * Splits types from other bindings
--- * (TODO) Creates extra type bindings for the "functions" that construct
---   structures.
 -- * (TODO) Check that all types referred to actually exist
--- * (TODO) Check that variable declarations are unique in a given block
 -- * (TODO) Check for variables that are defined and never referenced
 -- * (TODO) Check that match statements have at least one case
--- * (TODO) Check that variables in match expressions are not repeated
 -- * (TODO) Check that match cases do not completely overlap
--- * (TODO) Check that match cases are complete? (at least, for match expressions)
 firstPass :: File -> Result Module
 firstPass file = do
   uniqueDecls <- ensureDeclsAreUnique file
@@ -50,6 +47,7 @@ firstPass file = do
   enumTs <- gatherEnumTypes file
   binds <- gatherBindings uniqueDecls
   mapM_ checkReturns binds
+  mapM_ checkDupVars binds
   return Module { bindings=binds, types=typesFound, enumTypes=enumTs }
 
 
@@ -169,6 +167,74 @@ checkReturns Let{} =
 checkReturns (Function _ name _ _ stmt) = do
   _ <- checkStmtsReturn name Never [stmt]
   return ()
+
+checkDupVars :: Declaration -> Result ()
+checkDupVars decl = case decl of
+  TypeDef{}          -> return ()
+  Let _ _ _ e        -> checkDupVarsExpr e
+  Function _ _ _ _ s -> checkDupVarsStmt s
+
+
+checkDupVarsStmt :: S.Statement -> Result ()
+checkDupVarsStmt stmt = case stmt of
+  S.Return _ me      -> forM_ me checkDupVarsExpr
+  S.Let _ _ _ e      -> checkDupVarsExpr e
+  S.Assign _ _ e     -> checkDupVarsExpr e
+  S.Block _ stmts    -> checkDupVarsBlock stmts Set.empty
+  S.Expr _ e         -> checkDupVarsExpr e
+  S.If _ e stmts els -> do
+    checkDupVarsExpr e
+    checkDupVarsBlock stmts Set.empty
+    forM_ els checkDupVarsStmt
+  S.While _ e stmts  -> do
+    checkDupVarsExpr e
+    checkDupVarsBlock stmts Set.empty
+  S.Match _ e cases  -> do
+    checkDupVarsExpr e
+    mapM_ checkDupVarsCase cases
+
+
+checkDupVarsBlock :: [S.Statement] -> Set String -> Result ()
+checkDupVarsBlock [] _ = return ()
+checkDupVarsBlock (s:ss) declared = do
+  checkDupVarsStmt s
+  case s of
+    S.Let _ name _ _ ->
+      if Set.member name declared
+      then withLocations [s] $ Left $ DuplicateBinding name
+      else checkDupVarsBlock ss (Set.insert name declared)
+    _ ->
+      return ()
+
+checkDupVarsCase :: S.MatchCase -> Result ()
+checkDupVarsCase (S.MatchCase me st) = do
+  checkDupVarsME me
+  checkDupVarsStmt st
+
+checkDupVarsME :: S.MatchExpression -> Result ()
+checkDupVarsME me =
+  checkDuplicateBindings (gatherMEBindings me) Set.empty
+
+gatherMEBindings :: S.MatchExpression -> [(String, S.MatchExpression)]
+gatherMEBindings me = case me of
+  S.MatchAnything _        -> []
+  S.MatchVariable _ s      -> [(s, me)]
+  S.MatchStructure _ _ mes ->
+    concatMap gatherMEBindings mes
+
+checkDuplicateBindings :: (Annotated ast) => [(String, ast)] -> Set String -> Result ()
+checkDuplicateBindings []                  _        =
+  return ()
+checkDuplicateBindings ((name, node):rest) declared =
+  if Set.member name declared
+  then withLocations [node] $ Left $ DuplicateBinding name
+  else checkDuplicateBindings rest (Set.insert name declared)
+
+
+-- Update this once closures exist
+checkDupVarsExpr :: E.Expression -> Result ()
+checkDupVarsExpr _ = return ()
+
 
 checkStmtsReturn :: String -> DoesReturn -> [S.Statement] -> Result DoesReturn
 checkStmtsReturn fname prevReturns stmts =

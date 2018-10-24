@@ -83,4 +83,4 @@ instance Annotated MatchExpression where
   removeAnnotations matchExpr = case matchExpr of
     MatchAnything  _      -> MatchAnything  []
     MatchVariable  _ v    -> MatchVariable  [] v
-    MatchStructure _ s me -> MatchStructure [] s me
+    MatchStructure _ s me -> MatchStructure [] s (map removeAnnotations me)
