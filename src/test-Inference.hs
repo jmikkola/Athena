@@ -471,7 +471,7 @@ explicitLetBinding :: Assertion
 explicitLetBinding = do
   -- func(x) { let y Int = x; return y; }
   -- should type as Int -> Int
-  let typeAnnotation = Just "Int"
+  let typeAnnotation = Just $ T.TypeName [] "Int"
   let letStmt = S.Let [] "y" typeAnnotation (E.Var [] "x")
   let returnStmt = returnJust (E.Var [] "y")
   let funcLet = func "f" ["x"] [letStmt, returnStmt]

@@ -46,14 +46,14 @@ letDeclaration = do
   (name, mtype) <- letName
   D.Let [] name mtype <$> expressionParser
 
-letName :: Parser (String, Maybe Type)
+letName :: Parser (String, Maybe TypeDecl)
 letName = do
   _ <- string "let"
   _ <- any1Whitespace
   name <- valueName
   _ <- any1Whitespace
   mtype <- optionMaybe $ try $ do
-    typ <- typeParser -- TODO: Change to a full TypeDecl
+    typ <- typeDefParser
     _ <- any1Whitespace
     return typ
   _ <- char '='
@@ -535,7 +535,8 @@ typeParser :: Parser Type
 typeParser = string "()" <|> typeName
 
 typeDefParser :: Parser TypeDecl
-typeDefParser = addLocation (enumTypeParser <|> structTypeParser <|> genericType <|> namedType)
+typeDefParser = addLocation $ tryAll parsers
+  where parsers = [enumTypeParser, structTypeParser, genericType, namedType]
 
 enumTypeParser :: Parser TypeDecl
 enumTypeParser = do
@@ -588,6 +589,9 @@ namedType :: Parser TypeDecl
 namedType = T.TypeName [] <$> typeParser
 
 ---- Helper functions ----
+
+tryAll :: [Parser a] -> Parser a
+tryAll = choice . map try
 
 choices :: [(String, a)] -> Parser a
 choices = choice . map (try . pair2parser)

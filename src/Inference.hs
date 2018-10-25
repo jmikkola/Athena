@@ -118,7 +118,7 @@ isExplicit = isJust . getDeclaredType
 
 getDeclaredType :: D.Declaration -> Maybe T.TypeDecl
 getDeclaredType decl = case decl of
-  D.Let      _ _ mt _   -> fmap (T.TypeName []) mt
+  D.Let      _ _ mt _   -> mt
   D.Function _ _ mt _ _ -> mt
   D.TypeDef{}           -> error "shouldn't see a typedef here"
 
@@ -471,8 +471,8 @@ inferStmt env stmt = case stmt of
     expr' <- inferExpr env expr
     case mtype of
       Nothing    -> return()
-      Just tname -> do
-        t <- typeFromName tname
+      Just tdecl -> do
+        t <- typeFromDecl tdecl
         withLocations [stmt] $ unify (getType expr') t
     return (S.Let a name mtype expr', NeverReturns)
 
@@ -561,7 +561,7 @@ inferMatchExpr env targetType matchExpr = case matchExpr of
     return (addType targetType $ S.MatchVariable a name, bindings')
 
   S.MatchStructure a enumName fields -> do
-    structType <- getStructType enumName
+    structType <- getStructType enumName [] -- TODO: add the right number of generic tvars
     withLocations [matchExpr] $ unify targetType structType
 
     structFields <- withLocations [matchExpr] $ getStructDecl enumName
@@ -734,23 +734,25 @@ inferValue env val = case val of
     structFields <- getStructDecl tname
     labeledFields <- withLocations [val] $ checkSameFields tname fields structFields
     typedFields <- mapM (uncurry3 (inferField env)) labeledFields
-    t <- getStructType tname
+    t <- getStructType tname [] -- TODO: add the right number of generic tvars
     return $ addType t $ E.StructVal a tname typedFields
 
--- TODO: Support generics
-getStructType :: String -> InferM Type
-getStructType name = do
+getStructType :: String -> [Type] -> InferM Type
+getStructType name ts = do
   enumOptions <- gets enumOpts
   -- If this is an enum option not a struct, look up the
   -- actual enum type
   let tname = fromMaybe name (Map.lookup name enumOptions)
-  return $ TCon tname []
+  return $ TCon tname ts
 
 
 typeFromDecl :: T.TypeDecl -> InferM Type
 typeFromDecl tdecl = case tdecl of
   T.TypeName _ name ->
-    typeFromName name
+    typeFromName name []
+  T.Generic _ name genArgs -> do
+    genTypes <- mapM typeFromDecl genArgs
+    typeFromName name genTypes
   T.Function _ argTs retT -> do
     argTypes <- mapM typeFromDecl argTs
     retType <- typeFromDecl retT
@@ -761,12 +763,13 @@ typeFromDecl tdecl = case tdecl of
     error "shouldn't see an Enum here"
 
 
-typeFromName :: String -> InferM Type
-typeFromName name
+-- TODO: Check the kind of the type (which will require a lot of plumbing)
+typeFromName :: String -> [Type] -> InferM Type
+typeFromName name ts
   | name `elem` builtinTypes =
-    return $ TCon name []
+    return $ TCon name ts
   | otherwise =
-    getStructType name
+    getStructType name ts
 
 builtinTypes :: [String]
 builtinTypes = words "Int Float Bool Char String ()"

@@ -62,7 +62,7 @@ eBinary = E.Binary []
 sLet :: String -> Expr -> Stmt
 sLet name = S.Let [] name Nothing
 
-sLetT :: String -> T.Type -> Expr -> Stmt
+sLetT :: String -> T.TypeDecl -> Expr -> Stmt
 sLetT name t = S.Let [] name (Just t)
 
 sBlock :: [Stmt] -> Stmt
@@ -151,12 +151,21 @@ tests =
     (sBlock [sBlock [], sBlock []])
   , expectParsesA statementParser "let a123 = True"
     (sLet "a123" (eVal $ boolVal True))
+  , expectParsesA typeDefParser "Bool"
+    (T.TypeName [] "Bool")
+  , expectParsesA typeDefParser "Pair<Int, Int>"
+    (T.Generic [] "Pair" [T.TypeName [] "Int" | _ <- [1,2]])
   , expectParsesA statementParser "let a123 Bool = True"
-    (sLetT "a123" "Bool" (eVal $ boolVal True))
+    (sLetT "a123" (T.TypeName [] "Bool") (eVal $ boolVal True))
+  , expectParsesA statementParser "let x_y Pair<Int, Int> = foo()"
+    (sLetT "x_y"
+     (T.Generic [] "Pair" [T.TypeName [] "Int" | _ <- [1,2]])
+     (E.Call [] (E.Var [] "foo") []))
   , expectParsesA statementParser "a.b.c = True"
     (sAssign ["a", "b", "c"] (eVal $ boolVal True))
   , expectParsesA statementParser "print(c)"
     (S.Expr [] $ eCall (eVar "print") [eVar "c"])
+
   , expectParsesA letStatement "let int = 5 + (2 * 10) / 3 % 4"
     (sLet "int"
      (eBinary E.Plus
@@ -169,10 +178,12 @@ tests =
              (eVal (intVal 10))))
            (eVal $ intVal 3))
          (eVal $ intVal 4))))
+
   , expectParsesA assignStatement "int = 3"
     (sAssign ["int"] $ eVal $ intVal 3)
   , expectParsesA assignStatement "int = int ** 3"
     (sAssign ["int"] $ eBinary E.Power (eVar "int") (eVal $ intVal 3))
+
   -- blocks and larger
   , testParsingBlock
   , testParsingIf

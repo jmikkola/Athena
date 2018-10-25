@@ -15,7 +15,7 @@ import AST.Type (Type, TypeDecl)
 type File = [Declaration]
 
 data Declaration
-  = Let Annotation String (Maybe Type) Expression
+  = Let Annotation String (Maybe TypeDecl) Expression
   | Function Annotation String (Maybe TypeDecl) [String] Statement
   | TypeDef Annotation String TypeDecl
   deriving (Eq, Show)
@@ -37,6 +37,6 @@ instance Annotated Declaration where
     TypeDef  _ s t     -> TypeDef  ann s t
 
   removeAnnotations decl = case decl of
-    Let      _ n t e   -> Let      [] n t (removeAnnotations e)
+    Let      _ n t e   -> Let      [] n (fmap removeAnnotations t) (removeAnnotations e)
     Function _ n t a s -> Function [] n (fmap removeAnnotations t) a (removeAnnotations s)
     TypeDef  _ s t     -> TypeDef  [] s (removeAnnotations t)

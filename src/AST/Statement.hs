@@ -2,11 +2,11 @@ module AST.Statement where
 
 import AST.Annotation (Annotation, Annotated, getAnnotation, setAnnotation, removeAnnotations)
 import AST.Expression (Expression)
-import AST.Type (Type)
+import AST.Type (TypeDecl)
 
 data Statement
   = Return  Annotation (Maybe Expression)
-  | Let     Annotation String (Maybe Type) Expression
+  | Let     Annotation String (Maybe TypeDecl) Expression
   | Assign  Annotation [String] Expression
   | Block   Annotation [Statement]
   | Expr    Annotation Expression -- e.g. just calling a function
@@ -50,7 +50,7 @@ instance Annotated Statement where
 
   removeAnnotations stmt = case stmt of
     Return _ e     -> Return [] (fmap removeAnnotations e)
-    Let    _ n t e -> Let    [] n t (removeAnnotations e)
+    Let    _ n t e -> Let    [] n (fmap removeAnnotations t) (removeAnnotations e)
     Assign _ n e   -> Assign [] n (removeAnnotations e)
     Block  _ s     -> Block  [] (map removeAnnotations s)
     Expr   _ e     -> Expr   [] (removeAnnotations e)
