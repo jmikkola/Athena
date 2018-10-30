@@ -12,7 +12,7 @@ import qualified AST.Declaration as D
 import AST.Expression (BinOp, UnaryOp)
 import qualified AST.Expression as E
 import qualified AST.Statement as S
-import AST.Type (Type, TypeDecl)
+import AST.Type (Type, TypeDecl, TypeDef)
 import qualified AST.Type as T
 import Region (Position(..), Region(..))
 
@@ -78,27 +78,27 @@ funcDeclaration = do
   let (args, argTypes) = unzip argsAndTypes
   _ <- any1LinearWhitespace
   retType <- optionMaybe $ try $ do
-    typ <- typeParser -- TODO: Change to a full TypeDecl
+    typ <- typeDefParser
     _ <- any1LinearWhitespace
     return typ
   mtype <- assembleFunctionType argTypes retType
   D.Function [] name mtype args <$> blockStatement
 
-assembleFunctionType :: [Maybe Type] -> Maybe Type -> Parser (Maybe TypeDecl)
+assembleFunctionType :: [Maybe TypeDecl] -> Maybe TypeDecl -> Parser (Maybe TypeDecl)
 assembleFunctionType argTypes retType =
   if allNothings argTypes && isNothing retType
   then return Nothing
   else do
     argTs <- requireJusts argTypes
-    let retT = unwrapOr (fmap (T.TypeName []) retType) nilType
-    let typ = T.Function [] (map (T.TypeName []) argTs) retT
+    let retT = unwrapOr retType nilType
+    let typ = T.Function [] argTs retT
     return $ Just typ
 
 
 allNothings :: [Maybe a] -> Bool
 allNothings = all isNothing
 
-requireJusts :: [Maybe Type] -> Parser [Type]
+requireJusts :: [Maybe a] -> Parser [a]
 requireJusts [] = return []
 requireJusts (Nothing:_) =
   unexpected "When a function is typed, all arguments must be typed"
@@ -110,12 +110,29 @@ typeDeclaration :: Parser Declaration
 typeDeclaration = do
   _ <- string "type"
   _ <- any1LinearWhitespace
-  name <- typeName
+  declared <- typeDefParser
+  tdef <- mustBeTDef declared
   _ <- any1LinearWhitespace
-  D.TypeDef [] name <$> typeDefParser
+  D.TypeDef [] tdef <$> typeDefParser
 
 
-type ArgDecls = [(String, Maybe Type)]
+mustBeTDef :: TypeDecl -> Parser TypeDef
+mustBeTDef decl = case decl of
+  T.TypeName a name ->
+    return $ T.TypeDef a name []
+  T.Generic a name ts -> do
+    ts' <- mapM mustBeTypeName ts
+    return $ T.TypeDef a name ts'
+  _ ->
+    fail "invalid type to declare"
+
+
+mustBeTypeName :: TypeDecl -> Parser Type
+mustBeTypeName decl = case decl of
+  T.TypeName _ name -> return name
+  _ -> fail "invalid generic parameter in type to declare"
+
+type ArgDecls = [(String, Maybe TypeDecl)]
 
 funcArgDecl :: Parser ArgDecls
 funcArgDecl = argDeclEnd <|> argDecl
@@ -130,7 +147,7 @@ argDecl = do
   name <- valueName
   mtype <- optionMaybe $ try $ do
    _ <- any1LinearWhitespace
-   typeParser -- TODO: Change to a full TypeDecl
+   typeDefParser
   _ <- anyLinearWhitespace
   rest <- argDeclEnd <|> nextArgDecl
   return ((name, mtype) : rest)

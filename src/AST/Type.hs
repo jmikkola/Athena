@@ -19,6 +19,13 @@ data TypeDecl
   | Enum Annotation [(String, EnumOption)]
   deriving (Eq, Show)
 
+
+data TypeDef = TypeDef
+               { defAnn :: Annotation
+               , defName :: Type
+               , defGenerics :: [Type] }
+             deriving (Eq, Show)
+
 type EnumOption = [(String, TypeDecl)]
 
 instance Annotated TypeDecl where

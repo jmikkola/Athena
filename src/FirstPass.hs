@@ -15,18 +15,25 @@ import AST.Declaration
   , getDeclaredName )
 import qualified AST.Expression as E
 import qualified AST.Statement as S
-import AST.Type ( TypeDecl )
+import AST.Type ( TypeDecl, TypeDef, defName )
 import qualified AST.Type as T
 import Errors
   ( Error(..)
   , Result )
+import Types (Scheme)
 import Util.Functions
 
 data Module =
   Module
   { bindings :: Map String Declaration
-  , types :: Map String TypeDecl
-  , enumTypes :: Map String String
+  , constructors :: Map String Constructor
+  }
+  deriving (Show)
+
+data Constructor =
+  Constructor
+  { ctorFields :: [(String, Scheme)]
+  , ctorType :: Scheme
   }
   deriving (Show)
 
@@ -42,13 +49,14 @@ data Module =
 -- * (TODO) Check that match cases do not completely overlap
 firstPass :: File -> Result Module
 firstPass file = do
+  ctors <- gatherConstructors file
+
   uniqueDecls <- ensureDeclsAreUnique file
-  typesFound <- gatherTypeDecls uniqueDecls
-  enumTs <- gatherEnumTypes file
   binds <- gatherBindings uniqueDecls
   mapM_ checkReturns binds
   mapM_ checkDupVars binds
-  return Module { bindings=binds, types=typesFound, enumTypes=enumTs }
+
+  return Module { bindings=binds, constructors=ctors }
 
 
 type DeclMap = Map String Declaration
@@ -65,6 +73,9 @@ ensureDeclsAreUnique (d:ds) = do
       withLocations [d, duplicate] $ duplicateName name
 
 
+gatherConstructors = undefined
+
+{-
 gatherEnumTypes :: File -> Result (Map String String)
 gatherEnumTypes file = do
   let enumDecls = [(name, options) | TypeDef _ name (T.Enum _ options) <- file]
@@ -129,7 +140,7 @@ unnestFields name ((n,t):ts) = do
   (unnested, decls) <- unnestStructures (name ++ "." ++ n) t
   (rest, decls') <- unnestFields name ts
   return ((n, unnested) : rest, decls ++ decls')
-
+-}
 
 noStructures :: TypeDecl -> Result ()
 noStructures tdecl = case tdecl of

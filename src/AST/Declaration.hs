@@ -10,20 +10,21 @@ import AST.Annotation
 
 import AST.Expression (Expression)
 import AST.Statement (Statement)
-import AST.Type (Type, TypeDecl)
+import AST.Type (Type, TypeDecl, TypeDef, defName)
+import qualified AST.Type as T
 
 type File = [Declaration]
 
 data Declaration
   = Let Annotation String (Maybe TypeDecl) Expression
   | Function Annotation String (Maybe TypeDecl) [String] Statement
-  | TypeDef Annotation String TypeDecl
+  | TypeDef Annotation TypeDef TypeDecl
   deriving (Eq, Show)
 
 getDeclaredName :: Declaration -> String
 getDeclaredName (Let      _ name _ _)   = name
 getDeclaredName (Function _ name _ _ _) = name
-getDeclaredName (TypeDef  _ name _)     = name
+getDeclaredName (TypeDef  _ tdef _)     = defName tdef
 
 instance Annotated Declaration where
   getAnnotation decl = case decl of

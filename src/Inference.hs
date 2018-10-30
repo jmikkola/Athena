@@ -21,6 +21,7 @@ module Inference
 
 import Prelude hiding (exp)
 
+import Data.List (sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -60,7 +61,7 @@ import Errors
   ( Error(..)
   , Result )
 import FirstPass
-  ( Module(..), bindings )
+  ( Module(..), Constructor(..), bindings )
 import Util.Graph
   ( components )
 
@@ -88,9 +89,8 @@ data InferResult
 inferModule :: Module -> Result InferResult
 inferModule m = do
   let bindGroup = makeBindGroup m
-  let decls = types m
-  let enumOptions = enumTypes m
-  (binds, env) <- runInfer decls enumOptions $ inferBindGroup bindGroup startingEnv
+  let ctors = constructors m
+  (binds, env) <- runInfer ctors $ inferBindGroup bindGroup startingEnv
   return InferResult { topLevelBindings=binds, topLevelEnv=env }
 
 makeBindGroup :: Module -> BindGroup
@@ -231,22 +231,21 @@ instance Depencencies E.Value where
     _ ->
       []
 
-type EnumOptions = Map String String
+type CTors = Map String Constructor
 
 data InferState
   = InferState
     { nextVarN :: Int
     , currentSub :: Substitution
-    , typeDecls :: DeclaredTypes
-    , enumOpts :: EnumOptions }
+    , constrs :: CTors }
   deriving (Show)
 
-startingInferState :: DeclaredTypes -> EnumOptions -> InferState
-startingInferState decls enumOptions =
-  InferState { nextVarN = 0
+startingInferState :: CTors -> InferState
+startingInferState ctors =
+  InferState
+  { nextVarN = 0
   , currentSub = Map.empty
-  , typeDecls = decls
-  , enumOpts = enumOptions }
+  , constrs = ctors }
 
 -- `Either Error` = `Result`, but somehow that
 -- type synonym isn't allowed here.
@@ -268,10 +267,10 @@ startingEnv =
   Map.fromList
   [ ("print", Scheme 1 (TFunc [TGen 1] tUnit)) ]
 
-runInfer :: Monad m => DeclaredTypes -> EnumOptions
+runInfer :: Monad m => Map String Constructor
          -> StateT InferState m a -> m a
-runInfer decls enumOptions f =
-  evalStateT f (startingInferState decls enumOptions)
+runInfer ctors f =
+  evalStateT f (startingInferState ctors)
 
 inferErr :: Error -> InferM a
 inferErr err = lift $ Left err
@@ -561,20 +560,35 @@ inferMatchExpr env targetType matchExpr = case matchExpr of
     return (addType targetType $ S.MatchVariable a name, bindings')
 
   S.MatchStructure a enumName fields -> do
+    ctor <- withLocations [matchExpr] $ getConstructor enumName
+
+    when (length fields /= length (ctorFields ctor)) $
+      inferErrFor [matchExpr] $ PatternErr $ "wrong number of fields matched for " ++ enumName
+
+    let sch = ctorType ctor
+    enumT <- instantiate sch
+    (argTs, structT) <- case enumT of
+      TFunc a r -> return (a, r)
+      _         -> inferErr $ CompilerBug "invalid constructor fn type"
+
+    -- Pattern matching is basically running the constructor function backwards
+    withLocations [matchExpr] $ unify targetType structT
+
+{-
     structType <- getStructType enumName [] -- TODO: add the right number of generic tvars
     withLocations [matchExpr] $ unify targetType structType
 
     structFields <- withLocations [matchExpr] $ getStructDecl enumName
-    when (length fields /= length structFields) $
-      inferErrFor [matchExpr] $ PatternErr $ "wrong number of fields matched for " ++ enumName
 
     fieldTypes <- mapM (typeFromDecl . snd) structFields
 
     inner <- zipWithM (inferMatchExpr env) fieldTypes fields
     let (fields', bindingLists) = unzip inner
     let bindings' = concat bindingLists
-
+-}
     -- TODO: should probably apply the current substitution to the struct type
+    sub <- getSub
+    let structType = apply sub structT
     return (addType structType $ S.MatchStructure a enumName fields', bindings')
 
 
@@ -601,18 +615,19 @@ getStructField = foldM getStructFieldType
 
 getStructFieldType :: Type -> String -> InferM Type
 getStructFieldType t fieldName = case t of
-  TCon structName [] -> do
-    fields <- getStructDecl structName
-    fieldT <- case lookup fieldName fields of
+  TCon structName params -> do
+    resultT <- newTypeVar
+
+    ctor <- getConstructor structName
+    let fields = ctorFields ctor
+    fieldSch <- case lookup fieldName fields of
       Nothing -> inferErr $ UndefinedField structName fieldName
-      Just ft -> return ft
-    case fieldT of
-     T.TypeName _ typ ->
-       return $ TCon typ []
-     _ ->
-       inferErr $ CompilerBug $ "shouldn't see a " ++ show fieldT ++ " here"
-  TCon _ (_:_) ->
-    error "TODO: implement generic structures"
+      Just sc -> return sc
+    fieldFn <- instantiate fieldSch
+
+    unify fieldFn (TFunc [t] resultT)
+    sub <- getSub
+    return $ apply sub resultT
   TVar _ ->
     inferErr InsufficientlyDefinedType
   TGen _ ->
@@ -724,27 +739,60 @@ inferValue :: Environment -> E.Value -> InferM E.Value
 inferValue env val = case val of
   E.StrVal a str ->
     return $ addType tString $ E.StrVal a str
+
   E.BoolVal a b ->
     return $ addType tBool $ E.BoolVal a b
+
   E.IntVal a i ->
     return $ addType tInt $ E.IntVal a i
+
   E.FloatVal a f ->
     return $ addType tFloat $ E.FloatVal a f
+
   E.StructVal a tname fields  -> do
-    structFields <- getStructDecl tname
-    labeledFields <- withLocations [val] $ checkSameFields tname fields structFields
-    typedFields <- mapM (uncurry3 (inferField env)) labeledFields
-    t <- getStructType tname [] -- TODO: add the right number of generic tvars
-    return $ addType t $ E.StructVal a tname typedFields
+    resultT <- newTypeVar
+
+    ctor <- withLocations [val] $ getConstructor tname
+    checkSameFields tname (ctorFields ctor) fields
+    fnT <- instantiate (ctorType ctor)
+
+    -- sort the fields in the same order they are in the type - lexographically
+    -- by name. This allows typing to ignore field order.
+    let sorted = sortBy compareNames fields
+    typedFields <- mapM (inferExpr env . snd) sorted
+    let fieldTypes = map getType typedFields
+
+    -- Unify that with the "function" type of the struct's constructor
+    withLocations [val] $ unify fnT (TFunc fieldTypes resultT)
+    -- and find out what the resulting type is
+    sub <- getSub
+    let t = apply sub resultT
+
+    -- Finally, put the fields back in the right order since the order is
+    -- significant in evaluation
+    let namedTypedFields = zip (map fst sorted) typedFields
+    let orderedFields = orderAs (map fst fields) namedTypedFields
+
+    return $ addType t $ E.StructVal a tname orderedFields
+
+
+orderAs :: (Ord a) => [a] -> [(a, b)] -> [(a, b)]
+orderAs keys pairs = map getPair keys
+  where getPair key = (key, lookup_ key pairs)
+
+compareNames :: (Ord a) => (a, b) -> (a, b) -> Ordering
+compareNames (x, _) (y, _) = compare x y
 
 getStructType :: String -> [Type] -> InferM Type
 getStructType name ts = do
-  enumOptions <- gets enumOpts
-  -- If this is an enum option not a struct, look up the
-  -- actual enum type
-  let tname = fromMaybe name (Map.lookup name enumOptions)
-  return $ TCon tname ts
-
+  ctor <- getConstructor name
+  let sch = ctorType ctor
+  t <- instantiate sch
+  case t of
+    TFunc _ structT ->
+      return structT
+    _ ->
+      inferErr $ CompilerBug "invalid constructor function type"
 
 typeFromDecl :: T.TypeDecl -> InferM Type
 typeFromDecl tdecl = case tdecl of
@@ -775,22 +823,7 @@ builtinTypes :: [String]
 builtinTypes = words "Int Float Bool Char String ()"
 
 
-inferField ::
-  Environment -> String -> T.TypeDecl -> E.Expression
-  -> InferM (String, E.Expression)
-inferField env fname tdecl expr = do
-  typed <- inferExpr env expr
-  let exprType = getType typed
-  expectedType <- typeFromDecl tdecl
-  withLocations [expr] $ unify expectedType exprType
-  return (fname, typed)
-
-
-checkSameFields ::
-  String
-  -> [(String, E.Expression)]
-  -> [(String, T.TypeDecl)]
-  -> InferM [(String, T.TypeDecl, E.Expression)]
+checkSameFields :: String -> [(String, a)] -> [(String, b)] -> InferM ()
 checkSameFields tname given actual = do
   let givenSet = Set.fromList $ map fst given
   let actualSet = Set.fromList $ map fst actual
@@ -799,7 +832,7 @@ checkSameFields tname given actual = do
   when (givenSet /= actualSet) $
     inferErr $ StructFieldErr tname $
         "wrong set of fields given: " ++ show (givenSet, actualSet)
-  return $ labelFields given actual
+  return ()
 
 
 labelFields ::
@@ -813,20 +846,13 @@ lookup_ :: (Eq a) => a -> [(a, b)] -> b
 lookup_ name pairs =
   fromMaybe (error "lookup_ got Nothing") (lookup name pairs)
 
-getStructDecl :: String -> InferM [(String, T.TypeDecl)]
-getStructDecl tname = do
-  tdecl <- getTypeDecl tname
-  case tdecl of
-   T.Struct _ fields -> return fields
-   _ -> inferErr $ NonStructureType tname
 
-
-getTypeDecl :: String -> InferM T.TypeDecl
-getTypeDecl tname = do
-  decls <- gets typeDecls
-  case Map.lookup tname decls of
-   Nothing -> inferErr $ UndefinedType tname
-   Just t  -> return t
+getConstructor :: String -> InferM Constructor
+getConstructor tname = do
+  ctors <- gets constrs
+  case Map.lookup tname ctors of
+    Just c  -> return c
+    Nothing -> inferErr $ UndefinedType tname
 
 
 lookupName :: String -> Environment -> InferM Scheme
