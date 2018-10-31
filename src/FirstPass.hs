@@ -1,6 +1,6 @@
 module FirstPass where
 
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Data.Foldable (forM_)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -15,12 +15,12 @@ import AST.Declaration
   , getDeclaredName )
 import qualified AST.Expression as E
 import qualified AST.Statement as S
-import AST.Type ( TypeDecl, TypeDef, defName )
+import AST.Type ( TypeDecl, TypeDef, defName, defGenerics )
 import qualified AST.Type as T
 import Errors
   ( Error(..)
   , Result )
-import Types (Scheme)
+import Types (Scheme(..), Type(..))
 import Util.Functions
 
 data Module =
@@ -73,7 +73,36 @@ ensureDeclsAreUnique (d:ds) = do
       withLocations [d, duplicate] $ duplicateName name
 
 
-gatherConstructors = undefined
+gatherConstructors :: File -> Result (Map String Constructor)
+gatherConstructors file =
+  makeConstructors [(def, decl) | (TypeDef _ def decl) <- file] Map.empty
+
+makeConstructors :: [(TypeDef, TypeDecl)] -> Map String Constructor -> Result (Map String Constructor)
+makeConstructors []         constrs = return constrs
+makeConstructors ((t,d):ts) constrs = do
+  let name = defName t
+  let gens = defGenerics t
+  mustBeUnique name constrs
+  constrs' <- case d of
+    T.TypeName _ _       -> error "type aliases not supported yet"
+    T.Generic  _ _ _     -> error "type aliases not supported yet"
+    T.Function _ _ _     -> error "type aliases not supported yet"
+    T.Struct   _ fields  -> do
+      cf <- createStructFields fields gens
+      let nGens = length gens
+      let t = TCon name (map TGen [0..nGens])
+      let sch = Scheme nGens t
+      let ctor = Constructor { ctorFields=cf, ctorType=sch }
+      return $ Map.insert name ctor constrs
+    T.Enum     _ options -> undefined -- TODO
+  makeConstructors ts constrs'
+
+mustBeUnique :: String -> Map String b -> Result ()
+mustBeUnique key m =
+  when (Map.member key m) $ duplicateName key
+
+
+createStructFields = undefined -- TODO
 
 {-
 gatherEnumTypes :: File -> Result (Map String String)
@@ -144,12 +173,13 @@ unnestFields name ((n,t):ts) = do
 
 noStructures :: TypeDecl -> Result ()
 noStructures tdecl = case tdecl of
-  T.TypeName{}        -> return ()
+  T.TypeName{}          -> return ()
+  T.Generic{}           -> return ()
   T.Function _ args ret -> do
     mapM_ noStructures args
     noStructures ret
-  T.Struct{}          -> withLocations [tdecl] $ Left InvalidAnonStructure
-  T.Enum{}            -> withLocations [tdecl] $ Left InvalidAnonStructure
+  T.Struct{}            -> withLocations [tdecl] $ Left InvalidAnonStructure
+  T.Enum{}              -> withLocations [tdecl] $ Left InvalidAnonStructure
 
 
 requireUnique :: [String] -> Result ()
