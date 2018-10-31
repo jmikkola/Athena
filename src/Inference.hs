@@ -78,8 +78,6 @@ data BindGroup
 
 type TypedDecls = [(String, D.Declaration)]
 
-type DeclaredTypes = Map String T.TypeDecl
-
 data InferResult
   = InferResult
     { topLevelBindings :: TypedDecls
@@ -568,28 +566,22 @@ inferMatchExpr env targetType matchExpr = case matchExpr of
     let sch = ctorType ctor
     enumT <- instantiate sch
     (argTs, structT) <- case enumT of
-      TFunc a r -> return (a, r)
-      _         -> inferErr $ CompilerBug "invalid constructor fn type"
+      TFunc a' r -> return (a', r)
+      _          -> inferErr $ CompilerBug "invalid constructor fn type"
 
     -- Pattern matching is basically running the constructor function backwards
     withLocations [matchExpr] $ unify targetType structT
 
-{-
-    structType <- getStructType enumName [] -- TODO: add the right number of generic tvars
-    withLocations [matchExpr] $ unify targetType structType
+    sub1 <- getSub
+    let patternTypes = map (apply sub1) argTs
 
-    structFields <- withLocations [matchExpr] $ getStructDecl enumName
+    inner <- zipWithM (inferMatchExpr env) patternTypes fields
+    let (typedFields, bindingLists) = unzip inner
+    let binds = concat bindingLists
 
-    fieldTypes <- mapM (typeFromDecl . snd) structFields
-
-    inner <- zipWithM (inferMatchExpr env) fieldTypes fields
-    let (fields', bindingLists) = unzip inner
-    let bindings' = concat bindingLists
--}
-    -- TODO: should probably apply the current substitution to the struct type
-    sub <- getSub
-    let structType = apply sub structT
-    return (addType structType $ S.MatchStructure a enumName fields', bindings')
+    sub2 <- getSub
+    let structType = apply sub2 structT
+    return (addType structType $ S.MatchStructure a enumName typedFields, binds)
 
 
 
@@ -615,7 +607,7 @@ getStructField = foldM getStructFieldType
 
 getStructFieldType :: Type -> String -> InferM Type
 getStructFieldType t fieldName = case t of
-  TCon structName params -> do
+  TCon structName _ -> do
     resultT <- newTypeVar
 
     ctor <- getConstructor structName
@@ -788,11 +780,11 @@ getStructType name ts = do
   ctor <- getConstructor name
   let sch = ctorType ctor
   t <- instantiate sch
-  case t of
-    TFunc _ structT ->
-      return structT
-    _ ->
-      inferErr $ CompilerBug "invalid constructor function type"
+
+  resultT <- newTypeVar
+  unify t (TFunc ts resultT)
+  sub <- getSub
+  return $ apply sub resultT
 
 typeFromDecl :: T.TypeDecl -> InferM Type
 typeFromDecl tdecl = case tdecl of
@@ -834,13 +826,6 @@ checkSameFields tname given actual = do
         "wrong set of fields given: " ++ show (givenSet, actualSet)
   return ()
 
-
-labelFields ::
-  [(String, E.Expression)]
-  -> [(String, T.TypeDecl)]
-  -> [(String, T.TypeDecl, E.Expression)]
-labelFields given actual = map addTypeDecl given
-  where addTypeDecl (name,expr) = (name, lookup_ name actual, expr)
 
 lookup_ :: (Eq a) => a -> [(a, b)] -> b
 lookup_ name pairs =
