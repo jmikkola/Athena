@@ -343,6 +343,7 @@ getExplicitTypes expls = do
   typed <- mapM getExplicitType expls
   return $ Map.fromList typed
 
+-- TODO: This doesn't yet work for e.g. Pair<A, B>
 getExplicitType :: (name, D.Declaration) -> InferM (name, Scheme)
 getExplicitType (name, decl) = do
   let (Just declaredType) = getDeclaredType decl
@@ -494,7 +495,7 @@ inferStmt env stmt = case stmt of
        sch <- withLocations [stmt] $ lookupName var env
        -- Is it right for this to be working on an instantiation of sch?
        varT <- instantiate sch
-       fieldT <- getStructField varT fields
+       fieldT <- withLocations [stmt] $ getStructField varT fields
        withLocations [stmt] $ unify fieldT exprT
 
        return (S.Assign a names expr', NeverReturns)

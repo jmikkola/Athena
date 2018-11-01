@@ -20,7 +20,7 @@ import qualified AST.Type as T
 import Errors
   ( Error(..)
   , Result )
-import Types (Scheme(..), Type(..))
+import Types (Scheme(..), Type(..), Substitution, apply, tcon0, makeSub)
 import Util.Functions
 
 data Module =
@@ -81,19 +81,30 @@ makeConstructors :: [(TypeDef, TypeDecl)] -> Map String Constructor -> Result (M
 makeConstructors []         constrs = return constrs
 makeConstructors ((t,d):ts) constrs = do
   let name = defName t
-  let gens = defGenerics t
   mustBeUnique name constrs
+
+  let gens = defGenerics t
+  let nGens = length gens
+  let generalized = map TGen [1..nGens]
+  let sub = makeSub $ zip (map tcon0 gens) generalized
+
   constrs' <- case d of
     T.TypeName _ _       -> error "type aliases not supported yet"
     T.Generic  _ _ _     -> error "type aliases not supported yet"
     T.Function _ _ _     -> error "type aliases not supported yet"
+
     T.Struct   _ fields  -> do
-      cf <- createStructFields fields gens
-      let nGens = length gens
-      let t = TCon name (map TGen [0..nGens])
-      let sch = Scheme nGens t
+      let typ = TCon name generalized
+
+      let fieldNames = map fst fields
+      fieldTypes <- map (apply sub) <$> mapM (convertDecl . snd) fields
+
+      let cf = zipWith (\fname ftype -> (fname, Scheme nGens (TFunc [typ] ftype))) fieldNames fieldTypes
+
+      let sch = Scheme nGens (TFunc fieldTypes typ)
       let ctor = Constructor { ctorFields=cf, ctorType=sch }
       return $ Map.insert name ctor constrs
+
     T.Enum     _ options -> undefined -- TODO
   makeConstructors ts constrs'
 
@@ -102,7 +113,27 @@ mustBeUnique key m =
   when (Map.member key m) $ duplicateName key
 
 
-createStructFields = undefined -- TODO
+createStructFields :: Int -> Type -> [String] -> [Type] -> [(String, Scheme)]
+createStructFields nGens typ fieldNames fieldTypes = zipWith makePair fieldNames fieldTypes
+  where makePair fname ftype = (fname, Scheme nGens (TFunc [typ] ftype))
+
+
+convertDecl :: TypeDecl -> Result Type
+convertDecl decl = case decl of
+  T.TypeName _ tname      ->
+    return $ TCon tname []
+  T.Generic  _ tname gens -> do
+    genTypes <- mapM convertDecl gens
+    return $ TCon tname genTypes
+  T.Function _ argTs retT -> do
+    argTypes <- mapM convertDecl argTs
+    retType <- convertDecl retT
+    return $ TFunc argTypes retType
+  T.Struct{}              ->
+    withLocations [decl] $ Left InvalidAnonStructure
+  T.Enum{}                ->
+    withLocations [decl] $ Left InvalidAnonStructure
+
 
 {-
 gatherEnumTypes :: File -> Result (Map String String)
