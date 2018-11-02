@@ -105,7 +105,14 @@ makeConstructors ((t,d):ts) constrs = do
       let ctor = Constructor { ctorFields=cf, ctorType=sch }
       return $ Map.insert name ctor constrs
 
-    T.Enum     _ options -> undefined -- TODO
+    -- An enum like `Maybe T = Just T | Nothing` would need three constructors
+    -- One for finding the type of `Maybe<T>` in type declarations, and
+    -- one for each of `Just{val: val}` and `Nothing{}` constructors in the code.
+    T.Enum     _ options ->
+      let typ = TCon name generalized
+          sch = Scheme nGens (TFunc [] typ)
+          ctor = Constructor { ctorFields=[], ctorType=sch }
+      in addEnumOptions nGens generalized sub typ options (Map.insert name ctor constrs)
   makeConstructors ts constrs'
 
 mustBeUnique :: String -> Map String b -> Result ()
@@ -116,6 +123,20 @@ mustBeUnique key m =
 createStructFields :: Int -> Type -> [String] -> [Type] -> [(String, Scheme)]
 createStructFields nGens typ fieldNames fieldTypes = zipWith makePair fieldNames fieldTypes
   where makePair fname ftype = (fname, Scheme nGens (TFunc [typ] ftype))
+
+
+addEnumOptions nGens generalized sub typ []         constrs = return constrs
+addEnumOptions nGens generalized sub typ ((n,t):os) constrs = do
+  mustBeUnique n constrs
+
+  let fields = t
+  let fieldNames = map fst fields
+  fieldTypes <- map (apply sub) <$> mapM (convertDecl . snd) fields
+  let cf = zipWith (\fn ft -> (fn, Scheme nGens (TFunc [typ] ft))) fieldNames fieldTypes
+
+  let sch = Scheme nGens (TFunc fieldTypes typ)
+  let ctor = Constructor { ctorFields=cf, ctorType=sch }
+  addEnumOptions nGens generalized sub typ os (Map.insert n ctor constrs)
 
 
 convertDecl :: TypeDecl -> Result Type
@@ -133,95 +154,6 @@ convertDecl decl = case decl of
     withLocations [decl] $ Left InvalidAnonStructure
   T.Enum{}                ->
     withLocations [decl] $ Left InvalidAnonStructure
-
-
-{-
-gatherEnumTypes :: File -> Result (Map String String)
-gatherEnumTypes file = do
-  let enumDecls = [(name, options) | TypeDef _ name (T.Enum _ options) <- file]
-  let optionNames = [ (optName, name)
-                    | (name, options) <- enumDecls
-                    , (optName, _) <- options ]
-  return $ Map.fromList optionNames
-
--- select and deduplicate type declarations
--- TODO: Support type alises
-gatherTypeDecls :: DeclMap -> Result (Map String TypeDecl)
-gatherTypeDecls decls = do
-  let list = Map.toList decls
-  let typeDecls = [(name, t) | (_, TypeDef _ name t) <- list]
-  unnestedTypeDecls <- unnestAll typeDecls
-  -- Trust that ensureDeclsAreUnique has already made the declarations unique
-  -- and that the unnest scheme works at generating unique names
-  let addDecl ds (name, t) = return $ Map.insert name t ds
-  foldM addDecl Map.empty unnestedTypeDecls
-
-
-type TypeDecls = [(String, TypeDecl)]
-
-unnestAll :: TypeDecls -> Result TypeDecls
-unnestAll [] = return []
-unnestAll ((name,t):tds) = do
-  (decl, unnested) <- unnestStructures name t
-  rest <- unnestAll tds
-  return $ (name, decl) : unnested ++ rest
-
-unnestStructures :: String -> TypeDecl -> Result (TypeDecl, TypeDecls)
-unnestStructures name tdecl = case tdecl of
-  -- Aliases will have to happen as a second pass
-  T.TypeName _ _ ->
-    return (tdecl, [])
-  T.Function _ args ret -> do
-    mapM_ noStructures args
-    noStructures ret
-    return (tdecl, [])
-  T.Struct a fields -> do
-    requireUnique $ map fst fields
-    (unnested, decls) <- unnestFields name fields
-    return (T.Struct a unnested, decls)
-  T.Enum _ variants -> do
-    requireUnique $ map fst variants
-    structs <- mapM (uncurry variantToStruct) variants
-    return (tdecl, structs)
-
-
-variantToStruct :: String -> T.EnumOption -> Result (String, TypeDecl)
-variantToStruct name fields = do
-  let (names, fieldTypes) = unzip fields
-  requireUnique names
-  mapM_ noStructures fieldTypes
-  return (name, T.Struct [] fields)
-
-
--- fields -> Result (fields, de-anonymized)
-unnestFields :: String -> TypeDecls -> Result (TypeDecls, TypeDecls)
-unnestFields _    []         = return ([], [])
-unnestFields name ((n,t):ts) = do
-  (unnested, decls) <- unnestStructures (name ++ "." ++ n) t
-  (rest, decls') <- unnestFields name ts
-  return ((n, unnested) : rest, decls ++ decls')
--}
-
-noStructures :: TypeDecl -> Result ()
-noStructures tdecl = case tdecl of
-  T.TypeName{}          -> return ()
-  T.Generic{}           -> return ()
-  T.Function _ args ret -> do
-    mapM_ noStructures args
-    noStructures ret
-  T.Struct{}            -> withLocations [tdecl] $ Left InvalidAnonStructure
-  T.Enum{}              -> withLocations [tdecl] $ Left InvalidAnonStructure
-
-
-requireUnique :: [String] -> Result ()
-requireUnique items = requireUnique' items Set.empty
-
-requireUnique' :: [String] -> Set String -> Result ()
-requireUnique' []        _    = return ()
-requireUnique' (n:names) seen =
-  if Set.member n seen
-  then duplicateName n
-  else requireUnique' names (Set.insert n seen)
 
 -- select and deduplicate function and let bindings
 gatherBindings :: DeclMap -> Result (Map String Declaration)

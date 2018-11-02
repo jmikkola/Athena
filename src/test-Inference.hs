@@ -513,8 +513,7 @@ makeModule bindings =
   let bindMap = Map.fromList bindings
   in Module
      { bindings=bindMap
-     , types=Map.empty
-     , enumTypes=Map.empty }
+     , constructors=Map.empty }
 
 
 findGroups :: [(String, D.Declaration)] -> [[String]]
@@ -578,7 +577,7 @@ runInstantiate sch =
   let (Right result) = inferEmpty (instantiate sch)
   in result
 
-inferEmpty = runInfer Map.empty Map.empty
+inferEmpty = runInfer Map.empty
 
 
 assertNoGenerics :: Type -> Assertion
