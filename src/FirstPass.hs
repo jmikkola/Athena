@@ -6,7 +6,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 
 import AST.Annotation (Annotated, getLocation)
 import AST.Declaration
@@ -35,7 +35,7 @@ data Constructor =
   { ctorFields :: [(String, Scheme)]
   , ctorType :: Scheme
   }
-  deriving (Show)
+  deriving (Eq, Show)
 
 -- firstPass is the first thing run after parsing.
 -- It prepares data for type inference.
@@ -86,7 +86,7 @@ makeConstructors ((t,d):ts) constrs = do
   let gens = defGenerics t
   let nGens = length gens
   let generalized = map TGen [1..nGens]
-  let sub = makeSub $ zip (map tcon0 gens) generalized
+  let sub = makeSub $ zip (map TVar gens) generalized
 
   constrs' <- case d of
     T.TypeName _ _       -> error "type aliases not supported yet"
@@ -97,7 +97,7 @@ makeConstructors ((t,d):ts) constrs = do
       let typ = TCon name generalized
 
       let fieldNames = map fst fields
-      fieldTypes <- map (apply sub) <$> mapM (convertDecl . snd) fields
+      fieldTypes <- mapM (convertDecl sub . snd) fields
 
       let cf = zipWith (\fname ftype -> (fname, Scheme nGens (TFunc [typ] ftype))) fieldNames fieldTypes
 
@@ -131,7 +131,7 @@ addEnumOptions nGens generalized sub typ ((n,t):os) constrs = do
 
   let fields = t
   let fieldNames = map fst fields
-  fieldTypes <- map (apply sub) <$> mapM (convertDecl . snd) fields
+  fieldTypes <- mapM (convertDecl sub . snd) fields
   let cf = zipWith (\fn ft -> (fn, Scheme nGens (TFunc [typ] ft))) fieldNames fieldTypes
 
   let sch = Scheme nGens (TFunc fieldTypes typ)
@@ -139,16 +139,16 @@ addEnumOptions nGens generalized sub typ ((n,t):os) constrs = do
   addEnumOptions nGens generalized sub typ os (Map.insert n ctor constrs)
 
 
-convertDecl :: TypeDecl -> Result Type
-convertDecl decl = case decl of
+convertDecl :: Substitution -> TypeDecl -> Result Type
+convertDecl sub decl = case decl of
   T.TypeName _ tname      ->
-    return $ TCon tname []
+    return $ fromMaybe (TCon tname []) $ Map.lookup (TVar tname) sub
   T.Generic  _ tname gens -> do
-    genTypes <- mapM convertDecl gens
+    genTypes <- mapM (convertDecl sub) gens
     return $ TCon tname genTypes
   T.Function _ argTs retT -> do
-    argTypes <- mapM convertDecl argTs
-    retType <- convertDecl retT
+    argTypes <- mapM (convertDecl sub) argTs
+    retType <- convertDecl sub retT
     return $ TFunc argTypes retType
   T.Struct{}              ->
     withLocations [decl] $ Left InvalidAnonStructure
