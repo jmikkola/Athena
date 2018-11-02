@@ -21,7 +21,6 @@ module Inference
 
 import Prelude hiding (exp)
 
-import Data.List (sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -748,10 +747,11 @@ inferValue env val = case val of
     ctor <- withLocations [val] $ getConstructor tname
     checkSameFields tname (ctorFields ctor) fields
     fnT <- instantiate (ctorType ctor)
+    let fieldNamesInType = map fst $ ctorFields ctor
 
-    -- sort the fields in the same order they are in the type - lexographically
-    -- by name. This allows typing to ignore field order.
-    let sorted = sortBy compareNames fields
+    -- Sort the fields in the same order they are in the type.
+    -- This allows typing to ignore field order.
+    let sorted = orderAs fieldNamesInType fields
     typedFields <- mapM (inferExpr env . snd) sorted
     let fieldTypes = map getType typedFields
 
@@ -772,9 +772,6 @@ inferValue env val = case val of
 orderAs :: (Ord a) => [a] -> [(a, b)] -> [(a, b)]
 orderAs keys pairs = map getPair keys
   where getPair key = (key, lookup_ key pairs)
-
-compareNames :: (Ord a) => (a, b) -> (a, b) -> Ordering
-compareNames (x, _) (y, _) = compare x y
 
 getStructType :: String -> [Type] -> InferM Type
 getStructType name ts = do
