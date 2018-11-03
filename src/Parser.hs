@@ -72,6 +72,7 @@ funcDeclaration = do
   _ <- string "fn"
   _ <- any1LinearWhitespace
   name <- valueName
+  gens <- optionMaybe $ try $ genericList
   _ <- char '('
   _ <- anyLinearWhitespace
   argsAndTypes <- funcArgDecl
@@ -81,18 +82,26 @@ funcDeclaration = do
     typ <- typeDefParser
     _ <- any1LinearWhitespace
     return typ
-  mtype <- assembleFunctionType argTypes retType
+  mtype <- assembleFunctionType (fromMaybe [] gens) argTypes retType
   D.Function [] name mtype args <$> blockStatement
 
-assembleFunctionType :: [Maybe TypeDecl] -> Maybe TypeDecl -> Parser (Maybe TypeDecl)
-assembleFunctionType argTypes retType =
+assembleFunctionType :: [Type] -> [Maybe TypeDecl] -> Maybe TypeDecl -> Parser (Maybe D.FuncType)
+assembleFunctionType gens argTypes retType =
   if allNothings argTypes && isNothing retType
   then return Nothing
   else do
     argTs <- requireJusts argTypes
     let retT = unwrapOr retType nilType
     let typ = T.Function [] argTs retT
-    return $ Just typ
+    return $ Just (gens, typ)
+
+
+genericList :: Parser [Type]
+genericList = do
+  _ <- string "<"
+  gens <- sepBy typeParser commaSep
+  _ <- string ">"
+  return gens
 
 
 allNothings :: [Maybe a] -> Bool

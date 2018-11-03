@@ -11,15 +11,19 @@ import AST.Annotation
 import AST.Expression (Expression)
 import AST.Statement (Statement)
 import AST.Type (Type, TypeDecl, TypeDef, defName)
-import qualified AST.Type as T
+import Util.Functions (applySnd)
 
 type File = [Declaration]
 
 data Declaration
   = Let Annotation String (Maybe TypeDecl) Expression
-  | Function Annotation String (Maybe TypeDecl) [String] Statement
+  | Function Annotation String (Maybe FuncType) [String] Statement
   | TypeDef Annotation TypeDef TypeDecl
   deriving (Eq, Show)
+
+-- This is a bit gross, but whatever
+-- (generics, TFunc _ _)
+type FuncType = ([Type], TypeDecl)
 
 getDeclaredName :: Declaration -> String
 getDeclaredName (Let      _ name _ _)   = name
@@ -39,5 +43,5 @@ instance Annotated Declaration where
 
   removeAnnotations decl = case decl of
     Let      _ n t e   -> Let      [] n (fmap removeAnnotations t) (removeAnnotations e)
-    Function _ n t a s -> Function [] n (fmap removeAnnotations t) a (removeAnnotations s)
+    Function _ n t a s -> Function [] n (fmap (applySnd removeAnnotations) t) a (removeAnnotations s)
     TypeDef  _ s t     -> TypeDef  [] s (removeAnnotations t)

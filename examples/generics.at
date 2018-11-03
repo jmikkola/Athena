@@ -3,7 +3,7 @@ type Pair<A, B> struct {
     second B
 }
 
-
+/*
 type Maybe<Val> enum {
     Nothing
     Just {
@@ -22,9 +22,9 @@ fn isJust(m Maybe<V>) Bool {
         }
     }
 }
+    */
 
-
-fn flip(p Pair<A, B>) Pair<B, A> {
+fn flip<A, B>(p Pair<A, B>) Pair<B, A> {
     return Pair{
         first: p.second,
         second: p.first,
@@ -36,9 +36,13 @@ fn main() {
         first: 123,
         second: "foo",
     }
+    print(String(p1))
+    print("\n")
     print(String(flip(p1)))
     print("\n")
+    /*
     let m2 Maybe<Pair<Int, Int>> = Nothing{}
     print(String(m2))
     print("\n")
+    */
 }

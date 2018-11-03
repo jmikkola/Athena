@@ -116,7 +116,7 @@ isExplicit = isJust . getDeclaredType
 getDeclaredType :: D.Declaration -> Maybe T.TypeDecl
 getDeclaredType decl = case decl of
   D.Let      _ _ mt _   -> mt
-  D.Function _ _ mt _ _ -> mt
+  D.Function _ _ mt _ _ -> fmap snd mt -- TODO replace this with something that doesn't drop generics
   D.TypeDef{}           -> error "shouldn't see a typedef here"
 
 -- TODO: extend this into prelude (plus imported names)
