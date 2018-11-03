@@ -25,6 +25,7 @@ tests =
   [ test "empty fn body" testCheckReturns1
   , test "unreachable statement" testCheckReturns2
   , test "building struct constructor" testBuildStructConstructor
+  , test "building enum constructor" testBuildEnumConstructor
   ]
 
 
@@ -53,6 +54,31 @@ testBuildStructConstructor = do
   let ctor = Constructor { ctorFields=fields, ctorType=sch }
   let expected = Map.fromList [("Pair", ctor)]
   assertEq (Right expected) result
+
+
+testBuildEnumConstructor :: Assertion
+testBuildEnumConstructor = do
+  let tDef = T.TypeDef { T.defAnn=[], T.defName="Maybe", T.defGenerics=["X"] }
+  let optJust = [("val", T.TypeName [] "X")]
+  let optNothing = []
+  let tDecl = T.Enum [] [("Just", optJust), ("Nothing", optNothing)]
+  let result = makeConstructors [(tDef, tDecl)] Map.empty
+
+
+  let schNothing = Scheme 1 (TFunc [] $ TCon "Maybe" [TGen 1])
+  let ctorNothing = Constructor { ctorFields=[], ctorType=schNothing }
+
+  let schVal = Scheme 1 (TFunc [TCon "Maybe" [TGen 1]] (TGen 1))
+  let fieldsJust = [("val", schVal)]
+  let schJust = Scheme 1 (TFunc [TGen 1] $ TCon "Maybe" [TGen 1])
+  let ctorJust = Constructor { ctorFields=fieldsJust, ctorType=schJust }
+
+  let schMaybe = Scheme 1 (TFunc [] $ TCon "Maybe" [TGen 1])
+  let ctorMaybe = Constructor { ctorFields=[], ctorType=schMaybe }
+  let expected = Map.fromList [("Maybe", ctorMaybe), ("Just", ctorJust), ("Nothing", ctorNothing)]
+
+  assertEq (Right expected) result
+
 
 printStmt =
   S.Expr [] $ E.Call [] (E.Var [] "print") [E.Val [] (E.StrVal [] "hello world")]

@@ -330,6 +330,8 @@ tiExpl name decl env = do
   let sch = mustLookup name env
   t <- instantiate sch
 
+  -- TODO: Right here, inferDecl isn't being given the fact that the input
+  -- arguments have types, making field access not work.
   d <- inferDecl env decl
   let dt = getType d
 
@@ -746,7 +748,9 @@ inferExpr env expr = case expr of
 
   E.Access a exp field -> do
     exp' <- inferExpr env exp
-    t <- withLocations [expr] $ getStructFieldType (getType exp') field
+    sub <- getSub
+    let etype = apply sub $ getType exp'
+    t <- withLocations [expr] $ getStructFieldType etype field
     return $ addType t $ E.Access a exp' field
 
 inferValue :: Environment -> E.Value -> InferM E.Value
