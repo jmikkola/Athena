@@ -348,17 +348,19 @@ getExplicitType (name, decl) = case decl of
 
   D.Function _ _ mgendecl _ _ -> do
     let Just (gens, tdecl) = mgendecl
-    let gmap = genericMap gens
-    let ngens = length gens
+    gmap <- genericMap gens
     t <- withLocations [decl] $ typeFromDecl gmap tdecl
-    return (name, Scheme ngens t)
+    let varSet = Set.fromList gens
+    return (name, generalizeOver varSet t)
 
   D.TypeDef{} ->
     error "shouldn't see a typedef here"
 
 
-genericMap :: [T.Type] -> Map String Type
-genericMap tnames = Map.fromList $ zip tnames (map TGen [1..])
+genericMap :: [T.Type] -> InferM (Map String Type)
+genericMap tnames = do
+  gens <- mapM (\_ -> newTypeVar) tnames
+  return $ Map.fromList $ zip tnames gens
 
 inferGroups :: [[(String, D.Declaration)]] -> Environment ->
                InferM (TypedDecls, Environment)
@@ -404,11 +406,14 @@ inferDecls env decls ts = mapM infer (zip decls ts)
 generalize :: Environment -> Type -> Scheme
 generalize env t =
   let envVars = foldl Set.union Set.empty $ map (freeTypeVars . snd) $ Map.toList env
-      freeVars = map TVar $ Set.toList $ Set.difference (freeTypeVars t) envVars
+  in generalizeOver envVars t
+
+generalizeOver :: Set String -> Type -> Scheme
+generalizeOver envVars t =
+  let freeVars = map TVar $ Set.toList $ Set.difference (freeTypeVars t) envVars
       genVars = map TGen [1..]
       sub = Map.fromList $ zip freeVars genVars
   in Scheme (length freeVars) (apply sub t)
-
 
 instantiate :: Scheme -> InferM Type
 instantiate sch@(Scheme n t) = do
@@ -422,18 +427,15 @@ instantiate sch@(Scheme n t) = do
 
 
 verifyContainsNoGenerics :: Scheme -> Type -> InferM ()
-verifyContainsNoGenerics sch t
-  | containsGenerics t =
-    let message = "instantiated type " ++ show t ++ " from " ++ show sch ++  " contains generics"
-    in inferErr $ CompilerBug message
-  | otherwise          =
-    return ()
+verifyContainsNoGenerics sch t =
+  let message = "instantiated type " ++ show t ++ " from " ++ show sch ++  " contains generics"
+  in when (containsGenerics t) (inferErr $ CompilerBug message)
 
 
 containsGenerics :: Type -> Bool
 containsGenerics t = case t of
   TCon _ ts   -> any containsGenerics ts
-  TFunc as t' -> any containsGenerics as || containsGenerics t'
+  TFunc as rt -> any containsGenerics (rt : as)
   TVar _      -> False
   TGen _      -> True
 
@@ -934,10 +936,10 @@ mgu :: Type -> Type -> Result Substitution
 mgu t1 t2 = case (t1, t2) of
   (TGen _, _) ->
     --Left $ CompilerBug "A generic variable should have been instantiated"
-    error "A generic variable should have been instantiated"
+    error $ "A generic variable should have been instantiated: " ++ show (t1, t2)
   (_, TGen _) ->
     --Left $ CompilerBug "A generic variable should have been instantiated"
-    error "A generic variable should have been instantiated"
+    error $ "A generic variable should have been instantiated: " ++ show (t1, t2)
 
   (TCon ac ats, TCon bc bts) | ac == bc && length ats == length bts ->
     mguList emptySubstitution (zip ats bts)
