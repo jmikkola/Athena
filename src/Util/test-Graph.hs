@@ -38,7 +38,7 @@ tests =
 
 checkProperty :: (Testable prop) => String -> prop -> Test
 checkProperty name property = do
-  let args = stdArgs { maxSuccess = 1000 }
+  let args = stdArgs { maxSuccess = 100 }
   result <- quickCheckWithResult args property
   if isSuccess result
      then return True

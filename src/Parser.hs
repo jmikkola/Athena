@@ -382,7 +382,7 @@ precOrder =
 expr :: Parser Expression
 expr = do
   e <- addLocation $ choice $ map try [parenExpr, valueExpr, unaryExpr, callExpr, castExpr, varExpr]
-  try (accessExpr e) <|> return e
+  try (addLocation $ accessExpr e) <|> return e
 
 accessExpr :: Expression -> Parser Expression
 accessExpr left = do

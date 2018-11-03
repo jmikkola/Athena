@@ -274,8 +274,16 @@ inferErrFor nodes err = withLocations nodes $ inferErr err
 
 withLocations :: (Annotated a) => [a] -> InferM b -> InferM b
 withLocations nodes inf =
-  let regions = mapMaybe getLocation nodes
+  let regions = mapMaybe_ getLocation nodes
   in mapStateT (mapLeft (WithLocations regions)) inf
+
+
+mapMaybe_ :: (a -> Maybe b) -> [a] -> [b]
+mapMaybe_ f = map (mustJust . f)
+
+mustJust :: Maybe a -> a
+mustJust (Just a) = a
+mustJust Nothing = error "Must be Just"
 
 newTypeVar :: InferM Type
 newTypeVar = do
@@ -359,7 +367,7 @@ getExplicitType (name, decl) = case decl of
 
 genericMap :: [T.Type] -> InferM (Map String Type)
 genericMap tnames = do
-  gens <- mapM (\_ -> newTypeVar) tnames
+  gens <- mapM (const newTypeVar) tnames
   return $ Map.fromList $ zip tnames gens
 
 inferGroups :: [[(String, D.Declaration)]] -> Environment ->
