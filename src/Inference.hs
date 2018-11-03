@@ -116,12 +116,6 @@ isExplicit decl = case decl of
   D.Function _ _ mt _ _ -> isJust mt
   D.TypeDef{}           -> error "shouldn't see a typedef here"
 
-getDeclaredType :: D.Declaration -> Maybe T.TypeDecl
-getDeclaredType decl = case decl of
-  D.Let      _ _ mt _   -> mt
-  D.Function _ _ mt _ _ -> fmap snd mt -- TODO replace this with something that doesn't drop generics
-  D.TypeDef{}           -> error "shouldn't see a typedef here"
-
 -- TODO: extend this into prelude (plus imported names)
 startingDependencies :: Set String
 startingDependencies = Set.fromList ["print"]
@@ -345,12 +339,26 @@ getExplicitTypes expls = do
   typed <- mapM getExplicitType expls
   return $ Map.fromList typed
 
--- TODO: This doesn't yet work for e.g. Pair<A, B>
 getExplicitType :: (name, D.Declaration) -> InferM (name, Scheme)
-getExplicitType (name, decl) = do
-  let (Just declaredType) = getDeclaredType decl
-  t <- withLocations [decl] $ typeFromDecl declaredType
-  return (name, asScheme t)
+getExplicitType (name, decl) = case decl of
+  D.Let _ _ mtdecl _ -> do
+    let (Just tdecl) = mtdecl
+    t <- withLocations [decl] $ typeFromDecl Map.empty tdecl
+    return (name, asScheme t)
+
+  D.Function _ _ mgendecl _ _ -> do
+    let Just (gens, tdecl) = mgendecl
+    let gmap = genericMap gens
+    let ngens = length gens
+    t <- withLocations [decl] $ typeFromDecl gmap tdecl
+    return (name, Scheme ngens t)
+
+  D.TypeDef{} ->
+    error "shouldn't see a typedef here"
+
+
+genericMap :: [T.Type] -> Map String Type
+genericMap tnames = Map.fromList $ zip tnames (map TGen [1..])
 
 inferGroups :: [[(String, D.Declaration)]] -> Environment ->
                InferM (TypedDecls, Environment)
@@ -472,7 +480,8 @@ inferStmt env stmt = case stmt of
     case mtype of
       Nothing    -> return()
       Just tdecl -> do
-        t <- typeFromDecl tdecl
+        -- TODO: allow generics here, too?
+        t <- typeFromDecl Map.empty tdecl
         withLocations [stmt] $ unify (getType expr') t
     return (S.Let a name mtype expr', NeverReturns)
 
@@ -787,16 +796,18 @@ getStructType name ts = do
   sub <- getSub
   return $ apply sub resultT
 
-typeFromDecl :: T.TypeDecl -> InferM Type
-typeFromDecl tdecl = case tdecl of
+typeFromDecl :: Map String Type -> T.TypeDecl -> InferM Type
+typeFromDecl gmap tdecl = case tdecl of
   T.TypeName _ name ->
-    typeFromName name []
+    case Map.lookup name gmap of
+      Nothing -> typeFromName name []
+      Just t  -> return t
   T.Generic _ name genArgs -> do
-    genTypes <- mapM typeFromDecl genArgs
+    genTypes <- mapM (typeFromDecl gmap) genArgs
     typeFromName name genTypes
   T.Function _ argTs retT -> do
-    argTypes <- mapM typeFromDecl argTs
-    retType <- typeFromDecl retT
+    argTypes <- mapM (typeFromDecl gmap) argTs
+    retType <- typeFromDecl gmap retT
     return $ TFunc argTypes retType
   T.Struct{} ->
     error "shouldn't see a Struct here"
