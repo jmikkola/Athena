@@ -89,9 +89,9 @@ makeConstructors ((t,d):ts) constrs = do
   let sub = makeSub $ zip (map TVar gens) generalized
 
   constrs' <- case d of
-    T.TypeName _ _       -> error "type aliases not supported yet"
-    T.Generic  _ _ _     -> error "type aliases not supported yet"
-    T.Function _ _ _     -> error "type aliases not supported yet"
+    T.TypeName{}         -> error "type aliases not supported yet"
+    T.Generic{}          -> error "type aliases not supported yet"
+    T.Function{}         -> error "type aliases not supported yet"
 
     T.Struct   _ fields  -> do
       let typ = TCon name generalized
@@ -121,7 +121,7 @@ mustBeUnique key m =
 
 
 createStructFields :: Int -> Type -> [String] -> [Type] -> [(String, Scheme)]
-createStructFields nGens typ fieldNames fieldTypes = zipWith makePair fieldNames fieldTypes
+createStructFields nGens typ = zipWith makePair
   where makePair fname ftype = (fname, Scheme nGens (TFunc [typ] ftype))
 
 

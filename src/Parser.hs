@@ -72,7 +72,7 @@ funcDeclaration = do
   _ <- string "fn"
   _ <- any1LinearWhitespace
   name <- valueName
-  gens <- optionMaybe $ try $ genericList
+  gens <- optionMaybe $ try genericList
   _ <- char '('
   _ <- anyLinearWhitespace
   argsAndTypes <- funcArgDecl

@@ -111,7 +111,10 @@ isImplicit :: D.Declaration -> Bool
 isImplicit = not . isExplicit
 
 isExplicit :: D.Declaration -> Bool
-isExplicit = isJust . getDeclaredType
+isExplicit decl = case decl of
+  D.Let      _ _ mt _   -> isJust mt
+  D.Function _ _ mt _ _ -> isJust mt
+  D.TypeDef{}           -> error "shouldn't see a typedef here"
 
 getDeclaredType :: D.Declaration -> Maybe T.TypeDecl
 getDeclaredType decl = case decl of
@@ -346,7 +349,7 @@ getExplicitTypes expls = do
 getExplicitType :: (name, D.Declaration) -> InferM (name, Scheme)
 getExplicitType (name, decl) = do
   let (Just declaredType) = getDeclaredType decl
-  t <- typeFromDecl declaredType
+  t <- withLocations [decl] $ typeFromDecl declaredType
   return (name, asScheme t)
 
 inferGroups :: [[(String, D.Declaration)]] -> Environment ->
@@ -822,7 +825,6 @@ checkSameFields tname given actual = do
   when (givenSet /= actualSet) $
     inferErr $ StructFieldErr tname $
         "wrong set of fields given: " ++ show (givenSet, actualSet)
-  return ()
 
 
 lookup_ :: (Eq a) => a -> [(a, b)] -> b
