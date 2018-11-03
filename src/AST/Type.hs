@@ -49,3 +49,8 @@ instance Annotated TypeDecl where
     Function  _ a r -> Function [] (map removeAnnotations a) (removeAnnotations r)
     Struct    _ f   -> Struct   [] (mapSnd removeAnnotations f)
     Enum      _ o   -> Enum     [] (mapSnd (mapSnd removeAnnotations) o)
+
+instance Annotated TypeDef where
+  getAnnotation = defAnn
+  setAnnotation ann tdef = tdef { defAnn=ann }
+  removeAnnotations = setAnnotation []

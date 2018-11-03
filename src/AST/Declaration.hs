@@ -44,4 +44,4 @@ instance Annotated Declaration where
   removeAnnotations decl = case decl of
     Let      _ n t e   -> Let      [] n (fmap removeAnnotations t) (removeAnnotations e)
     Function _ n t a s -> Function [] n (fmap (applySnd removeAnnotations) t) a (removeAnnotations s)
-    TypeDef  _ s t     -> TypeDef  [] s (removeAnnotations t)
+    TypeDef  _ s t     -> TypeDef  [] (removeAnnotations s) (removeAnnotations t)

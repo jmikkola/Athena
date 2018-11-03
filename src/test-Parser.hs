@@ -248,7 +248,7 @@ testParsingFunc2 =
 testParsingTypedFunction :: Test
 testParsingTypedFunction =
   let text = "fn main(a Int, b Bool) Bool {\n//a comment\n}"
-      fnType = Just $ T.Function [] [intT, boolT] boolT
+      fnType = Just $ ([], T.Function [] [intT, boolT] boolT)
       expected = D.Function [] "main" fnType ["a", "b"] (sBlock [])
   in expectParsesA declarationParser text expected
 
@@ -256,7 +256,8 @@ testParsingTypeDecl :: Test
 testParsingTypeDecl =
   let text = "type Foo struct {\n  asdf Int\n  xyz Foo\n}"
       declaredType = T.Struct [] [("asdf", intT), ("xyz", T.TypeName [] "Foo")]
-      expected = D.TypeDef [] "Foo" declaredType
+      def = T.TypeDef [] "Foo" []
+      expected = D.TypeDef [] def declaredType
   in expectParsesA declarationParser text expected
 
 ---- Utilities ----
