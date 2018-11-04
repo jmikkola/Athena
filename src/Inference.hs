@@ -465,6 +465,16 @@ inferDecl env decl = case decl of
   D.Function a name mtype args stmt -> do
     argTs <- mapM (const newTypeVar) args
     retT <- newTypeVar
+
+    -- This case statement exists so that, by the time
+    -- a field access is reached, the type of that variable
+    -- will already be known.
+    case Map.lookup name env of
+      Nothing -> return ()
+      Just sc -> do
+        dt <- instantiate sc
+        withLocations [stmt] $ unify dt (TFunc argTs retT)
+
     let argEnv = Map.fromList $ zip args (map asScheme argTs)
     let env' = Map.union argEnv env
     (stmt', stmtReturns) <- inferStmt env' stmt
