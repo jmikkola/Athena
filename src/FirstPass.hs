@@ -37,6 +37,12 @@ data Constructor =
   }
   deriving (Eq, Show)
 
+
+valueType :: Constructor -> Scheme
+valueType ctor =
+  let (Scheme n (TFunc _ ret)) = ctorType ctor
+  in Scheme n ret
+
 -- firstPass is the first thing run after parsing.
 -- It prepares data for type inference.
 --

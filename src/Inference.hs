@@ -60,7 +60,7 @@ import Errors
   ( Error(..)
   , Result )
 import FirstPass
-  ( Module(..), Constructor(..), bindings )
+  ( Module(..), Constructor(..), bindings, valueType )
 import Util.Graph
   ( components )
 
@@ -294,6 +294,11 @@ newTypeVar = do
 
 getSub :: InferM Substitution
 getSub = gets currentSub
+
+applyCurrentSub :: Type -> InferM Type
+applyCurrentSub t = do
+  sub <- getSub
+  return $ apply sub t
 
 extendSub :: Substitution -> InferM ()
 extendSub sub = do
@@ -799,26 +804,26 @@ orderAs :: (Ord a) => [a] -> [(a, b)] -> [(a, b)]
 orderAs keys pairs = map getPair keys
   where getPair key = (key, lookup_ key pairs)
 
-getStructType :: String -> [Type] -> InferM Type
-getStructType name ts = do
+getStructType :: String -> InferM Type
+getStructType name = do
   ctor <- getConstructor name
-  let sch = ctorType ctor
-  t <- instantiate sch
-
-  resultT <- newTypeVar
-  unify t (TFunc ts resultT)
-  sub <- getSub
-  return $ apply sub resultT
+  let sch = valueType ctor
+  instantiate sch
 
 typeFromDecl :: Map String Type -> T.TypeDecl -> InferM Type
 typeFromDecl gmap tdecl = case tdecl of
   T.TypeName _ name ->
     case Map.lookup name gmap of
-      Nothing -> typeFromName name []
+      Nothing -> typeFromName name
       Just t  -> return t
   T.Generic _ name genArgs -> do
     genTypes <- mapM (typeFromDecl gmap) genArgs
-    typeFromName name genTypes
+    t <- typeFromName name
+    case t of
+      TCon con args -> do
+        unify t (TCon con genTypes)
+        applyCurrentSub t
+      _ -> error "TODO: figure out what causes this case"
   T.Function _ argTs retT -> do
     argTypes <- mapM (typeFromDecl gmap) argTs
     retType <- typeFromDecl gmap retT
@@ -830,12 +835,12 @@ typeFromDecl gmap tdecl = case tdecl of
 
 
 -- TODO: Check the kind of the type (which will require a lot of plumbing)
-typeFromName :: String -> [Type] -> InferM Type
-typeFromName name ts
+typeFromName :: String -> InferM Type
+typeFromName name
   | name `elem` builtinTypes =
-    return $ TCon name ts
+    return $ TCon name []
   | otherwise =
-    getStructType name ts
+    getStructType name
 
 builtinTypes :: [String]
 builtinTypes = words "Int Float Bool Char String ()"
