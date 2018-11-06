@@ -344,8 +344,8 @@ tiExpl name decl env = do
 
   sub <- getSub
   let sch' = generalize (applyEnv sub env) (apply sub dt)
-  if sch' /= sch
-    then inferErrFor [decl] $ BindingTooGeneral name
+  if not $ schemesEquivalent sch' sch
+    then inferErrFor [decl] $ BindingTooGeneral $ name ++ ": " ++ show (sch', sch, dt)
     else return d
 
 
@@ -1028,9 +1028,20 @@ insertAll m ((k, v):kvs) =
 insertAll m [] =
   m
 
+-- This is not a great solution, ideally generalization would
+-- always pick new TGen generics from left to right,
+-- but this is good enough for now.
+schemesEquivalent :: Scheme -> Scheme -> Bool
+schemesEquivalent (Scheme n1 t1) (Scheme n2 t2) =
+  n1 == n2 && genSubstitutes t1 t2
 
 alphaSubstitues :: Type -> Type -> Bool
 alphaSubstitues t1 t2 = case getVarPairs t1 t2 of
+  Nothing    -> False
+  Just pairs -> isAlphaSub pairs
+
+genSubstitutes :: Type -> Type -> Bool
+genSubstitutes t1 t2 = case getGenPairs t1 t2 of
   Nothing    -> False
   Just pairs -> isAlphaSub pairs
 
@@ -1047,8 +1058,25 @@ isInjective = check Map.empty
                 Just b' -> b' == b
           in noConflict && check (Map.insert a b existing) is
 
-swap :: (a, b) -> (b, a)
-swap (a, b) = (b, a)
+getGenPairs :: Type -> Type -> Maybe [(Int, Int)]
+getGenPairs t1 t2 = case (t1, t2) of
+  (TGen a, TGen b) ->
+    return [(a, b)]
+  (TCon cA tsA, TCon cB tsB) -> do
+    requireEq cA cB
+    requireEq (length tsA) (length tsB)
+    concat <$> zipWithM getGenPairs tsA tsB
+  (TFunc argsA retA, TFunc argsB retB) -> do
+    requireEq (length argsA) (length argsB)
+    gens1 <- getGenPairs retA retB
+    gens2 <- concat <$> zipWithM getGenPairs argsA argsB
+    return $ gens1 ++ gens2
+  (TVar a, TVar b) -> do
+    requireEq a b
+    return []
+  _ ->
+    Nothing
+
 
 getVarPairs :: Type -> Type -> Maybe [(String, String)]
 getVarPairs t1 t2 = case (t1, t2) of

@@ -15,3 +15,6 @@ applyFst f (a, c) = (f a, c)
 
 applySnd :: (a -> b) -> (c, a) -> (c, b)
 applySnd f (c, a) = (c, f a)
+
+swap :: (a, b) -> (b, a)
+swap (a, b) = (b, a)
