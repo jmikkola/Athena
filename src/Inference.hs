@@ -335,8 +335,6 @@ tiExpl name decl env = do
   let sch = mustLookup name env
   t <- instantiate sch
 
-  -- TODO: Right here, inferDecl isn't being given the fact that the input
-  -- arguments have types, making field access not work.
   d <- inferDecl env decl
   let dt = getType d
 
